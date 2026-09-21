@@ -23,6 +23,10 @@ pub(super) async fn run_phase(
     command: String,
     phase: ImagePhase,
 ) -> Result<()> {
+    let sensitive_values = [
+        connection.sandbox_id().to_owned(),
+        connection.access_token().to_owned(),
+    ];
     let output = backend
         .processes
         .run(
@@ -40,7 +44,7 @@ pub(super) async fn run_phase(
     if output.succeeded() {
         return Ok(());
     }
-    Err(phase.error(output))
+    Err(phase.error(output, &sensitive_values))
 }
 
 impl ImagePhase {
@@ -55,15 +59,15 @@ impl ImagePhase {
         }
     }
 
-    fn error(self, output: ProcessRunOutput) -> Error {
+    fn error(self, output: ProcessRunOutput, sensitive_values: &[String]) -> Error {
         match self {
             Self::Setup => Error::ImageSetupFailed {
-                command: Some(command_failure(output)),
+                command: Some(command_failure(output, sensitive_values)),
                 retained_sandbox: None,
             },
             Self::Verify(index) => Error::ImageVerificationFailed {
                 index,
-                command: Some(command_failure(output)),
+                command: Some(command_failure(output, sensitive_values)),
                 retained_sandbox: None,
             },
             Self::Scrub => Error::ImageScrubFailed,
@@ -71,11 +75,11 @@ impl ImagePhase {
     }
 }
 
-fn command_failure(output: ProcessRunOutput) -> ImageCommandFailure {
+fn command_failure(output: ProcessRunOutput, sensitive_values: &[String]) -> ImageCommandFailure {
     ImageCommandFailure::from_captured_output(
         &output.bytes,
         output.exit_code,
         output.output_truncated,
-        &[],
+        sensitive_values,
     )
 }

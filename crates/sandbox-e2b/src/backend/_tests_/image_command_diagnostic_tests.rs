@@ -128,6 +128,39 @@ async fn setup_failure_preserves_transport_truncation() {
     ));
 }
 
+#[tokio::test]
+async fn setup_failure_redacts_connection_identity_and_access_token() {
+    let sandbox_id = SandboxId::new();
+    let control = retained_control("opaque-provider-id");
+    let processes = Unimock::new(
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
+            .returns(Ok(failed_output(
+                b"sandbox=opaque-provider-id token=call-local-token",
+                Some(7),
+            ))),
+    );
+
+    let error = backend(control, processes)
+        .prepare_image(request(
+            sandbox_id,
+            "opaque-provider-id",
+            "exit 7",
+            Vec::new(),
+        ))
+        .await
+        .expect_err("setup failure should return a safe diagnostic");
+
+    assert!(matches!(
+        error,
+        Error::ImageSetupFailed {
+            command: Some(ImageCommandFailure { ref output, .. }),
+            ..
+        } if output.as_deref()
+            == Some("sandbox=[REDACTED] token=[REDACTED]")
+    ));
+}
+
 fn retained_control(provider: &'static str) -> Unimock {
     Unimock::new(
         E2bControlApiMock::connect_sandbox

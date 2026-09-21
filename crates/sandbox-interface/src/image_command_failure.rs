@@ -1,5 +1,7 @@
 //! Safe command-failure diagnostics for platform image realization.
 
+use std::cmp::Reverse;
+
 use serde::{Deserialize, Serialize};
 
 use crate::IMAGE_COMMAND_OUTPUT_MAX_BYTES;
@@ -30,7 +32,13 @@ impl ImageCommandFailure {
         let stripped = strip_ansi_escapes::strip(bytes);
         let mut output = String::from_utf8_lossy(&stripped).replace("\r\n", "\n");
         output.retain(|character| matches!(character, '\n' | '\t') || !character.is_control());
-        for value in sensitive_values.iter().filter(|value| !value.is_empty()) {
+        let mut redactions = sensitive_values
+            .iter()
+            .map(String::as_str)
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        redactions.sort_unstable_by_key(|value| Reverse(value.len()));
+        for value in redactions {
             output = output.replace(value, "[REDACTED]");
         }
         let (output, normalized_truncated) = bounded_tail(output);

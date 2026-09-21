@@ -28,6 +28,18 @@ fn redacts_available_sensitive_values_before_return() {
 }
 
 #[test]
+fn redacts_overlapping_sensitive_values_without_leaving_a_suffix() {
+    let failure = ImageCommandFailure::from_captured_output(
+        b"token=secret-value",
+        Some(1),
+        false,
+        &["secret".to_owned(), "secret-value".to_owned()],
+    );
+
+    assert_eq!(failure.output.as_deref(), Some("token=[REDACTED]"));
+}
+
+#[test]
 fn normalized_output_keeps_a_utf8_bounded_tail() {
     let input = ["prefix", &"🙂".repeat(IMAGE_COMMAND_OUTPUT_MAX_BYTES)].concat();
     let failure = ImageCommandFailure::from_captured_output(input.as_bytes(), Some(2), false, &[]);

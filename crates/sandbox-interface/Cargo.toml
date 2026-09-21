@@ -16,6 +16,7 @@ internal-error.workspace = true
 serde = { version = "1.0.228", features = ["derive"] }
 strip-ansi-escapes = "0.2.1"
 thiserror = "2.0.18"
+tokio = { version = "1.52.4", features = ["time"] }
 unimock = "0.6.8"
 uuid = { version = "1.24.0", features = ["serde", "v7"] }
 

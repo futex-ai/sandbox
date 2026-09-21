@@ -38,6 +38,11 @@ pub struct RunProcessRequest {
 }
 
 /// Provider request to run one bounded non-interactive process.
+///
+/// Backends must reject an empty command, combined command and argument bytes
+/// above [`PROCESS_RUN_MAX_ARGV_BYTES`], stream limits above
+/// [`PROCESS_RUN_MAX_STREAM_BYTES`], and deadlines above
+/// [`PROCESS_RUN_MAX_DEADLINE`] before contacting their provider.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendRunProcessRequest {
     /// Source provider sandbox reference.

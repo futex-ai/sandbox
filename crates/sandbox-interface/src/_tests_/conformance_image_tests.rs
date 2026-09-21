@@ -1,14 +1,17 @@
 //! Image conformance recovery and cleanup regressions.
 
+use std::time::Duration;
+
 use crate::{
-    BackendPreparedImage, BackendSandbox, BackendSnapshot, BackendSnapshotCreateOutcome,
-    BackendSnapshotInventory, BackendSnapshotRecovery, Error, ProviderRef, RetainedSandboxRef,
-    SandboxBackendMock, SandboxState, SnapshotState,
+    BackendCreateSnapshotRequest, BackendPreparedImage, BackendSandbox, BackendSnapshot,
+    BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery, Error,
+    OperationId, ProviderRef, RetainedSandboxRef, SandboxBackendMock, SandboxState, SnapshotId,
+    SnapshotState,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
 
-use super::exercise;
+use super::{SnapshotRecoverySleeperMock, create_or_recover_snapshot_with_sleeper, exercise};
 
 #[tokio::test]
 async fn in_progress_snapshot_recovers_and_optional_diagnostics_cleanup() {
@@ -113,6 +116,38 @@ async fn snapshot_inventory_failure_cleans_the_created_source() {
     assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
 }
 
+#[tokio::test]
+async fn in_progress_recovery_waits_one_second_before_each_retry() {
+    let backend = Unimock::new((
+        SandboxBackendMock::create_snapshot
+            .next_call(matching!(_))
+            .returns(Ok(BackendSnapshotCreateOutcome::InProgress)),
+        SandboxBackendMock::recover_snapshot_create
+            .next_call(matching!(_))
+            .returns(Ok(BackendSnapshotRecovery::InProgress)),
+        SandboxBackendMock::recover_snapshot_create
+            .next_call(matching!(_))
+            .returns(Ok(BackendSnapshotRecovery::InProgress)),
+        SandboxBackendMock::recover_snapshot_create
+            .next_call(matching!(_))
+            .returns(Ok(BackendSnapshotRecovery::Recovered(snapshot()))),
+    ));
+    let sleeper = Unimock::new((
+        SnapshotRecoverySleeperMock::sleep
+            .next_call(matching!(_))
+            .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
+        SnapshotRecoverySleeperMock::sleep
+            .next_call(matching!(_))
+            .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
+    ));
+
+    let recovered = create_or_recover_snapshot_with_sleeper(&backend, snapshot_request(), &sleeper)
+        .await
+        .expect("snapshot should recover after paced retries");
+
+    assert_eq!(recovered, snapshot());
+}
+
 fn backend(
     snapshot_outcome: BackendSnapshotCreateOutcome,
     retained_sandbox: Option<RetainedSandboxRef>,
@@ -169,5 +204,15 @@ fn snapshot() -> BackendSnapshot {
     BackendSnapshot {
         provider_ref: ProviderRef::new("prepared-image"),
         state: SnapshotState::Ready,
+    }
+}
+
+fn snapshot_request() -> BackendCreateSnapshotRequest {
+    BackendCreateSnapshotRequest {
+        snapshot_id: SnapshotId::new(),
+        operation_id: OperationId::new(),
+        source_provider_ref: ProviderRef::new("prepared-source"),
+        correlation_name: "paced-recovery".to_owned(),
+        before: BackendSnapshotInventory::default(),
     }
 }

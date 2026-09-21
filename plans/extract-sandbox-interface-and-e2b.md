@@ -456,5 +456,34 @@ retryable provider failures.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
       unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.
+
+## Milestone 14: Validation, Redaction, And Recovery Pacing
+
+Resolve every finding from the sixth clean post-push review. At the end of this
+milestone, malformed process requests cannot reach the provider, image command
+diagnostics cannot expose known connection identifiers or credentials, and
+snapshot recovery gives asynchronous providers a bounded real-time window
+without bursting their APIs.
+
+- [x] Add failing regressions first for pre-dispatch process validation, image
+      diagnostic redaction, and one-second snapshot recovery pacing.
+- [x] Validate process command text, combined argv bytes, stream bounds, and
+      deadlines before acquiring a provider connection.
+- [x] Redact the provider sandbox reference and envd access token from failed
+      image command output before returning a handled diagnostic.
+- [x] Redact overlapping sensitive diagnostic values longest-first so a
+      shorter provider value cannot leave part of a longer credential visible.
+- [x] Pace in-progress snapshot recovery through an injected sleeper while
+      keeping conformance tests deterministic and the recovery window bounded.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the validation, redaction, and recovery timing guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

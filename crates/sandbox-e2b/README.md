@@ -48,7 +48,11 @@ enforce arbitrary byte limits exactly rather than rounding to filesystem
 blocks.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
-bounded while streaming.
+bounded while streaming. Direct process requests are validated before the
+adapter acquires sandbox access: commands must be non-empty, combined argv is
+capped at 128 KiB, each stream cap is at most 64 MiB, and deadlines cannot
+exceed 300 seconds. Failed image-command diagnostics redact the call-local
+opaque sandbox ID and envd access token before returning bounded output.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Definitive rejection headers are mapped without waiting for an

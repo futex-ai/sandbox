@@ -58,6 +58,8 @@ Envd routing is derived from adapter configuration, not a response-provided
 host. The complete HTTPS URL must parse to the exact configured envd hostname
 before the access-token header is added. Access tokens and private-traffic
 credentials stay inside call-local types and are redacted from debug output.
+Failed setup and verification diagnostics also redact the active opaque
+sandbox ID and envd access token from captured command output.
 An unconfigured logical profile returns the handled provider-neutral
 `UnknownProfile` error before any provider request.
 
@@ -77,11 +79,14 @@ definitive pre-commit rejections retain their typed errors. If neither outcome
 can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. Process
 execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
-outcomes separate. File and maintenance helpers require a normal process exit;
-a default zero exit code on a signal event is not success. A one-shot process
-whose collection times out, overflows, or fails decoding is killed with a
-bounded cleanup call once its PID has been observed; persistent terminal
-connections are left running intentionally.
+outcomes separate. Before acquiring sandbox access, the adapter rejects an
+empty command, more than 128 KiB across the command and arguments, a stdout or
+stderr limit above 64 MiB, or a deadline above 300 seconds. File and
+maintenance helpers require a normal process exit; a default zero exit code on
+a signal event is not success. A one-shot process whose collection times out,
+overflows, or fails decoding is killed with a bounded cleanup call once its PID
+has been observed; persistent terminal connections are left running
+intentionally.
 
 Terminal recovery lists processes by the configured stable tag and never
 starts a replacement when recovery finds no match. Inspection and output reads

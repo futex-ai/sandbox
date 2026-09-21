@@ -1,5 +1,8 @@
 //! Caller-driven image phase coverage for the reusable backend harness.
 
+use std::time::Duration;
+
+use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::{
@@ -9,7 +12,26 @@ use crate::{
     SandboxNetworkPolicy, SnapshotId,
 };
 
-const SNAPSHOT_RECOVERY_ATTEMPTS: usize = 60;
+const SNAPSHOT_RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
+const SNAPSHOT_RECOVERY_WAITS: usize = 60;
+
+/// Delay boundary used to keep recovery tests deterministic.
+#[unimock::unimock(api = SnapshotRecoverySleeperMock)]
+#[async_trait]
+trait SnapshotRecoverySleeper: Send + Sync {
+    /// Waits before the next provider recovery poll.
+    async fn sleep(&self, duration: Duration);
+}
+
+/// Tokio-backed delay used by the public conformance flow.
+struct TokioSnapshotRecoverySleeper;
+
+#[async_trait]
+impl SnapshotRecoverySleeper for TokioSnapshotRecoverySleeper {
+    async fn sleep(&self, duration: Duration) {
+        tokio::time::sleep(duration).await;
+    }
+}
 
 pub(crate) async fn exercise(
     backend: &dyn SandboxBackend,
@@ -79,25 +101,42 @@ pub(crate) async fn create_or_recover_snapshot(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
 ) -> Result<BackendSnapshot> {
+    create_or_recover_snapshot_with_sleeper(backend, request, &TokioSnapshotRecoverySleeper).await
+}
+
+/// Recovers one dispatched snapshot with bounded, paced polling.
+async fn create_or_recover_snapshot_with_sleeper(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSnapshotRequest,
+    sleeper: &dyn SnapshotRecoverySleeper,
+) -> Result<BackendSnapshot> {
     match backend.create_snapshot(request.clone()).await? {
         BackendSnapshotCreateOutcome::Created(image) => return Ok(image),
         BackendSnapshotCreateOutcome::InProgress
         | BackendSnapshotCreateOutcome::DeliveryAmbiguous => {}
     }
-    for _attempt in 0..SNAPSHOT_RECOVERY_ATTEMPTS {
+    let mut waits_remaining = SNAPSHOT_RECOVERY_WAITS;
+    loop {
         match backend.recover_snapshot_create(request.clone()).await? {
             BackendSnapshotRecovery::Recovered(image) => return Ok(image),
-            BackendSnapshotRecovery::InProgress => {}
+            BackendSnapshotRecovery::InProgress if waits_remaining == 0 => {
+                return Err(snapshot_reconciliation_required());
+            }
+            BackendSnapshotRecovery::InProgress => {
+                waits_remaining -= 1;
+                sleeper.sleep(SNAPSHOT_RECOVERY_INTERVAL).await;
+            }
             BackendSnapshotRecovery::ReconciliationRequired => {
-                return Err(Error::SnapshotReconciliationRequired {
-                    retained_sandbox: None,
-                });
+                return Err(snapshot_reconciliation_required());
             }
         }
     }
-    Err(Error::SnapshotReconciliationRequired {
+}
+
+fn snapshot_reconciliation_required() -> Error {
+    Error::SnapshotReconciliationRequired {
         retained_sandbox: None,
-    })
+    }
 }
 
 async fn exercise_failed_preparation(

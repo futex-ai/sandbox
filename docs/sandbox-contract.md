@@ -84,8 +84,11 @@ terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Port zero, empty required text,
 oversized values, unknown profiles, and unsupported network policies fail
-before provider dispatch. In particular, an oversized replacement write must
-fail before connecting to or resuming its sandbox.
+before provider dispatch. A direct process command cannot be empty; its command
+and arguments total at most 128 KiB, each requested stream limit is at most 64
+MiB, and its deadline is at most 300 seconds. These bounds must be checked
+before acquiring provider sandbox access. In particular, an oversized
+replacement write must fail before connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Inherited credential or drive helpers must be stopped with bounded escalation,
@@ -108,8 +111,9 @@ confirm resize process termination returns `ScreenViewportResizeUnconfirmed`;
 the caller must retain its session fence and arrange cleanup.
 
 Provider diagnostics returned through handled errors must not contain secret
-values or opaque backend handles. Unknown profile errors do not echo an
-untrusted profile name.
+values or opaque backend handles. Image-command failures must redact every
+provider identifier and credential known to the adapter before returning
+captured output. Unknown profile errors do not echo an untrusted profile name.
 
 ## Conformance
 
@@ -117,9 +121,10 @@ The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
 Its ordinary and image snapshot probes accept immediate completion or recover
 in-progress and delivery-ambiguous outcomes with a bounded number of calls.
-The harness cleans every image source it creates, including after preparation,
-prepared-result validation, inventory, snapshot, and intentional-failure
-errors. Preparation errors may omit a retained-source diagnostic; when one is
-present, the harness requires it to identify that source. Every provider
-adapter should run the harness in addition to its own edge-case and transport
-tests.
+After every in-progress recovery response, the harness waits one second before
+polling again, with no more than 60 waits. The harness cleans every image source
+it creates, including after preparation, prepared-result validation,
+inventory, snapshot, and intentional-failure errors. Preparation errors may
+omit a retained-source diagnostic; when one is present, the harness requires
+it to identify that source. Every provider adapter should run the harness in
+addition to its own edge-case and transport tests.

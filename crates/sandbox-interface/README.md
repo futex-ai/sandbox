@@ -24,15 +24,20 @@ ID, while `SandboxReadOnly` exposes a deliberately narrow inspection surface.
 
 Consumer IDs are UUIDv7 values. Provider references remain opaque, so callers
 cannot infer E2B or any future provider's identifier format. Bounded request
-types reject unsafe paths, oversized commands and files, invalid ports, and
-unsupported viewport dimensions before an adapter dispatches work.
+types and backend adapters reject unsafe paths, oversized commands and files,
+invalid ports, and unsupported viewport dimensions before provider dispatch.
+Direct process requests require a non-empty command, at most 128 KiB across
+the command and arguments, at most 64 MiB for each captured stream, and a
+deadline no longer than 300 seconds.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
 Both its ordinary and image snapshot probes recover in-progress and
-delivery-ambiguous outcomes with a bounded number of calls. Every source
-sandbox created by the image probes is cleaned after preparation, result
-validation, inventory, snapshot, or intentional-failure errors.
+delivery-ambiguous outcomes with a bounded number of calls. Recovery waits one
+second after each in-progress result, for at most 60 waits, so asynchronous
+providers receive a real completion window without a burst of polling. Every
+source sandbox created by the image probes is cleaned after preparation,
+result validation, inventory, snapshot, or intentional-failure errors.
 Retained-source diagnostics are optional, but are checked against the known
 source when present. Adapters should run the harness alongside
 provider-specific transport and failure tests.
