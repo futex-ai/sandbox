@@ -101,6 +101,47 @@ fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
     assert!(!temporary.exists());
 }
 
+#[test]
+fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
+    let root = tempdir().expect("temporary write root");
+    let stage = tempdir().expect("temporary staging root");
+    fs::create_dir(root.path().join("src")).expect("nested directory");
+    let state = stage.path().join("state");
+    let marker = stage.path().join("fsync-observed");
+    fs::write(root.path().join("src/lib.rs"), b"replacement").expect("replacement target");
+    symlink(
+        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
+        &state,
+    )
+    .expect("commit claim");
+    let mut command = command(CleanupRequest {
+        root: root.path().to_string_lossy().into_owned(),
+        path: "src/lib.rs".to_owned(),
+        staging_path: stage
+            .path()
+            .join("missing-upload")
+            .to_string_lossy()
+            .into_owned(),
+        temporary_name: ".missing-temporary".to_owned(),
+        state_path: state.to_string_lossy().into_owned(),
+        expected_size: b"replacement".len(),
+    });
+    let helper = command.args.get_mut(1).expect("embedded cleanup helper");
+    *helper = format!(
+        "import os\noriginal_fsync = os.fsync\ndef observed_fsync(fd):\n open({:?}, 'wb').close()\n return original_fsync(fd)\nos.fsync = observed_fsync\n{}",
+        marker.to_string_lossy(),
+        helper
+    );
+
+    let output = Command::new(command.command)
+        .args(command.args)
+        .output()
+        .expect("run instrumented write reconciler");
+
+    assert_eq!(output.status.code(), Some(51));
+    assert!(marker.exists(), "committed target was not made durable");
+}
+
 fn run(
     root: &Path,
     path: &str,

@@ -174,7 +174,12 @@ fn request_error(source: reqwest::Error, ambiguous: bool, context: &'static str)
     if ambiguous {
         return Error::DeliveryAmbiguous;
     }
-    if source.is_timeout() || source.is_connect() {
+    if source.is_timeout()
+        || source.is_connect()
+        || source.is_body()
+        || source.is_decode()
+        || source.is_request()
+    {
         return Error::Unavailable;
     }
     Error::internal_with(source, context)
@@ -183,3 +188,7 @@ fn request_error(source: reqwest::Error, ambiguous: bool, context: &'static str)
 #[cfg(test)]
 #[path = "_tests_/control_http_tests.rs"]
 mod control_http_tests;
+
+#[cfg(test)]
+#[path = "_tests_/control_http_error_tests.rs"]
+mod control_http_error_tests;

@@ -4,7 +4,6 @@ pub(crate) mod configured;
 mod files;
 mod image_command_diagnostic;
 mod image_realization;
-mod image_snapshot;
 mod mapping;
 mod port_ingress;
 mod process_run;
@@ -30,10 +29,6 @@ mod sandbox_create_tests;
 mod backend_conformance_tests;
 
 #[cfg(test)]
-#[path = "_tests_/image_snapshot_tests.rs"]
-mod image_snapshot_tests;
-
-#[cfg(test)]
 #[path = "_tests_/port_ingress_tests.rs"]
 mod port_ingress_tests;
 
@@ -49,8 +44,8 @@ mod screen_stack_tests;
 mod image_realization_tests;
 
 #[cfg(test)]
-#[path = "_tests_/image_recovery_tests.rs"]
-mod image_recovery_tests;
+#[path = "_tests_/image_phase_contract_tests.rs"]
+mod image_phase_contract_tests;
 
 #[cfg(test)]
 #[path = "_tests_/image_command_diagnostic_tests.rs"]

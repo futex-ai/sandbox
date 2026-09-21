@@ -82,9 +82,9 @@ try:
             raise ValueError()
         try:
             os.replace(temporary, target, src_dir_fd=directory, dst_dir_fd=directory)
-            os.fsync(directory)
         except FileNotFoundError:
             pass
+        os.fsync(directory)
         if target_matches(directory, target, expected, digest):
             outcome = COMMITTED
     else:

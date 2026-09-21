@@ -40,8 +40,9 @@ that carry an API or envd access token never follow HTTP redirects.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
-Envd DNS, connection, timeout, and response-stream failures map to retryable
-provider unavailability. A failure that can occur after a process start,
+Control and envd DNS, connection, timeout, request, decode, body, and
+response-stream failures map to retryable provider unavailability for safe
+reads. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
 operation-specific recovery fence resolves the outcome.
 
@@ -67,7 +68,10 @@ then traverse the trusted root through non-following directory descriptors and
 atomically replace the leaf. The writer and bounded cleanup helper race for one
 atomic commit-or-revoke marker. A revocation winner prevents every later
 rename; a commit winner lets cleanup finish or verify the exact replacement by
-size and digest. If neither outcome can be confirmed, `FileWriteUnconfirmed`
+size and digest, then sync the containing directory before success. Writer
+exits that could follow a commit claim use this same reconciliation path;
+definitive pre-commit rejections retain their typed errors. If neither outcome
+can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. Process
 execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
 outcomes separate. File and maintenance helpers require a normal process exit;
@@ -87,18 +91,16 @@ Transcript writers use the request's exact byte limit rather than a rounded
 filesystem block limit. Oversized replacement writes fail before acquiring
 mutating sandbox access.
 
-Successful image realization returns the completed snapshot, measured size,
-and source-sandbox cleanup reference without destroying the source first. The
-trusted caller must durably store that completion and then call the backend's
-idempotent sandbox destroy operation. This keeps transient cleanup failures
-from replaying credential-free setup and verification scripts.
-Before any replayed build side effect, the adapter inventories the stable
-source-and-correlation pair and returns an already completed snapshot. If
-snapshot identity stays unresolved, `SnapshotReconciliationRequired` carries
-the retained source reference instead of destroying the evidence needed for a
-later retry or operator decision. Image scrub sends TERM to both configured
+Image preparation accepts the caller's durably stored source provider
+reference. It stages files, runs setup and ordered verification, scrubs the
+runtime, and returns the measured size, but never lists or creates a sandbox or
+snapshot and never destroys the source. The caller separately records each
+create intent, dispatches it once, and uses the adapter's recover-only methods
+after dispatch starts. Empty recovery inventory remains `InProgress`, so an
+eventual-consistency gap cannot replay build commands, allocate a second paid
+sandbox, or create a second image. Image scrub sends TERM to both configured
 process names, waits for bounded disappearance, escalates to KILL, and fails
-unless both names are gone before size measurement and snapshot creation.
+unless both names are gone before size measurement.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and

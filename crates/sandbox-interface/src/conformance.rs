@@ -7,10 +7,9 @@ use uuid::Uuid;
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInputRequest,
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
-    BackendReadFileRequest, BackendRealizeImageRequest, BackendRunProcessRequest,
-    BackendSnapshotCreateOutcome, BackendTerminalCreateRequest, BackendWriteFileRequest, Error,
-    OperationId, RealizeImageFileInput, ResourceOwner, Result, SandboxBackend, SandboxId,
-    SandboxNetworkPolicy, SnapshotId, TerminalId,
+    BackendReadFileRequest, BackendRunProcessRequest, BackendSnapshotCreateOutcome,
+    BackendTerminalCreateRequest, BackendWriteFileRequest, Error, OperationId, ResourceOwner,
+    Result, SandboxBackend, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
 };
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
@@ -195,66 +194,7 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
         .close_terminal(source.provider_ref.clone(), terminal.provider_ref)
         .await?;
 
-    let realized = backend
-        .realize_image(BackendRealizeImageRequest {
-            sandbox_id: SandboxId::new(),
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
-            owner: ResourceOwner::platform(workspace_id),
-            deployment_id: "backend-conformance".to_owned(),
-            profile: profile.to_owned(),
-            parent_image_provider_ref: None,
-            input_files: vec![RealizeImageFileInput {
-                root: "/tmp".to_owned(),
-                path: "sandbox-conformance-input.bin".to_owned(),
-                bytes: b"input".to_vec(),
-            }],
-            setup_script: "test -f /tmp/sandbox-conformance-input.bin".to_owned(),
-            verify_commands: vec!["true".to_owned()],
-            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
-        })
-        .await?;
-    if realized.size_bytes == 0 {
-        return Err(Error::internal_message(
-            "backend image realization returned a zero size",
-        ));
-    }
-    backend
-        .destroy_sandbox(realized.source_sandbox_cleanup_ref.clone())
-        .await?;
-    let failed_sandbox_id = SandboxId::new();
-    let failure = backend
-        .realize_image(BackendRealizeImageRequest {
-            sandbox_id: failed_sandbox_id,
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
-            owner: ResourceOwner::platform(workspace_id),
-            deployment_id: "backend-conformance".to_owned(),
-            profile: profile.to_owned(),
-            parent_image_provider_ref: None,
-            input_files: Vec::new(),
-            setup_script: "exit 7".to_owned(),
-            verify_commands: vec!["true".to_owned()],
-            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
-        })
-        .await
-        .expect_err("backend setup failure should be typed");
-    match failure {
-        Error::ImageSetupFailed {
-            command: _,
-            retained_sandbox: Some(retained_sandbox),
-        } if retained_sandbox.sandbox_id == failed_sandbox_id => {
-            backend
-                .destroy_sandbox(retained_sandbox.provider_ref)
-                .await?;
-        }
-        _ => {
-            return Err(Error::internal_message(
-                "backend setup failure did not retain its failed sandbox",
-            ));
-        }
-    }
-    backend.delete_snapshot(realized.image_provider_ref).await?;
+    crate::conformance_image::exercise(backend, profile, workspace_id).await?;
     backend.delete_snapshot(snapshot.provider_ref).await?;
     backend.destroy_sandbox(first.provider_ref).await?;
     backend.destroy_sandbox(second.provider_ref).await?;

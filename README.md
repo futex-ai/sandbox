@@ -19,6 +19,10 @@ application -> sandbox-interface <- sandbox-e2b
 Consumers should depend on `sandbox-interface`. Only the process that selects
 and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
 credentials, payloads, access tokens, and errors out of higher-level services.
+Image consumers also own the durable phase transitions: source creation,
+one-shot preparation, snapshot dispatch, recover-only retries, and final source
+cleanup are separate backend calls so eventual consistency cannot silently
+duplicate provider work.
 
 ## Developer Setup
 

@@ -79,9 +79,9 @@ pub(super) async fn write(
         )
         .await;
     match output {
-        Ok(output) => {
-            let result = map_output(transport, output.exit_code);
-            if result.is_err() {
+        Ok(output) => match writer_outcome(transport, output.exit_code) {
+            WriterOutcome::Succeeded => Ok(()),
+            WriterOutcome::Rejected(error) => {
                 let _outcome = regular_file_cleanup::cleanup(
                     transport,
                     connection,
@@ -95,27 +95,54 @@ pub(super) async fn write(
                     ),
                 )
                 .await;
+                Err(error)
             }
-            result
-        }
-        Err(error) => match regular_file_cleanup::cleanup(
-            transport,
-            connection,
-            cleanup_request(
-                request.root,
-                request.path,
-                staging_path,
-                temporary_name,
-                state_path,
-                expected_size,
-            ),
-        )
-        .await
-        {
-            CleanupOutcome::Committed => Ok(()),
-            CleanupOutcome::Revoked => Err(error),
-            CleanupOutcome::Unconfirmed => Err(Error::FileWriteUnconfirmed),
+            WriterOutcome::Uncertain(error) => {
+                reconcile_failure(
+                    transport,
+                    connection,
+                    cleanup_request(
+                        request.root,
+                        request.path,
+                        staging_path,
+                        temporary_name,
+                        state_path,
+                        expected_size,
+                    ),
+                    error,
+                )
+                .await
+            }
         },
+        Err(error) => {
+            reconcile_failure(
+                transport,
+                connection,
+                cleanup_request(
+                    request.root,
+                    request.path,
+                    staging_path,
+                    temporary_name,
+                    state_path,
+                    expected_size,
+                ),
+                error,
+            )
+            .await
+        }
+    }
+}
+
+async fn reconcile_failure(
+    transport: &ConnectProcessTransport,
+    connection: ProcessConnection,
+    request: CleanupRequest,
+    error: Error,
+) -> Result<()> {
+    match regular_file_cleanup::cleanup(transport, connection, request).await {
+        CleanupOutcome::Committed => Ok(()),
+        CleanupOutcome::Revoked => Err(error),
+        CleanupOutcome::Unconfirmed => Err(Error::FileWriteUnconfirmed),
     }
 }
 
@@ -137,19 +164,29 @@ fn cleanup_request(
     }
 }
 
-fn map_output(transport: &ConnectProcessTransport, exit_code: Option<i32>) -> Result<()> {
+/// Separates exits that precede the commit claim from exits that may follow it.
+fn writer_outcome(transport: &ConnectProcessTransport, exit_code: Option<i32>) -> WriterOutcome {
     match exit_code {
-        Some(0) => Ok(()),
-        Some(45) => Err(Error::InvalidFilePath { field: "root" }),
-        Some(46) => Err(Error::FileNotRegular),
-        Some(47) => Err(Error::FileTooLarge {
+        Some(0) => WriterOutcome::Succeeded,
+        Some(45) => WriterOutcome::Rejected(Error::InvalidFilePath { field: "root" }),
+        Some(46) => WriterOutcome::Rejected(Error::FileNotRegular),
+        Some(47) => WriterOutcome::Rejected(Error::FileTooLarge {
             limit: FILE_TRANSFER_MAX_BYTES,
         }),
-        Some(48) => Err(Error::InvalidFilePath { field: "path" }),
-        _ => Err(Error::BackendUnavailable {
+        Some(48) => WriterOutcome::Rejected(Error::InvalidFilePath { field: "path" }),
+        Some(50) => WriterOutcome::Rejected(Error::BackendUnavailable {
+            backend_id: transport.backend_id.clone(),
+        }),
+        _ => WriterOutcome::Uncertain(Error::BackendUnavailable {
             backend_id: transport.backend_id.clone(),
         }),
     }
+}
+
+enum WriterOutcome {
+    Succeeded,
+    Rejected(Error),
+    Uncertain(Error),
 }
 
 fn command(
@@ -183,3 +220,7 @@ fn command(
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_tests.rs"]
 mod regular_file_write_tests;
+
+#[cfg(test)]
+#[path = "_tests_/regular_file_write_outcome_tests.rs"]
+mod regular_file_write_outcome_tests;

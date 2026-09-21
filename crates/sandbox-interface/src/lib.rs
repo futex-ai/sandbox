@@ -7,6 +7,7 @@ mod backend_files;
 mod backend_images;
 mod backend_terminal;
 pub mod conformance;
+mod conformance_image;
 mod constants;
 mod consumer;
 mod domain;
@@ -33,7 +34,7 @@ pub use self::backend::{
 pub use self::backend_files::{
     BackendFileContent, BackendReadFileRequest, BackendWriteFileRequest,
 };
-pub use self::backend_images::{BackendRealizeImageRequest, BackendRealizedImage};
+pub use self::backend_images::{BackendPrepareImageRequest, BackendPreparedImage};
 pub use self::backend_terminal::{
     BackendInputRequest, BackendOutputRequest, BackendTerminal, BackendTerminalCreateRequest,
     BackendTerminalOutput,

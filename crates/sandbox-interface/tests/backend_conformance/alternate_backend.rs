@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendEnsureScreenStackRequest,
     BackendFileContent, BackendInputRequest, BackendInspectSnapshotRequest, BackendManagedSandbox,
-    BackendOutputRequest, BackendPortIngressRequest, BackendReadFileRequest,
-    BackendReadOnlyExecRequest, BackendRealizeImageRequest, BackendRealizedImage,
+    BackendOutputRequest, BackendPortIngressRequest, BackendPrepareImageRequest,
+    BackendPreparedImage, BackendReadFileRequest, BackendReadOnlyExecRequest,
     BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
     BackendTerminal, BackendTerminalCreateRequest, BackendTerminalOutput, BackendWriteFileRequest,
@@ -31,11 +31,11 @@ pub(super) struct AlternateBackend {
 
 #[async_trait]
 impl SandboxBackend for AlternateBackend {
-    async fn realize_image(
+    async fn prepare_image(
         &self,
-        request: BackendRealizeImageRequest,
-    ) -> Result<BackendRealizedImage> {
-        alternate_image_realization::realize(request)
+        request: BackendPrepareImageRequest,
+    ) -> Result<BackendPreparedImage> {
+        alternate_image_realization::prepare(request)
     }
 
     async fn list_managed_sandboxes(

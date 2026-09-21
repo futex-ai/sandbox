@@ -3,8 +3,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendRealizeImageRequest, Error, ImageCommandFailure, OperationId, ResourceOwner,
-    SandboxBackend, SandboxId, SnapshotId,
+    BackendPrepareImageRequest, Error, ImageCommandFailure, ProviderRef, ResourceOwner,
+    SandboxBackend, SandboxId,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -27,7 +27,12 @@ async fn setup_failure_retains_provider_sandbox_and_command_detail() {
     );
 
     let error = backend(control, processes)
-        .realize_image(request(sandbox_id, "exit 7", vec!["true"]))
+        .prepare_image(request(
+            sandbox_id,
+            "retained-source",
+            "exit 7",
+            vec!["true"],
+        ))
         .await
         .expect_err("setup failure should retain sandbox");
 
@@ -66,7 +71,12 @@ async fn verification_failure_preserves_index_and_sanitized_missing_exit_detail(
     ));
 
     let error = backend(control, processes)
-        .realize_image(request(sandbox_id, "true", vec!["true", "hang"]))
+        .prepare_image(request(
+            sandbox_id,
+            "retained-verify",
+            "true",
+            vec!["true", "hang"],
+        ))
         .await
         .expect_err("verification failure should retain safe command detail");
 
@@ -102,7 +112,7 @@ async fn setup_failure_preserves_transport_truncation() {
     );
 
     let error = backend(control, processes)
-        .realize_image(request(sandbox_id, "exit 2", Vec::new()))
+        .prepare_image(request(sandbox_id, "retained-tail", "exit 2", Vec::new()))
         .await
         .expect_err("truncated setup output should remain marked");
 
@@ -119,39 +129,26 @@ async fn setup_failure_preserves_transport_truncation() {
 }
 
 fn retained_control(provider: &'static str) -> Unimock {
-    Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
-        E2bControlApiMock::create_sandbox
-            .next_call(matching!(_))
-            .returns(Ok(access(provider))),
-        E2bControlApiMock::list_snapshots
-            .next_call(matching!(_, "sandbox-retained-failure"))
-            .returns(Ok(Vec::new())),
+    Unimock::new(
         E2bControlApiMock::connect_sandbox
             .next_call(matching!(_))
             .returns(Ok(access(provider))),
-    ))
+    )
 }
 
 fn request(
     sandbox_id: SandboxId,
+    provider_ref: &str,
     setup_script: &str,
     verify_commands: Vec<&str>,
-) -> BackendRealizeImageRequest {
-    BackendRealizeImageRequest {
+) -> BackendPrepareImageRequest {
+    BackendPrepareImageRequest {
         sandbox_id,
-        snapshot_id: SnapshotId::new(),
-        operation_id: OperationId::new(),
+        source_provider_ref: ProviderRef::new(provider_ref),
         owner: ResourceOwner::platform(Uuid::now_v7()),
-        deployment_id: "deployment".to_owned(),
-        profile: "general".to_owned(),
-        parent_image_provider_ref: None,
         input_files: Vec::new(),
         setup_script: setup_script.to_owned(),
         verify_commands: verify_commands.into_iter().map(str::to_owned).collect(),
-        correlation_name: "sandbox-retained-failure".to_owned(),
     }
 }
 

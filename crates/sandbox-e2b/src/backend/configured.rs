@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendEnsureScreenStackRequest,
     BackendFileContent, BackendInputRequest, BackendInspectSnapshotRequest, BackendManagedSandbox,
-    BackendOutputRequest, BackendPortIngressRequest, BackendReadFileRequest,
-    BackendReadOnlyExecRequest, BackendRealizeImageRequest, BackendRealizedImage,
+    BackendOutputRequest, BackendPortIngressRequest, BackendPrepareImageRequest,
+    BackendPreparedImage, BackendReadFileRequest, BackendReadOnlyExecRequest,
     BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
     BackendTerminal, BackendTerminalCreateRequest, BackendTerminalOutput, BackendWriteFileRequest,
@@ -21,8 +21,6 @@ use crate::{
     process::{ConnectProcessTransport, DynProcessTransport},
 };
 
-use super::image_snapshot::{DynSnapshotRecoverySleeper, TokioSnapshotRecoverySleeper};
-
 use super::{
     files, image_realization, mapping, port_ingress, process_run, read_only_exec, sandboxes,
     screen_resize, screen_stack, snapshots, terminal_output, terminals,
@@ -33,7 +31,6 @@ pub struct E2bSandboxBackend {
     pub(super) config: E2bAdapterConfig,
     pub(super) control: DynE2bControlApi,
     pub(super) processes: DynProcessTransport,
-    pub(super) snapshot_recovery_sleeper: DynSnapshotRecoverySleeper,
 }
 
 impl E2bSandboxBackend {
@@ -54,7 +51,6 @@ impl E2bSandboxBackend {
             config,
             control: Arc::new(control),
             processes: Arc::new(processes),
-            snapshot_recovery_sleeper: Arc::new(TokioSnapshotRecoverySleeper),
         })
     }
 
@@ -69,7 +65,6 @@ impl E2bSandboxBackend {
             config,
             control,
             processes,
-            snapshot_recovery_sleeper: Arc::new(TokioSnapshotRecoverySleeper),
         }
     }
 
@@ -82,11 +77,11 @@ impl E2bSandboxBackend {
 
 #[async_trait]
 impl SandboxBackend for E2bSandboxBackend {
-    async fn realize_image(
+    async fn prepare_image(
         &self,
-        request: BackendRealizeImageRequest,
-    ) -> Result<BackendRealizedImage> {
-        image_realization::realize(self, request).await
+        request: BackendPrepareImageRequest,
+    ) -> Result<BackendPreparedImage> {
+        image_realization::prepare(self, request).await
     }
 
     async fn list_managed_sandboxes(

@@ -1,44 +1,24 @@
-//! E2B image-realization failure behavior tests.
+//! E2B image-preparation behavior tests.
 
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendRealizeImageRequest, Error, OperationId, RealizeImageFileInput, ResourceOwner,
-    SandboxBackend, SandboxId, SnapshotId,
+    BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
+    SandboxBackend, SandboxId,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
 
 use crate::{
-    ControlSandboxAccess, ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile,
-    E2bRuntimeConventions, ProcessRegularFileWriteRequest, ProcessRunOutput, ProcessTransportMock,
+    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, E2bRuntimeConventions,
+    ProcessRegularFileWriteRequest, ProcessRunOutput, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
 
 #[tokio::test]
-async fn image_completion_precedes_separate_source_cleanup() {
+async fn image_preparation_precedes_separate_source_cleanup() {
     let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
-        E2bControlApiMock::create_sandbox
-            .next_call(matching!(_))
-            .returns(Ok(access("source"))),
-        E2bControlApiMock::list_snapshots
-            .next_call(matching!("source", "sandbox-input-image"))
-            .returns(Ok(Vec::new())),
-        E2bControlApiMock::connect_sandbox
-            .next_call(matching!("source"))
-            .returns(Ok(access("source"))),
-        E2bControlApiMock::list_snapshots
-            .next_call(matching!("source", "sandbox-input-image"))
-            .returns(Ok(Vec::new())),
-        E2bControlApiMock::create_snapshot
-            .next_call(matching!("source", "sandbox-input-image"))
-            .returns(Ok(ControlSnapshot {
-                snapshot_id: "snapshot".to_owned(),
-            })),
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("source"))
             .returns(Ok(access("source"))),
@@ -89,15 +69,11 @@ async fn image_completion_precedes_separate_source_cleanup() {
     ));
     let backend = backend(control, processes);
 
-    let image = backend
-        .realize_image(BackendRealizeImageRequest {
+    let prepared = backend
+        .prepare_image(BackendPrepareImageRequest {
             sandbox_id: SandboxId::new(),
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
+            source_provider_ref: ProviderRef::new("source"),
             owner: ResourceOwner::platform(Uuid::now_v7()),
-            deployment_id: "deployment".to_owned(),
-            profile: "general".to_owned(),
-            parent_image_provider_ref: None,
             input_files: vec![RealizeImageFileInput {
                 root: "/tmp".to_owned(),
                 path: "artifact.bin".to_owned(),
@@ -105,37 +81,24 @@ async fn image_completion_precedes_separate_source_cleanup() {
             }],
             setup_script: "test -f /tmp/artifact.bin".to_owned(),
             verify_commands: vec!["true".to_owned()],
-            correlation_name: "sandbox-input-image".to_owned(),
         })
         .await
-        .expect("image should realize");
+        .expect("image source should prepare");
 
-    assert_eq!(image.size_bytes, 4096);
+    assert_eq!(prepared.size_bytes, 4096);
     backend
-        .destroy_sandbox(image.source_sandbox_cleanup_ref)
+        .destroy_sandbox(prepared.source_provider_ref)
         .await
         .expect("persisted image source should clean up separately");
 }
 
 #[tokio::test]
 async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
-    let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
-        E2bControlApiMock::create_sandbox
-            .next_call(matching!(_))
-            .returns(Ok(access("scrub-source"))),
-        E2bControlApiMock::list_snapshots
-            .next_call(matching!("scrub-source", "sandbox-scrub-check"))
-            .returns(Ok(Vec::new())),
+    let control = Unimock::new(
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("scrub-source"))
             .returns(Ok(access("scrub-source"))),
-        E2bControlApiMock::kill_sandbox
-            .next_call(matching!("scrub-source"))
-            .returns(Ok(())),
-    ));
+    );
     let processes = Unimock::new((
         ProcessTransportMock::run
             .next_call(matching!(_, _))
@@ -172,18 +135,13 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
     );
 
     let error = backend
-        .realize_image(BackendRealizeImageRequest {
+        .prepare_image(BackendPrepareImageRequest {
             sandbox_id: SandboxId::new(),
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
+            source_provider_ref: ProviderRef::new("scrub-source"),
             owner: ResourceOwner::platform(Uuid::now_v7()),
-            deployment_id: "deployment".to_owned(),
-            profile: "general".to_owned(),
-            parent_image_provider_ref: None,
             input_files: Vec::new(),
             setup_script: "true".to_owned(),
             verify_commands: Vec::new(),
-            correlation_name: "sandbox-scrub-check".to_owned(),
         })
         .await
         .expect_err("the test scrub response should fail realization");

@@ -11,7 +11,7 @@ instead of depending on one another.
 - Define handled errors and async traits for sandbox services, backends,
   registries, and read-only access.
 - Define bounded data types for file transfer, process output, terminal logs,
-  image realization, ingress credentials, and screen viewport sizes.
+  image preparation, ingress credentials, and screen viewport sizes.
 - Provide mocks and a public conformance harness that every backend can run.
 - Preserve provider-neutral lifecycle, reconciliation, and recovery semantics.
 
@@ -28,14 +28,18 @@ types reject unsafe paths, oversized commands and files, invalid ports, and
 unsupported viewport dimensions before an adapter dispatches work.
 
 The public `conformance` module exercises creation, recovery, image
-realization, split-stream execution, private ingress, and terminal identity.
+preparation, split-stream execution, private ingress, and terminal identity.
 Adapters should run it alongside provider-specific transport and failure tests.
-Image realization deliberately returns its source cleanup reference: callers
-persist the completed image first, then destroy that source idempotently so a
-cleanup retry cannot rerun build scripts. A replay checks for the correlated
-snapshot before any build side effect. If snapshot identity is still
-ambiguous, `SnapshotReconciliationRequired` carries the retained source when
-the backend can identify it.
+
+Image construction uses explicit durable phases. The caller records source
+create intent before calling `create_sandbox`, uses only
+`recover_sandbox_create` after that first call begins, persists the recovered
+source, and calls `prepare_image` once. After persisting its measured size, the
+caller records one snapshot request and dispatches it once; every retry uses
+`recover_snapshot_create` with that same request. Only after the completed
+snapshot and size are durable may the caller destroy the source. This division
+keeps eventual-consistency gaps from allocating another source, replaying build
+scripts, or dispatching another snapshot.
 
 Replacement-file failures are safe to retry only after the backend confirms
 that the remote writer was revoked. `FileWriteUnconfirmed` means the caller
@@ -66,11 +70,13 @@ cargo clippy -p sandbox-interface --all-targets --all-features -- -D warnings
 ### Key Code
 
 - `src/backend.rs` — provider lifecycle and reconciliation obligations.
+- `src/backend_images.rs` — caller-owned image preparation phase types.
 - `src/service.rs` — trusted consumer lifecycle boundary.
 - `src/backend_files.rs` and `src/process_run.rs` — bounded file/process data.
 - `src/read_only.rs` — narrow non-mutating capability.
 - `src/screen_stack.rs` — screen capabilities and validated viewport values.
 - `src/conformance.rs` — reusable backend conformance harness.
+- `src/conformance_image.rs` — durable image phase conformance flow.
 
 ### Related Docs
 

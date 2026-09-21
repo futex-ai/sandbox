@@ -1,11 +1,10 @@
-//! Native E2B composition for workspace-platform image realization.
+//! Native E2B preparation of a caller-owned platform image source.
 
 use std::time::Duration;
 
 use sandbox_interface::{
-    BackendCreateSandboxRequest, BackendRealizeImageRequest, BackendRealizedImage, Error,
-    ProviderRef, RealizeImageFileInput, Result, RetainedSandboxRef, SandboxId,
-    SandboxNetworkPolicy,
+    BackendPrepareImageRequest, BackendPreparedImage, Error, ProviderRef, RealizeImageFileInput,
+    Result, RetainedSandboxRef, SandboxId,
 };
 
 use crate::process::{ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessRunOutput};
@@ -14,7 +13,7 @@ use super::{
     configured::E2bSandboxBackend,
     files,
     image_command_diagnostic::{ImagePhase, run_phase},
-    image_snapshot, mapping, sandboxes,
+    mapping,
 };
 
 const HELPER_OUTPUT_LIMIT: usize = 4096;
@@ -54,108 +53,54 @@ test -z "${GIT_ASKPASS:-}${SSH_ASKPASS:-}${SSH_AUTH_SOCK:-}${AWS_ACCESS_KEY_ID:-
 "#;
 const SIZE_COMMAND: &str = "du -sbx / 2>/dev/null | awk '{print \"__SANDBOX_IMAGE_SIZE__=\" $1}'";
 
-pub(super) async fn realize(
+pub(super) async fn prepare(
     backend: &E2bSandboxBackend,
-    request: BackendRealizeImageRequest,
-) -> Result<BackendRealizedImage> {
+    request: BackendPrepareImageRequest,
+) -> Result<BackendPreparedImage> {
     if !request.owner.is_platform() {
         return Err(Error::PlatformOwnerRequired);
     }
     let sandbox_id = request.sandbox_id;
-    let source = sandboxes::create(
-        backend,
-        BackendCreateSandboxRequest {
-            sandbox_id: request.sandbox_id,
-            operation_id: request.operation_id,
-            owner: request.owner,
-            deployment_id: request.deployment_id.clone(),
-            profile: request.profile.clone(),
-            network: SandboxNetworkPolicy::Open,
-            snapshot_provider_ref: request.parent_image_provider_ref.clone(),
-        },
-    )
-    .await?;
-    let source_provider_ref = source.provider_ref;
-    match realize_in_sandbox(backend, request, source_provider_ref.clone()).await {
-        Err(error) => match retained_failure(error, sandbox_id, source_provider_ref) {
-            RetentionDecision::Retain(error) => Err(error),
-            RetentionDecision::Destroy {
-                error,
-                provider_ref,
-            } => {
-                let _destroyed = sandboxes::destroy(backend, provider_ref).await;
-                Err(error)
-            }
-        },
-        Ok(image) => Ok(BackendRealizedImage {
-            source_sandbox_cleanup_ref: source_provider_ref,
-            image_provider_ref: image.provider_ref,
-            size_bytes: image.size_bytes,
+    let source_provider_ref = request.source_provider_ref.clone();
+    match prepare_source(backend, request).await {
+        Ok(size_bytes) => Ok(BackendPreparedImage {
+            source_provider_ref,
+            size_bytes,
         }),
+        Err(error) => Err(with_retained_source(error, sandbox_id, source_provider_ref)),
     }
 }
 
-fn retained_failure(
-    error: Error,
-    sandbox_id: SandboxId,
-    provider_ref: ProviderRef,
-) -> RetentionDecision {
+fn with_retained_source(error: Error, sandbox_id: SandboxId, provider_ref: ProviderRef) -> Error {
     let retained_sandbox = Some(RetainedSandboxRef {
         sandbox_id,
-        provider_ref: provider_ref.clone(),
+        provider_ref,
     });
     match error {
-        Error::ImageSetupFailed { command, .. } => {
-            RetentionDecision::Retain(Error::ImageSetupFailed {
-                command,
-                retained_sandbox,
-            })
-        }
-        Error::ImageVerificationFailed { index, command, .. } => {
-            RetentionDecision::Retain(Error::ImageVerificationFailed {
-                index,
-                command,
-                retained_sandbox,
-            })
-        }
-        Error::SnapshotReconciliationRequired { .. } => {
-            RetentionDecision::Retain(Error::SnapshotReconciliationRequired { retained_sandbox })
-        }
-        error => RetentionDecision::Destroy {
-            error,
-            provider_ref,
+        Error::ImageSetupFailed { command, .. } => Error::ImageSetupFailed {
+            command,
+            retained_sandbox,
         },
+        Error::ImageVerificationFailed { index, command, .. } => Error::ImageVerificationFailed {
+            index,
+            command,
+            retained_sandbox,
+        },
+        error => error,
     }
 }
 
-async fn realize_in_sandbox(
+async fn prepare_source(
     backend: &E2bSandboxBackend,
-    request: BackendRealizeImageRequest,
-    source_provider_ref: ProviderRef,
-) -> Result<RealizedProviderImage> {
-    let BackendRealizeImageRequest {
-        snapshot_id,
-        operation_id,
+    request: BackendPrepareImageRequest,
+) -> Result<u64> {
+    let BackendPrepareImageRequest {
+        source_provider_ref,
         input_files,
         setup_script,
         verify_commands,
-        correlation_name,
         ..
     } = request;
-    if let Some(provider_ref) = image_snapshot::existing(
-        backend,
-        source_provider_ref.clone(),
-        correlation_name.clone(),
-    )
-    .await?
-    {
-        let connection = mapping::connection(backend, &source_provider_ref).await?;
-        let size_bytes = observe_size(backend, connection).await?;
-        return Ok(RealizedProviderImage {
-            provider_ref,
-            size_bytes,
-        });
-    }
     let connection = mapping::connection(backend, &source_provider_ref).await?;
     write_input_files(backend, connection.clone(), input_files).await?;
     run_phase(
@@ -181,19 +126,7 @@ async fn realize_in_sandbox(
         ImagePhase::Scrub,
     )
     .await?;
-    let size_bytes = observe_size(backend, connection).await?;
-    let image_provider_ref = image_snapshot::realize(
-        backend,
-        snapshot_id,
-        operation_id,
-        correlation_name,
-        source_provider_ref,
-    )
-    .await?;
-    Ok(RealizedProviderImage {
-        provider_ref: image_provider_ref,
-        size_bytes,
-    })
+    observe_size(backend, connection).await
 }
 
 fn scrub_command(backend: &E2bSandboxBackend) -> String {
@@ -266,17 +199,4 @@ fn parse_size(output: ProcessRunOutput) -> Result<u64> {
         "E2B image size observation did not produce a usable value"
     );
     Err(Error::ImageSizeUnavailable)
-}
-
-enum RetentionDecision {
-    Retain(Error),
-    Destroy {
-        error: Error,
-        provider_ref: ProviderRef,
-    },
-}
-
-struct RealizedProviderImage {
-    provider_ref: ProviderRef,
-    size_bytes: u64,
 }

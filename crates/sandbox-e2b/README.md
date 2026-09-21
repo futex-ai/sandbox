@@ -53,13 +53,14 @@ mapped without waiting for an unused response body. DNS, connection, timeout,
 and response-stream failures remain typed as provider unavailability; failed
 mutating delivery remains ambiguous.
 
-Image realization returns its completed snapshot and source cleanup reference
-before source destruction. Consumers persist the image result first and then
-destroy the source idempotently, so cleanup failures cannot replay setup or
-verification commands. A retry looks for that correlated snapshot before
-staging inputs or running commands. Unresolved snapshot identity retains the
-source for reconciliation. Before measuring or snapshotting, configured image
-processes must exit after bounded TERM/KILL escalation.
+Image construction is split across the interface's durable phases. E2B
+preparation accepts an already persisted source and never creates, snapshots,
+or destroys a provider resource. Consumers dispatch source and snapshot creates
+once, use only their recovery methods after each dispatch starts, and persist
+preparation's measured size before snapshot dispatch. Empty recovery inventory
+stays in progress instead of replaying preparation or allocating another
+resource. Before measuring a prepared source, configured image processes must
+exit after bounded TERM/KILL escalation.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
@@ -114,6 +115,7 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
 - `src/config.rs` — validated profiles and adapter configuration.
 - `src/runtime_conventions.rs` — validated deployment and cleanup names.
 - `src/backend/configured.rs` — backend construction and trait dispatch.
+- `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.

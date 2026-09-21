@@ -13,22 +13,25 @@ sandbox-e2b = { git = "https://github.com/futex-ai/sandbox.git", rev = "<reviewe
 Then update Rust imports to `sandbox_interface` and `sandbox_e2b`, remove the
 old local crate members, and run Juno's full workspace checks.
 
-Image realization now returns `source_sandbox_cleanup_ref`. Persist the image
-provider reference and measured size before passing that cleanup reference to
-the backend's idempotent sandbox destroy operation. Do not translate a cleanup
-failure back into an image-realization failure, because retrying realization
-could rerun user-authored setup commands after the snapshot already exists.
-Reuse the exact realization operation, sandbox, snapshot, and correlation IDs
-on recovery. The backend now inventories that correlation before staging files
-or running commands, so a crash after provider snapshot completion returns the
-existing image without replaying the build.
+Replace the old monolithic backend image call with durable orchestration. Store
+a source-create intent before calling `create_sandbox` once. If that call is
+interrupted or reports ambiguous delivery, call only `recover_sandbox_create`;
+an empty result means wait or escalate, not dispatch another paid sandbox.
+Persist the source provider reference before calling `prepare_image` once, and
+persist its measured size before moving to snapshot dispatch.
 
-Handle `SnapshotReconciliationRequired { retained_sandbox: Some(...) }` as a
-recoverable retained build, not as ordinary failed-build cleanup. Persist the
-source provider identity and keep it available for a later retry or operator
-reconciliation. Destroying it loses the evidence needed to adopt a delayed
-snapshot. Likewise, `FileWriteUnconfirmed` requires the sandbox to stay fenced
-until it is reconciled or destroyed; do not immediately retry the write.
+Before `create_snapshot`, persist the exact source-and-correlation inventory,
+snapshot request, and dispatch intent. Call create once. Every restart,
+ambiguous response, or in-progress result must use
+`recover_snapshot_create` with that same request. Zero candidates remain in
+progress, while multiple candidates need operator reconciliation; neither case
+may call preparation or snapshot create again. Persist the completed image and
+size before destroying the source. A crash after intent but before confirmed
+delivery must fail closed for operator action rather than guess and duplicate
+work.
+
+`FileWriteUnconfirmed` requires the sandbox to stay fenced until it is
+reconciled or destroyed; do not immediately retry the write.
 
 Juno must construct `E2bRuntimeConventions` with the metadata prefix, terminal
 tag prefix, screen-helper path, and image helper and agent process names used

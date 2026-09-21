@@ -1,28 +1,23 @@
-//! Alternate-backend image-realization failure coverage.
+//! Alternate-backend image-preparation failure coverage.
 
 use sandbox_interface::{
-    BackendRealizeImageRequest, Error, OperationId, ResourceOwner, SandboxBackend, SandboxId,
-    SnapshotId,
+    BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
+    SandboxBackend, SandboxId,
 };
 
 use super::alternate_backend::AlternateBackend;
 
 #[tokio::test]
-async fn alternate_backend_realize_image_failure_may_omit_retained_sandbox() {
+async fn alternate_backend_prepare_image_failure_may_omit_retained_sandbox() {
     let backend = AlternateBackend::default();
     let error = backend
-        .realize_image(BackendRealizeImageRequest {
+        .prepare_image(BackendPrepareImageRequest {
             sandbox_id: SandboxId::new(),
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
+            source_provider_ref: ProviderRef::new("persisted-source"),
             owner: ResourceOwner::platform(uuid::Uuid::now_v7()),
-            deployment_id: "backend-conformance".to_owned(),
-            profile: "alternate".to_owned(),
-            parent_image_provider_ref: None,
             input_files: Vec::new(),
             setup_script: "infra-error".to_owned(),
             verify_commands: vec!["true".to_owned()],
-            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
         })
         .await
         .expect_err("infrastructure failure may omit retained sandbox");
@@ -34,18 +29,13 @@ async fn alternate_backend_realize_image_failure_may_omit_retained_sandbox() {
 async fn alternate_backend_may_omit_command_detail_and_retained_runtime() {
     let backend = AlternateBackend::default();
     let error = backend
-        .realize_image(BackendRealizeImageRequest {
+        .prepare_image(BackendPrepareImageRequest {
             sandbox_id: SandboxId::new(),
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
+            source_provider_ref: ProviderRef::new("persisted-source"),
             owner: ResourceOwner::platform(uuid::Uuid::now_v7()),
-            deployment_id: "backend-conformance".to_owned(),
-            profile: "alternate".to_owned(),
-            parent_image_provider_ref: None,
             input_files: Vec::new(),
             setup_script: "typed-without-details".to_owned(),
             verify_commands: vec!["true".to_owned()],
-            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
         })
         .await
         .expect_err("typed command failure may omit optional backend detail");
@@ -60,31 +50,23 @@ async fn alternate_backend_may_omit_command_detail_and_retained_runtime() {
 }
 
 #[tokio::test]
-async fn reconciliation_failure_can_return_its_retained_source() {
+async fn successful_preparation_returns_the_same_persisted_source() {
     let backend = AlternateBackend::default();
-    let sandbox_id = SandboxId::new();
-    let error = backend
-        .realize_image(BackendRealizeImageRequest {
-            sandbox_id,
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
+    let prepared = backend
+        .prepare_image(BackendPrepareImageRequest {
+            sandbox_id: SandboxId::new(),
+            source_provider_ref: ProviderRef::new("persisted-source"),
             owner: ResourceOwner::platform(uuid::Uuid::now_v7()),
-            deployment_id: "backend-conformance".to_owned(),
-            profile: "alternate".to_owned(),
-            parent_image_provider_ref: None,
-            input_files: Vec::new(),
-            setup_script: "reconciliation-required".to_owned(),
+            input_files: vec![RealizeImageFileInput {
+                root: "/tmp".to_owned(),
+                path: "sandbox-conformance-input.bin".to_owned(),
+                bytes: b"input".to_vec(),
+            }],
+            setup_script: "test -f /tmp/sandbox-conformance-input.bin".to_owned(),
             verify_commands: vec!["true".to_owned()],
-            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
         })
         .await
-        .expect_err("ambiguous identity should retain recovery context");
+        .expect("source preparation should succeed");
 
-    assert!(matches!(
-        error,
-        Error::SnapshotReconciliationRequired {
-            retained_sandbox: Some(ref retained),
-        } if retained.sandbox_id == sandbox_id
-            && retained.provider_ref.as_str() == "alternate-reconciliation-source"
-    ));
+    assert_eq!(prepared.source_provider_ref.as_str(), "persisted-source");
 }

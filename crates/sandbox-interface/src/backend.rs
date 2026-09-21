@@ -10,8 +10,8 @@ use crate::backend_terminal::{
 };
 use crate::{
     BackendEnsureScreenStackRequest, BackendFileContent, BackendPortIngressRequest,
-    BackendReadFileRequest, BackendReadOnlyExecRequest, BackendRealizeImageRequest,
-    BackendRealizedImage, BackendResizeScreenStackRequest, BackendRunProcessRequest,
+    BackendPrepareImageRequest, BackendPreparedImage, BackendReadFileRequest,
+    BackendReadOnlyExecRequest, BackendResizeScreenStackRequest, BackendRunProcessRequest,
     BackendWriteFileRequest, OperationId, PortIngress, ProviderRef, ReadOnlyExecOutput,
     ResourceOwner, Result, SandboxId, SandboxNetworkPolicy, SandboxProcessOutput, SandboxState,
     ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
@@ -126,20 +126,25 @@ pub enum BackendSnapshotRecovery {
 #[unimock::unimock(api = SandboxBackendMock)]
 #[async_trait]
 pub trait SandboxBackend: Send + Sync {
-    /// Realizes one platform image and returns its separate source cleanup target.
+    /// Prepares one durably recorded platform image source for snapshot dispatch.
     ///
-    /// Callers must durably persist the completed image before idempotently
-    /// destroying the returned source sandbox.
-    async fn realize_image(
+    /// The caller creates or recovers the source in separate durable phases,
+    /// invokes this preparation phase at most once, persists its result, then
+    /// uses the snapshot inventory, create, and recovery methods below. This
+    /// method never allocates, snapshots, or destroys a provider resource.
+    async fn prepare_image(
         &self,
-        request: BackendRealizeImageRequest,
-    ) -> Result<BackendRealizedImage>;
+        request: BackendPrepareImageRequest,
+    ) -> Result<BackendPreparedImage>;
     /// Lists provider sandboxes correlated to one consumer deployment.
     async fn list_managed_sandboxes(
         &self,
         deployment_id: String,
     ) -> Result<Vec<BackendManagedSandbox>>;
-    /// Creates a new sandbox from a profile or provider-bound snapshot.
+    /// Dispatches a new sandbox create after the caller records create intent.
+    ///
+    /// Once invocation starts, retries must call `recover_sandbox_create`
+    /// instead of this method until the outcome is reconciled.
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox>;
     /// Reconciles a correlated sandbox create without dispatching a new create.
     async fn recover_sandbox_create(
@@ -172,7 +177,10 @@ pub trait SandboxBackend: Send + Sync {
         source_provider_ref: ProviderRef,
         correlation_name: String,
     ) -> Result<BackendSnapshotInventory>;
-    /// Dispatches snapshot creation exactly once for a durable operation.
+    /// Dispatches snapshot creation once after the caller records dispatch intent.
+    ///
+    /// Once invocation starts, retries must call `recover_snapshot_create`
+    /// with this exact request instead of redispatching it.
     async fn create_snapshot(
         &self,
         request: BackendCreateSnapshotRequest,

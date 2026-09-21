@@ -341,7 +341,7 @@ image builds or weakening the provider-neutral byte and validation contracts.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
       unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.
 
 ## Milestone 10: Recovery And Process Safety Review Remediation
@@ -367,6 +367,35 @@ never be reported as successful completion.
       unavailability, while preserving ambiguous delivery for mutations.
 - [x] Add focused regression coverage and update the public interface, adapter,
       adoption, and protocol documentation for every changed contract.
+- [x] Run formatting, focused regressions, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
+      unrelated edits.
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.
+
+## Milestone 11: Durable Image And Write Recovery
+
+Resolve every finding from the third clean post-push review. At the end of this
+milestone, callers durably control image source creation and snapshot dispatch,
+provider recovery failures retain their evidence, and file and transport
+reconciliation report only outcomes that are proven durable.
+
+- [x] Replace monolithic image realization with explicit caller-driven source,
+      preparation, snapshot-dispatch, and recovery phases so retries never
+      allocate a second source or replay completed build side effects.
+- [x] Retain image source sandboxes whenever preparation or recovery cannot
+      prove a safe terminal outcome.
+- [x] Reconcile nonzero writer exits through the same commit-or-revoke outcome
+      mapping used for uncertain transport failures.
+- [x] Preserve definitive pre-commit writer rejections while reconciling only
+      exit paths that could have claimed or completed the replacement.
+- [x] Classify control-plane response-body transport failures as retryable
+      provider unavailability.
+- [x] Sync the destination directory before cleanup reports an already visible
+      replacement as durably committed.
+- [x] Add failing regressions first for all six review findings, then update the
+      interface, adapter, conformance, adoption, and protocol documentation.
 - [x] Run formatting, focused regressions, Clippy, the full workspace test
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
