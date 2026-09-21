@@ -115,6 +115,24 @@ async fn helper_deadline_after_start_kills_the_observed_process() {
     assert!(matches!(error, DomainError::BackendUnavailable { .. }));
 }
 
+#[tokio::test]
+async fn helper_rejects_a_non_normal_end_even_when_its_default_code_is_zero() {
+    let events = vec![event_frame(
+        r#"{"event":{"end":{"exitCode":0,"exited":false}}}"#,
+    )];
+
+    let error = process_transport(events)
+        .run_helper(
+            connection(),
+            command(ProcessOutputCapture::HardLimit { max_bytes: 5 }),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect_err("signal termination must not look like helper success");
+
+    assert!(matches!(error, DomainError::BackendUnavailable { .. }));
+}
+
 fn process_transport(events: Vec<Vec<u8>>) -> ConnectProcessTransport {
     let mock = Unimock::new(
         stream_call

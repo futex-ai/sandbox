@@ -1,4 +1,4 @@
-//! Bounded cleanup for failed atomic regular-file replacement attempts.
+//! Revocation fencing and reconciliation for uncertain replacement writes.
 
 use std::time::Duration;
 
@@ -8,88 +8,57 @@ use super::{
 };
 
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
+const COMMITTED_EXIT_CODE: i32 = 51;
+const CLEANER: &str = include_str!("helpers/regular_file_cleanup.py");
 
-const CLEANER: &str = r#"import os
-import sys
-import time
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum CleanupOutcome {
+    Revoked,
+    Committed,
+    Unconfirmed,
+}
 
-failed = False
-directory = None
-try:
-    root = sys.argv[1]
-    path = sys.argv[2]
-    staging = sys.argv[3]
-    temporary = sys.argv[4]
-    try:
-        os.unlink(staging)
-    except FileNotFoundError:
-        pass
-    except OSError:
-        failed = True
-    root_parts = [part for part in root.split('/') if part]
-    path_parts = path.split('/')
-    if root != '/' + '/'.join(root_parts):
-        raise ValueError()
-    if not path_parts or any(part in ('', '.', '..') for part in path_parts):
-        raise ValueError()
-    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-    directory = os.open('/', flags)
-    for part in root_parts + path_parts[:-1]:
-        child = os.open(part, flags, dir_fd=directory)
-        os.close(directory)
-        directory = child
-    for delay in (0, 3):
-        if delay:
-            time.sleep(delay)
-        try:
-            os.unlink(temporary, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        except OSError:
-            failed = True
-except (IndexError, OSError, ValueError):
-    failed = True
-finally:
-    if directory is not None:
-        os.close(directory)
-raise SystemExit(1 if failed else 0)
-"#;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct CleanupRequest {
+    pub(super) root: String,
+    pub(super) path: String,
+    pub(super) staging_path: String,
+    pub(super) temporary_name: String,
+    pub(super) state_path: String,
+    pub(super) expected_size: usize,
+}
 
 pub(super) async fn cleanup(
     transport: &ConnectProcessTransport,
     connection: ProcessConnection,
-    root: String,
-    path: String,
-    staging_path: String,
-    temporary_name: String,
-) {
+    request: CleanupRequest,
+) -> CleanupOutcome {
     let result = transport
-        .run_helper(
-            connection,
-            command(root, path, staging_path, temporary_name),
-            CLEANUP_TIMEOUT,
-        )
+        .run_helper(connection, command(request), CLEANUP_TIMEOUT)
         .await;
-    if !matches!(result, Ok(output) if output.exit_code == Some(0)) {
+    let outcome = match result {
+        Ok(output) if output.succeeded() => CleanupOutcome::Revoked,
+        Ok(output) if output.exit_code == Some(COMMITTED_EXIT_CODE) => CleanupOutcome::Committed,
+        Ok(_) | Err(_) => CleanupOutcome::Unconfirmed,
+    };
+    if outcome == CleanupOutcome::Unconfirmed {
         tracing::debug!(event = "e2b_regular_file_cleanup_unconfirmed");
     }
+    outcome
 }
 
-fn command(
-    root: String,
-    path: String,
-    staging_path: String,
-    temporary_name: String,
-) -> ProcessCommand {
+fn command(request: CleanupRequest) -> ProcessCommand {
     ProcessCommand {
         command: "/usr/bin/python3".to_owned(),
         args: vec![
             "-c".to_owned(),
             CLEANER.to_owned(),
-            root,
-            path,
-            staging_path,
-            temporary_name,
+            request.root,
+            request.path,
+            request.staging_path,
+            request.temporary_name,
+            request.state_path,
+            request.expected_size.to_string(),
         ],
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },

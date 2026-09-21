@@ -27,13 +27,16 @@ pub(super) async fn clean_restored(
     let connection = mapping::connection(backend, &sandbox_ref).await?;
     let processes = backend.processes.list(connection.clone()).await?;
     let terminal_tag_prefix = backend.config.runtime_conventions().terminal_tag_prefix();
-    for process in processes
-        .into_iter()
-        .filter(|process| tagged_terminal(process, terminal_tag_prefix).is_some())
-    {
+    for process in processes {
+        if tagged_terminal(&process, terminal_tag_prefix).is_none() {
+            continue;
+        }
+        let Some(tag) = process.tag else {
+            continue;
+        };
         backend
             .processes
-            .kill(connection.clone(), ProcessSelector::Pid(process.pid))
+            .kill(connection.clone(), ProcessSelector::Tag(tag))
             .await?;
     }
     let cleanup = backend
@@ -50,7 +53,7 @@ pub(super) async fn clean_restored(
             },
         )
         .await?;
-    if cleanup.exit_code != Some(0) {
+    if !cleanup.succeeded() {
         return Err(Error::internal_message(
             "restored E2B terminal helper cleanup failed",
         ));
@@ -84,7 +87,7 @@ pub(super) async fn create(
             },
         )
         .await?;
-    if directory.exit_code != Some(0) {
+    if !directory.succeeded() {
         return Err(Error::internal_message(
             "E2B terminal log directory creation failed",
         ));

@@ -1,22 +1,30 @@
-//! Descriptor-relative failed-write cleanup coverage.
+//! Descriptor-relative write revocation and reconciliation coverage.
 
-use std::{fs, os::unix::fs::symlink, path::Path, process::Command, time::Duration};
+use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
 
 use tempfile::tempdir;
 
-use super::command;
+use super::{CleanupRequest, command};
 
 #[test]
-fn cleanup_removes_staging_and_destination_temporary_files() {
+fn cleanup_revokes_the_writer_and_removes_temporary_files() {
     let root = tempdir().expect("temporary write root");
     let stage = tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let staged = stage.path().join("upload");
+    let state = stage.path().join("state");
     let temporary = root.path().join("src/.sandbox-write-test");
     fs::write(&staged, b"staged").expect("staged file");
     fs::write(&temporary, b"temporary").expect("destination temporary file");
 
-    let output = run(root.path(), "src/lib.rs", &staged, ".sandbox-write-test");
+    let output = run(
+        root.path(),
+        "src/lib.rs",
+        &staged,
+        ".sandbox-write-test",
+        &state,
+        6,
+    );
 
     assert!(
         output.status.success(),
@@ -25,6 +33,12 @@ fn cleanup_removes_staging_and_destination_temporary_files() {
     );
     assert!(!staged.exists());
     assert!(!temporary.exists());
+    assert_eq!(
+        fs::read_link(state)
+            .expect("revocation marker")
+            .to_string_lossy(),
+        "revoked"
+    );
 }
 
 #[test]
@@ -34,11 +48,19 @@ fn cleanup_does_not_follow_a_replaced_parent_directory() {
     let stage = tempdir().expect("temporary staging root");
     symlink(outside.path(), root.path().join("linked")).expect("linked parent");
     let staged = stage.path().join("upload");
+    let state = stage.path().join("state");
     let outside_temporary = outside.path().join(".sandbox-write-test");
     fs::write(&staged, b"staged").expect("staged file");
     fs::write(&outside_temporary, b"protected").expect("outside temporary file");
 
-    let output = run(root.path(), "linked/lib.rs", &staged, ".sandbox-write-test");
+    let output = run(
+        root.path(),
+        "linked/lib.rs",
+        &staged,
+        ".sandbox-write-test",
+        &state,
+        6,
+    );
 
     assert!(!output.status.success());
     assert!(!staged.exists());
@@ -49,40 +71,54 @@ fn cleanup_does_not_follow_a_replaced_parent_directory() {
 }
 
 #[test]
-fn cleanup_second_pass_removes_a_late_temporary_file() {
+fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
     let root = tempdir().expect("temporary write root");
     let stage = tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
-    let staged = stage.path().join("upload");
-    fs::write(&staged, b"staged").expect("staged file");
+    let staged = stage.path().join("missing-upload");
+    let state = stage.path().join("state");
+    let target = root.path().join("src/lib.rs");
     let temporary = root.path().join("src/.sandbox-write-test");
-    let late_temporary = temporary.clone();
-    let writer = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(1));
-        fs::write(late_temporary, b"late").expect("late temporary file");
-    });
+    fs::write(&target, b"old").expect("old target");
+    fs::write(&temporary, b"replacement").expect("complete temporary file");
+    symlink(
+        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
+        &state,
+    )
+    .expect("commit claim");
 
-    let output = run(root.path(), "src/lib.rs", &staged, ".sandbox-write-test");
-    writer.join().expect("late writer should finish");
-
-    assert!(
-        output.status.success(),
-        "cleanup stderr: {:?}",
-        output.stderr
+    let output = run(
+        root.path(),
+        "src/lib.rs",
+        &staged,
+        ".sandbox-write-test",
+        &state,
+        b"replacement".len(),
     );
-    assert!(!staged.exists());
+
+    assert_eq!(output.status.code(), Some(51));
+    assert_eq!(fs::read(target).expect("reconciled target"), b"replacement");
     assert!(!temporary.exists());
 }
 
-fn run(root: &Path, path: &str, staged: &Path, temporary_name: &str) -> std::process::Output {
-    let command = command(
-        root.to_string_lossy().into_owned(),
-        path.to_owned(),
-        staged.to_string_lossy().into_owned(),
-        temporary_name.to_owned(),
-    );
+fn run(
+    root: &Path,
+    path: &str,
+    staged: &Path,
+    temporary_name: &str,
+    state: &Path,
+    expected_size: usize,
+) -> std::process::Output {
+    let command = command(CleanupRequest {
+        root: root.to_string_lossy().into_owned(),
+        path: path.to_owned(),
+        staging_path: staged.to_string_lossy().into_owned(),
+        temporary_name: temporary_name.to_owned(),
+        state_path: state.to_string_lossy().into_owned(),
+        expected_size,
+    });
     Command::new(command.command)
         .args(command.args)
         .output()
-        .expect("run failed-write cleanup")
+        .expect("run write reconciler")
 }

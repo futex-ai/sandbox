@@ -343,3 +343,33 @@ image builds or weakening the provider-neutral byte and validation contracts.
       unrelated edits.
 - [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.
+
+## Milestone 10: Recovery And Process Safety Review Remediation
+
+Resolve every finding from the second clean post-push review. At the end of
+this milestone, image realization can be recovered without losing provider
+state or replaying completed build steps, and provider process uncertainty can
+never be reported as successful completion.
+
+- [x] Preserve the image source sandbox when snapshot reconciliation remains
+      unresolved, and return enough typed context for the caller to recover it.
+- [x] Look for a completed correlated image before staging files or rerunning
+      user-authored image setup and verification commands.
+- [x] Require normal process termination before any regular-file helper or
+      restored-sandbox maintenance helper reports success.
+- [x] Kill restored terminal processes by their stable provider tag rather
+      than a separately observed numeric PID.
+- [x] Replace the fixed failed-write cleanup delay with a writer revocation
+      fence checked immediately before atomic replacement.
+- [x] Stop configured image helper processes with bounded TERM/KILL escalation
+      and verify that they are gone before size measurement and snapshotting.
+- [x] Classify transient envd request and response failures as provider
+      unavailability, while preserving ambiguous delivery for mutations.
+- [x] Add focused regression coverage and update the public interface, adapter,
+      adoption, and protocol documentation for every changed contract.
+- [x] Run formatting, focused regressions, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
+      unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.

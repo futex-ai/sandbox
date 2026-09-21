@@ -5,12 +5,14 @@ mod connect_helpers;
 mod file;
 mod framing;
 mod http;
+mod http_error;
 mod mapping;
 mod regular_file;
 mod regular_file_cleanup;
 mod regular_file_write;
 mod selector;
 mod split_run;
+mod status;
 mod types;
 mod wire;
 

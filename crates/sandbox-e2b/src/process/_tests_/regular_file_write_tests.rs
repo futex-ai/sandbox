@@ -81,6 +81,30 @@ fn writer_rejects_a_symlinked_parent_without_writing_outside_root() {
     assert!(!outside.path().join("target.txt").exists());
 }
 
+#[test]
+fn writer_cannot_replace_after_cleanup_claims_revocation() {
+    let root = tempdir().expect("temporary write root");
+    let stage = tempdir().expect("temporary staging root");
+    fs::create_dir(root.path().join("src")).expect("nested directory");
+    let target = root.path().join("src/lib.rs");
+    let staged = stage.path().join("upload");
+    let state = stage.path().join("state");
+    fs::write(&target, b"old").expect("old target");
+    fs::write(&staged, b"replacement").expect("staged bytes");
+    symlink("revoked", &state).expect("revocation claim");
+
+    let output = run_with_state(
+        root.path(),
+        "src/lib.rs",
+        &staged,
+        &state,
+        b"replacement".len(),
+    );
+
+    assert_eq!(output.status.code(), Some(50));
+    assert_eq!(fs::read(target).expect("unchanged target"), b"old");
+}
+
 #[tokio::test]
 async fn failed_writer_attempts_run_bounded_remote_cleanup() {
     let staged_path = Arc::new(Mutex::new(None));
@@ -102,7 +126,7 @@ async fn failed_writer_attempts_run_bounded_remote_cleanup() {
                 let cleanup_request = cleanup_request.clone();
                 Arc::new(move |_, _, _, request| {
                     *cleanup_request.lock().expect("cleanup request lock") = Some(request);
-                    Ok(completed_stream())
+                    Ok(completed_stream(0))
                 })
             }),
     ));
@@ -138,20 +162,92 @@ async fn failed_writer_attempts_run_bounded_remote_cleanup() {
     assert!(args.iter().any(|value| value == &staged_path));
     assert!(args.iter().any(|value| value == "/workspace"));
     assert!(args.iter().any(|value| value == "src/lib.rs"));
+    assert!(args.iter().any(|value| {
+        value
+            .as_str()
+            .is_some_and(|value| value.contains("sandbox-e2b-write-state-"))
+    }));
+}
+
+#[tokio::test]
+async fn uncertain_writer_with_unconfirmed_revocation_returns_a_fencing_error() {
+    let http = Unimock::new((
+        upload_call.next_call(matching!(_, _, _)).returns(Ok(())),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers(&|_, _, _, _| Err(E2bAdapterError::Unavailable)),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers(&|_, _, _, _| Err(E2bAdapterError::Unavailable)),
+    ));
+    let transport = ConnectProcessTransport {
+        http: Arc::new(http),
+        backend_id: "e2b".to_owned(),
+    };
+
+    let result = write(&transport, connection(), request()).await;
+
+    assert!(matches!(result, Err(Error::FileWriteUnconfirmed)));
+}
+
+#[tokio::test]
+async fn uncertain_transport_accepts_a_durably_committed_write() {
+    let http = Unimock::new((
+        upload_call.next_call(matching!(_, _, _)).returns(Ok(())),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers(&|_, _, _, _| Err(E2bAdapterError::Unavailable)),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers(&|_, _, _, _| Ok(completed_stream(51))),
+    ));
+    let transport = ConnectProcessTransport {
+        http: Arc::new(http),
+        backend_id: "e2b".to_owned(),
+    };
+
+    write(&transport, connection(), request())
+        .await
+        .expect("commit claim proves the replacement completed");
 }
 
 fn run(root: &Path, path: &str, staged: &Path, expected_size: usize) -> std::process::Output {
+    run_with_state(
+        root,
+        path,
+        staged,
+        &staged.with_extension("state"),
+        expected_size,
+    )
+}
+
+fn run_with_state(
+    root: &Path,
+    path: &str,
+    staged: &Path,
+    state: &Path,
+    expected_size: usize,
+) -> std::process::Output {
     let command = command(
         root.to_string_lossy().into_owned(),
         path.to_owned(),
         staged.to_string_lossy().into_owned(),
         ".sandbox-write-test".to_owned(),
+        state.to_string_lossy().into_owned(),
         expected_size,
     );
     Command::new(command.command)
         .args(command.args)
         .output()
         .expect("run atomic writer")
+}
+
+fn request() -> ProcessRegularFileWriteRequest {
+    ProcessRegularFileWriteRequest {
+        root: "/workspace".to_owned(),
+        path: "src/lib.rs".to_owned(),
+        bytes: b"replacement".to_vec(),
+    }
 }
 
 fn connection() -> ProcessConnection {
@@ -162,9 +258,11 @@ fn connection() -> ProcessConnection {
     )
 }
 
-fn completed_stream() -> ByteStream {
+fn completed_stream(exit_code: i32) -> ByteStream {
     let start = frame(br#"{"event":{"start":{"pid":7}}}"#);
-    let end = frame(br#"{"event":{"end":{"exitCode":0,"exited":true}}}"#);
+    let end = frame(
+        format!(r#"{{"event":{{"end":{{"exitCode":{exit_code},"exited":true}}}}}}"#).as_bytes(),
+    );
     Box::pin(futures_util::stream::iter(vec![
         Ok(Bytes::from(start)),
         Ok(Bytes::from(end)),

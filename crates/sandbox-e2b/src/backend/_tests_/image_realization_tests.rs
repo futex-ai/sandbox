@@ -25,6 +25,9 @@ async fn image_completion_precedes_separate_source_cleanup() {
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(access("source"))),
+        E2bControlApiMock::list_snapshots
+            .next_call(matching!("source", "sandbox-input-image"))
+            .returns(Ok(Vec::new())),
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("source"))
             .returns(Ok(access("source"))),
@@ -123,6 +126,9 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(access("scrub-source"))),
+        E2bControlApiMock::list_snapshots
+            .next_call(matching!("scrub-source", "sandbox-scrub-check"))
+            .returns(Ok(Vec::new())),
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("scrub-source"))
             .returns(Ok(access("scrub-source"))),
@@ -142,6 +148,9 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
                 assert!(script.contains("tenant-helper"));
                 assert!(script.contains("tenant-agent"));
                 assert!(script.contains("pkill -TERM -x"));
+                assert!(script.contains("pkill -KILL -x"));
+                assert!(script.contains("pgrep -x"));
+                assert!(script.contains("sandbox_stop_attempt"));
                 assert!(script.contains("sandbox_home=\"${HOME:?"));
                 assert!(script.contains("-user \"$sandbox_uid\""));
                 assert!(script.contains("! -name '.*'"));

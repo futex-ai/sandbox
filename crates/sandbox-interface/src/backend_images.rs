@@ -11,7 +11,7 @@ pub struct BackendRealizeImageRequest {
     pub sandbox_id: SandboxId,
     /// Stable consumer snapshot handle for the resulting image.
     pub snapshot_id: SnapshotId,
-    /// Durable operation correlation handle.
+    /// Durable operation correlation handle, reused unchanged for recovery.
     pub operation_id: OperationId,
     /// Workspace-platform owner encoded as opaque provider metadata.
     pub owner: ResourceOwner,
@@ -27,7 +27,7 @@ pub struct BackendRealizeImageRequest {
     pub setup_script: String,
     /// Ordered commands that must all exit successfully.
     pub verify_commands: Vec<String>,
-    /// Opaque provider snapshot correlation name.
+    /// Opaque provider snapshot correlation name, reused unchanged for recovery.
     pub correlation_name: String,
 }
 

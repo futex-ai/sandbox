@@ -43,6 +43,10 @@ The backend first returns the completed image plus its source-sandbox cleanup
 reference. The trusted caller durably persists the image identity and measured
 size, then idempotently destroys that source. A cleanup failure must never turn
 completed realization into an error that replays setup or verification.
+Every replay must first look for a completed snapshot using the same source and
+correlation identity. If identity remains ambiguous, the backend must retain
+the source and return it in `SnapshotReconciliationRequired` when known; it
+must not destroy the runtime needed for recovery.
 
 ## Bounds And Failure Safety
 
@@ -50,7 +54,11 @@ Paths must remain under their trusted absolute root and must identify regular
 files without following a symlink escape. Replacement writes must bind parent
 directories and replace the leaf atomically so concurrent path changes cannot
 redirect a write. Failed replacement attempts must make a bounded cleanup
-attempt for all provider-side staging and destination-temporary files. File
+attempt for all provider-side staging and destination-temporary files. An
+uncertain writer must be fenced by an atomic revocation or reconciled as an
+already committed exact replacement. If neither can be proven, the backend
+returns `FileWriteUnconfirmed`; the caller must not retry on that sandbox until
+it is reconciled or destroyed. File
 transfers are capped at 256 MiB. Provider response and process output limits
 are enforced while bytes are consumed. A bounded one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
@@ -59,11 +67,14 @@ the exact destination host is validated. Port zero, empty required text,
 oversized values, unknown profiles, and unsupported network policies fail
 before provider dispatch. In particular, an oversized replacement write must
 fail before connecting to or resuming its sandbox.
+Helper processes may report success only after a normal exit; an exit-code
+field accompanying signal termination is not a successful completion.
 
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
 sufficient identity fence because a numeric process ID can be reused between
-the two calls. Provider-side transcripts enforce the requested byte count
+the two calls. The same rule applies when killing terminals inherited by a
+restored sandbox. Provider-side transcripts enforce the requested byte count
 exactly, including limits that are smaller than or not aligned to 1 KiB.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product

@@ -126,6 +126,9 @@ fn retained_control(provider: &'static str) -> Unimock {
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(access(provider))),
+        E2bControlApiMock::list_snapshots
+            .next_call(matching!(_, "sandbox-retained-failure"))
+            .returns(Ok(Vec::new())),
         E2bControlApiMock::connect_sandbox
             .next_call(matching!(_))
             .returns(Ok(access(provider))),

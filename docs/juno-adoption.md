@@ -18,6 +18,17 @@ provider reference and measured size before passing that cleanup reference to
 the backend's idempotent sandbox destroy operation. Do not translate a cleanup
 failure back into an image-realization failure, because retrying realization
 could rerun user-authored setup commands after the snapshot already exists.
+Reuse the exact realization operation, sandbox, snapshot, and correlation IDs
+on recovery. The backend now inventories that correlation before staging files
+or running commands, so a crash after provider snapshot completion returns the
+existing image without replaying the build.
+
+Handle `SnapshotReconciliationRequired { retained_sandbox: Some(...) }` as a
+recoverable retained build, not as ordinary failed-build cleanup. Persist the
+source provider identity and keep it available for a later retry or operator
+reconciliation. Destroying it loses the evidence needed to adopt a delayed
+snapshot. Likewise, `FileWriteUnconfirmed` requires the sandbox to stay fenced
+until it is reconciled or destroyed; do not immediately retry the write.
 
 Juno must construct `E2bRuntimeConventions` with the metadata prefix, terminal
 tag prefix, screen-helper path, and image helper and agent process names used

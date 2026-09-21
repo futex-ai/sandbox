@@ -28,6 +28,14 @@ pub(super) fn realize(request: BackendRealizeImageRequest) -> Result<BackendReal
             backend_id: "alternate".to_owned(),
         });
     }
+    if request.setup_script == "reconciliation-required" {
+        return Err(Error::SnapshotReconciliationRequired {
+            retained_sandbox: Some(RetainedSandboxRef {
+                sandbox_id: request.sandbox_id,
+                provider_ref: ProviderRef::new("alternate-reconciliation-source"),
+            }),
+        });
+    }
     assert_eq!(
         request.setup_script,
         "test -f /tmp/sandbox-conformance-input.bin"

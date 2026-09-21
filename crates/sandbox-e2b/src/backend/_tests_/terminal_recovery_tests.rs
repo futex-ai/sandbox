@@ -1,13 +1,13 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendTerminalCreateRequest, OperationId, ProviderRef, SandboxBackend, TerminalId,
+    BackendTerminalCreateRequest, Error, OperationId, ProviderRef, SandboxBackend, TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, E2bRuntimeConventions,
-    ProcessInfo, ProcessTransportMock,
+    ProcessInfo, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -100,6 +100,8 @@ async fn terminal_recovery_does_not_allocate_when_the_tag_is_absent() {
 
 #[tokio::test]
 async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
+    let terminal_id = TerminalId::new();
+    let terminal_tag = format!("sandbox-terminal-{terminal_id}");
     let control = Unimock::new(
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("sandbox"))
@@ -110,10 +112,20 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 traffic_access_token: "traffic-token".to_owned(),
             })),
     );
+    let expected_tag = terminal_tag.clone();
     let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
+            .returns(Ok(vec![ProcessInfo {
+                pid: 73,
+                tag: Some(terminal_tag),
+            }])),
+        ProcessTransportMock::kill
+            .next_call(matching!(_, _))
+            .answers_arc(Arc::new(move |_, _, selector| {
+                assert_eq!(selector, ProcessSelector::Tag(expected_tag.clone()));
+                Ok(())
+            })),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
             .answers(&|_, _, command| {
@@ -136,6 +148,42 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
         .clean_restored_terminals(ProviderRef::new("sandbox"))
         .await
         .expect("restored cleanup should succeed");
+}
+
+#[tokio::test]
+async fn restored_cleanup_rejects_non_normal_helper_termination() {
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(ControlSandboxAccess {
+                sandbox_id: "sandbox".to_owned(),
+                domain: "e2b.app".to_owned(),
+                envd_access_token: "call-local-token".to_owned(),
+                traffic_access_token: "traffic-token".to_owned(),
+            })),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(Vec::new())),
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
+            .returns(Ok(crate::ProcessRunOutput {
+                bytes: Vec::new(),
+                exit_code: Some(0),
+                exited: false,
+                output_truncated: false,
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    let error = backend
+        .clean_restored_terminals(ProviderRef::new("sandbox"))
+        .await
+        .expect_err("signalled cleanup must fail closed");
+
+    assert!(matches!(error, Error::Internal(_)));
 }
 
 fn config() -> E2bAdapterConfig {

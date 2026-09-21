@@ -49,6 +49,10 @@ mod screen_stack_tests;
 mod image_realization_tests;
 
 #[cfg(test)]
+#[path = "_tests_/image_recovery_tests.rs"]
+mod image_recovery_tests;
+
+#[cfg(test)]
 #[path = "_tests_/image_command_diagnostic_tests.rs"]
 mod image_command_diagnostic_tests;
 

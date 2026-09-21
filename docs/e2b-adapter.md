@@ -40,6 +40,10 @@ that carry an API or envd access token never follow HTTP redirects.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
+Envd DNS, connection, timeout, and response-stream failures map to retryable
+provider unavailability. A failure that can occur after a process start,
+terminal input, or upload was delivered remains delivery-ambiguous until its
+operation-specific recovery fence resolves the outcome.
 
 Sandbox creation filters on exact configured metadata. Snapshot recovery walks
 bounded cursor pagination and adopts exactly one new correlated snapshot.
@@ -60,12 +64,14 @@ An unconfigured logical profile returns the handled provider-neutral
 Regular-file reads use a descriptor-relative helper with non-following opens
 and `fstat` on the opened leaf. Replacement writes stage the bounded payload,
 then traverse the trusted root through non-following directory descriptors and
-atomically replace the leaf. Any failed upload or replacement invokes a bounded
-descriptor-relative cleanup helper for both the upload staging path and the
-destination temporary name. It repeats destination cleanup after the
-process-kill allowance so a late, unconfirmed writer cannot recreate the
-temporary name after the first pass. Process execution is direct-argv and keeps
-stdout, stderr, deadlines, and overflow outcomes separate. A one-shot process
+atomically replace the leaf. The writer and bounded cleanup helper race for one
+atomic commit-or-revoke marker. A revocation winner prevents every later
+rename; a commit winner lets cleanup finish or verify the exact replacement by
+size and digest. If neither outcome can be confirmed, `FileWriteUnconfirmed`
+requires the caller to keep the sandbox fenced rather than retry. Process
+execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
+outcomes separate. File and maintenance helpers require a normal process exit;
+a default zero exit code on a signal event is not success. A one-shot process
 whose collection times out, overflows, or fails decoding is killed with a
 bounded cleanup call once its PID has been observed; persistent terminal
 connections are left running intentionally.
@@ -74,16 +80,25 @@ Terminal recovery lists processes by the configured stable tag and never
 starts a replacement when recovery finds no match. Inspection and output reads
 bind the stored PID to that exact tag. Input and close requests select the tag
 inside the provider operation itself, so a process that reuses the stored PID
-cannot receive input or be killed. Durable log reads share one absolute
-provider deadline and coherent cursor/size reporting. Transcript writers use
-the request's exact byte limit rather than a rounded filesystem block limit.
-Oversized replacement writes fail before acquiring mutating sandbox access.
+cannot receive input or be killed. Restored-terminal cleanup also kills by tag,
+then requires its maintenance command to exit normally. Durable log reads
+share one absolute provider deadline and coherent cursor/size reporting.
+Transcript writers use the request's exact byte limit rather than a rounded
+filesystem block limit. Oversized replacement writes fail before acquiring
+mutating sandbox access.
 
 Successful image realization returns the completed snapshot, measured size,
 and source-sandbox cleanup reference without destroying the source first. The
 trusted caller must durably store that completion and then call the backend's
 idempotent sandbox destroy operation. This keeps transient cleanup failures
 from replaying credential-free setup and verification scripts.
+Before any replayed build side effect, the adapter inventories the stable
+source-and-correlation pair and returns an already completed snapshot. If
+snapshot identity stays unresolved, `SnapshotReconciliationRequired` carries
+the retained source reference instead of destroying the evidence needed for a
+later retry or operator decision. Image scrub sends TERM to both configured
+process names, waits for bounded disappearance, escalates to KILL, and fails
+unless both names are gone before size measurement and snapshot creation.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and

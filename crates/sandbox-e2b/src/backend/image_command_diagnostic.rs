@@ -37,7 +37,7 @@ pub(super) async fn run_phase(
             },
         )
         .await?;
-    if output.exited && output.exit_code == Some(0) {
+    if output.succeeded() {
         return Ok(());
     }
     Err(phase.error(output))

@@ -9,7 +9,7 @@ use url::Url;
 use crate::error::{Error, Result};
 use crate::response_body::{ResponseByteStream, collect_bounded};
 
-use super::{framing::encode_frame, types::ProcessConnection};
+use super::{framing::encode_frame, http_error::request_error, types::ProcessConnection};
 
 pub(crate) type ByteStream = ResponseByteStream;
 
@@ -134,6 +134,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
         method: String,
         request_json: Vec<u8>,
     ) -> Result<ByteStream> {
+        let ambiguous = method == "Start";
         let request_body = server_streaming_request_body(&request_json)?;
         let response = match self
             .request(&connection, &method, "application/connect+json")?
@@ -142,12 +143,12 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             .await
         {
             Ok(response) => response,
-            Err(source) => return Err(Error::internal_with(source, "open Connect stream")),
+            Err(source) => return Err(request_error(source, ambiguous, "open Connect stream")),
         };
-        map_status(response.status().as_u16(), false)?;
-        let response_stream = response.bytes_stream().map(|item| match item {
+        map_status(response.status().as_u16(), ambiguous)?;
+        let response_stream = response.bytes_stream().map(move |item| match item {
             Ok(bytes) => Ok(bytes),
-            Err(source) => Err(Error::internal_with(source, "read Connect stream")),
+            Err(source) => Err(request_error(source, ambiguous, "read Connect stream")),
         });
         Ok(Box::pin(response_stream))
     }
@@ -166,11 +167,13 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             .await
         {
             Ok(response) => response,
-            Err(source) if ambiguous => {
-                let _ = source;
-                return Err(Error::DeliveryAmbiguous);
+            Err(source) => {
+                return Err(request_error(
+                    source,
+                    ambiguous,
+                    "send Connect unary request",
+                ));
             }
-            Err(source) => return Err(Error::internal_with(source, "send Connect unary request")),
         };
         map_status(response.status().as_u16(), ambiguous)?;
         read_bounded_response(
@@ -203,7 +206,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             .await
         {
             Ok(response) => response,
-            Err(source) => return Err(Error::internal_with(source, "download envd file")),
+            Err(source) => return Err(request_error(source, false, "download envd file")),
         };
         map_status(response.status().as_u16(), false)?;
         read_bounded_response(response, max_bytes, false, "read envd file response").await
@@ -223,7 +226,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             .await
         {
             Ok(response) => response,
-            Err(source) => return Err(Error::internal_with(source, "upload envd file")),
+            Err(source) => return Err(request_error(source, true, "upload envd file")),
         };
         map_status(response.status().as_u16(), false)
     }
@@ -248,8 +251,7 @@ async fn read_bounded_response(
     let response_stream: ResponseByteStream =
         Box::pin(response.bytes_stream().map(move |item| match item {
             Ok(bytes) => Ok(bytes),
-            Err(_) if ambiguous => Err(Error::DeliveryAmbiguous),
-            Err(source) => Err(Error::internal_with(source, context)),
+            Err(source) => Err(request_error(source, ambiguous, context)),
         }));
     match collect_bounded(response_stream, maximum).await {
         Err(Error::ResponseTooLarge) if ambiguous => Err(Error::DeliveryAmbiguous),

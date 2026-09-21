@@ -32,7 +32,14 @@ realization, split-stream execution, private ingress, and terminal identity.
 Adapters should run it alongside provider-specific transport and failure tests.
 Image realization deliberately returns its source cleanup reference: callers
 persist the completed image first, then destroy that source idempotently so a
-cleanup retry cannot rerun build scripts.
+cleanup retry cannot rerun build scripts. A replay checks for the correlated
+snapshot before any build side effect. If snapshot identity is still
+ambiguous, `SnapshotReconciliationRequired` carries the retained source when
+the backend can identify it.
+
+Replacement-file failures are safe to retry only after the backend confirms
+that the remote writer was revoked. `FileWriteUnconfirmed` means the caller
+must keep the sandbox fenced and reconcile or destroy it before another write.
 
 ## Quick Start
 

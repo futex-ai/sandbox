@@ -46,7 +46,7 @@ pub(super) async fn realize(
     match before.snapshots.as_slice() {
         [existing] => return Ok(existing.clone()),
         [] => {}
-        _ => return Err(Error::SnapshotReconciliationRequired),
+        _ => return Err(reconciliation_required()),
     }
     let create_request = BackendCreateSnapshotRequest {
         snapshot_id,
@@ -64,6 +64,19 @@ pub(super) async fn realize(
     }
 }
 
+pub(super) async fn existing(
+    backend: &E2bSandboxBackend,
+    source_provider_ref: ProviderRef,
+    correlation_name: String,
+) -> Result<Option<ProviderRef>> {
+    let inventory = snapshots::inventory(backend, source_provider_ref, correlation_name).await?;
+    match inventory.snapshots.as_slice() {
+        [] => Ok(None),
+        [existing] => Ok(Some(existing.clone())),
+        _ => Err(reconciliation_required()),
+    }
+}
+
 async fn recover_ambiguous_snapshot(
     backend: &E2bSandboxBackend,
     request: BackendCreateSnapshotRequest,
@@ -73,10 +86,10 @@ async fn recover_ambiguous_snapshot(
         match snapshots::recover(backend, request.clone()).await? {
             BackendSnapshotRecovery::Recovered(snapshot) => return Ok(snapshot.provider_ref),
             BackendSnapshotRecovery::ReconciliationRequired => {
-                return Err(Error::SnapshotReconciliationRequired);
+                return Err(reconciliation_required());
             }
             BackendSnapshotRecovery::InProgress if waits_remaining == 0 => {
-                return Err(Error::SnapshotReconciliationRequired);
+                return Err(reconciliation_required());
             }
             BackendSnapshotRecovery::InProgress => {
                 waits_remaining -= 1;
@@ -86,5 +99,11 @@ async fn recover_ambiguous_snapshot(
                     .await;
             }
         }
+    }
+}
+
+fn reconciliation_required() -> Error {
+    Error::SnapshotReconciliationRequired {
+        retained_sandbox: None,
     }
 }

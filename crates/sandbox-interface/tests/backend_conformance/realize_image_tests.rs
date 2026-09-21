@@ -58,3 +58,33 @@ async fn alternate_backend_may_omit_command_detail_and_retained_runtime() {
         }
     ));
 }
+
+#[tokio::test]
+async fn reconciliation_failure_can_return_its_retained_source() {
+    let backend = AlternateBackend::default();
+    let sandbox_id = SandboxId::new();
+    let error = backend
+        .realize_image(BackendRealizeImageRequest {
+            sandbox_id,
+            snapshot_id: SnapshotId::new(),
+            operation_id: OperationId::new(),
+            owner: ResourceOwner::platform(uuid::Uuid::now_v7()),
+            deployment_id: "backend-conformance".to_owned(),
+            profile: "alternate".to_owned(),
+            parent_image_provider_ref: None,
+            input_files: Vec::new(),
+            setup_script: "reconciliation-required".to_owned(),
+            verify_commands: vec!["true".to_owned()],
+            correlation_name: format!("sandbox-conformance-image-{}", OperationId::new()),
+        })
+        .await
+        .expect_err("ambiguous identity should retain recovery context");
+
+    assert!(matches!(
+        error,
+        Error::SnapshotReconciliationRequired {
+            retained_sandbox: Some(ref retained),
+        } if retained.sandbox_id == sandbox_id
+            && retained.provider_ref.as_str() == "alternate-reconciliation-source"
+    ));
+}

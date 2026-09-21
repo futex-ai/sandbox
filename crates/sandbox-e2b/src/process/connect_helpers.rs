@@ -140,7 +140,7 @@ impl ConnectProcessTransport {
         timeout: Duration,
     ) -> DomainResult<ProcessRunOutput> {
         match self.run_for(connection, command, timeout).await {
-            Ok(output) if output.exit_code.is_some() => Ok(output),
+            Ok(output) if output.exited && output.exit_code.is_some() => Ok(output),
             Err(error) => Err(error),
             Ok(_) => Err(DomainError::BackendUnavailable {
                 backend_id: self.backend_id.clone(),

@@ -21,7 +21,25 @@ const HELPER_OUTPUT_LIMIT: usize = 4096;
 const SIZE_MARKER: &str = "__SANDBOX_IMAGE_SIZE__=";
 const QUIESCE_AND_SCRUB: &str = r#"set -eu
 jobs -pr | xargs -r kill || true
-for sandbox_process_name in "$@"; do pkill -TERM -x -- "$sandbox_process_name" || true; done
+stop_named_process() {
+    sandbox_process_name="$1"
+    pkill -TERM -x -- "$sandbox_process_name" || true
+    sandbox_stop_attempt=0
+    while pgrep -x -- "$sandbox_process_name" >/dev/null && [ "$sandbox_stop_attempt" -lt 20 ]; do
+        sleep 0.1
+        sandbox_stop_attempt=$((sandbox_stop_attempt + 1))
+    done
+    if pgrep -x -- "$sandbox_process_name" >/dev/null; then
+        pkill -KILL -x -- "$sandbox_process_name" || true
+        sandbox_stop_attempt=0
+        while pgrep -x -- "$sandbox_process_name" >/dev/null && [ "$sandbox_stop_attempt" -lt 20 ]; do
+            sleep 0.1
+            sandbox_stop_attempt=$((sandbox_stop_attempt + 1))
+        done
+    fi
+    ! pgrep -x -- "$sandbox_process_name" >/dev/null
+}
+for sandbox_process_name in "$@"; do stop_named_process "$sandbox_process_name"; done
 if mountpoint -q /drives/me; then fusermount3 -u /drives/me || umount -l /drives/me; fi
 pkill -TERM -f '[s]andbox-drive-' || true
 rm -rf /tmp/sandbox-drive
@@ -100,6 +118,9 @@ fn retained_failure(
                 retained_sandbox,
             })
         }
+        Error::SnapshotReconciliationRequired { .. } => {
+            RetentionDecision::Retain(Error::SnapshotReconciliationRequired { retained_sandbox })
+        }
         error => RetentionDecision::Destroy {
             error,
             provider_ref,
@@ -121,6 +142,20 @@ async fn realize_in_sandbox(
         correlation_name,
         ..
     } = request;
+    if let Some(provider_ref) = image_snapshot::existing(
+        backend,
+        source_provider_ref.clone(),
+        correlation_name.clone(),
+    )
+    .await?
+    {
+        let connection = mapping::connection(backend, &source_provider_ref).await?;
+        let size_bytes = observe_size(backend, connection).await?;
+        return Ok(RealizedProviderImage {
+            provider_ref,
+            size_bytes,
+        });
+    }
     let connection = mapping::connection(backend, &source_provider_ref).await?;
     write_input_files(backend, connection.clone(), input_files).await?;
     run_phase(
@@ -218,8 +253,7 @@ fn parse_size(output: ProcessRunOutput) -> Result<u64> {
         })
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|value| *value > 0);
-    if output.exited
-        && output.exit_code == Some(0)
+    if output.succeeded()
         && let Some(size) = size
     {
         return Ok(size);

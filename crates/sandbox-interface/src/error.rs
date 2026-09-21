@@ -127,7 +127,10 @@ pub enum Error {
     },
     /// Snapshot creation could not prove one provider result.
     #[error("[sandbox_interface/error] snapshot identity requires operator reconciliation")]
-    SnapshotReconciliationRequired,
+    SnapshotReconciliationRequired {
+        /// Source runtime retained so the caller can reconcile without replaying work.
+        retained_sandbox: Option<RetainedSandboxRef>,
+    },
     /// Exact terminal input may have been delivered and cannot be replayed.
     #[error("[sandbox_interface/error] terminal input delivery is unknown")]
     DeliveryUnknown,
@@ -198,6 +201,9 @@ pub enum Error {
         /// Maximum transfer bytes.
         limit: usize,
     },
+    /// A replacement write failed without proving that its writer was revoked.
+    #[error("[sandbox_interface/error] sandbox file replacement termination is unconfirmed")]
+    FileWriteUnconfirmed,
     /// Port zero cannot address a sandbox HTTP service.
     #[error("[sandbox_interface/error] port must be between 1 and 65535")]
     InvalidPort,
