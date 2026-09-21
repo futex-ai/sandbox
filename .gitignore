@@ -1,0 +1,5 @@
+/target/
+/.context/
+/.conductor/
+.DS_Store
+*.log
