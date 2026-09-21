@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::fs;
 use std::io;
 
 use tempfile::TempDir;
@@ -35,7 +34,7 @@ impl CommandRunner for FakeRunner {
 }
 
 #[test]
-fn invokes_exact_review_plan_with_prompt_on_stdin() {
+fn invokes_exact_native_review_plan() {
     let workspace = workspace();
     let runner = FakeRunner::new(successful_run(b"review finding\n"));
     review::run(workspace.path(), &runner).unwrap();
@@ -55,19 +54,9 @@ fn invokes_exact_review_plan_with_prompt_on_stdin() {
     assert_eq!(review.program, "codex");
     assert_eq!(
         review.args,
-        [
-            "exec",
-            "review",
-            "--base",
-            "origin/main",
-            "--ephemeral",
-            "-"
-        ]
+        ["exec", "review", "--base", "origin/main", "--ephemeral"]
     );
-    assert_eq!(
-        review.stdin.as_deref(),
-        Some(b"review contract\n".as_slice())
-    );
+    assert_eq!(review.stdin, None);
     assert_eq!(review.output, OutputMode::Inherit);
     assert!(calls.iter().all(|call| call.cwd == workspace.path()));
 }
@@ -170,14 +159,5 @@ fn failed() -> Response {
 }
 
 fn workspace() -> TempDir {
-    let workspace = TempDir::new().unwrap();
-    fs::create_dir(workspace.path().join("docs")).unwrap();
-    fs::write(
-        workspace
-            .path()
-            .join("docs/implementation-review-prompt.md"),
-        "review contract\n",
-    )
-    .unwrap();
-    workspace
+    TempDir::new().unwrap()
 }

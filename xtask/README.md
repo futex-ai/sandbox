@@ -15,8 +15,9 @@ It is not a runtime dependency of either published library crate.
 `check` runs locked metadata, formatting, Clippy with warnings denied,
 all-feature tests, file-length validation, and the smoke test. `review` fetches
 `origin/main`, proves the worktree is clean and the current commit is pushed,
-pipes the repository review contract to Codex, and verifies the worktree is
-still unchanged afterward.
+uses Codex's native base-branch reviewer, and verifies the worktree is still
+unchanged afterward. The repository instructions apply the reporting contract
+in `docs/implementation-review-prompt.md` to that reviewer.
 
 External commands cross one injected runner boundary. Unit tests use a fake
 runner, so they do not contact Git remotes or invoke Codex.

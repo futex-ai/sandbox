@@ -1,5 +1,9 @@
 # Implementation Review Contract
 
+The repository's agent instructions apply this contract to native base-branch
+reviews. The Codex CLI does not currently accept supplemental prompt text
+together with its native `--base` target.
+
 Review the complete current-branch diff against `origin/main`.
 
 Do not edit files, run formatters, or make commits. Report only concrete,

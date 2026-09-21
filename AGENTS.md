@@ -24,6 +24,8 @@
 - Explain every review item in simple, direct language and assume the reader
   has no prior context about the repository, feature, implementation, or
   underlying technical concepts
+- When performing an implementation review, follow the complete reporting
+  contract in `docs/implementation-review-prompt.md`
 - Documentation-only or plan-only changes, including initial plan creation, do not require `cargo xtask check`; validate the changed Markdown and review the diff instead
 - This project is not currently in production/live, so breaking changes are
   acceptable when they improve correctness, architecture, or product quality

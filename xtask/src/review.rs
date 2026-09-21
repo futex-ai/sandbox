@@ -1,12 +1,9 @@
 //! Post-push Codex review orchestration with Git safety checks.
 
-use std::fs;
 use std::path::Path;
 
 use crate::command::{CommandOutcome, CommandRunner, CommandSpec};
 use crate::error::{Error, Result};
-
-const PROMPT_PATH: &str = "docs/implementation-review-prompt.md";
 
 pub(crate) fn run(root: &Path, runner: &dyn CommandRunner) -> Result<()> {
     execute_checked(
@@ -49,24 +46,11 @@ pub(crate) fn run(root: &Path, runner: &dyn CommandRunner) -> Result<()> {
         return Err(Error::ReviewUnpushedHead);
     }
 
-    let prompt_path = root.join(PROMPT_PATH);
-    let prompt = fs::read(&prompt_path).map_err(|source| Error::ReviewPromptRead {
-        path: prompt_path,
-        source,
-    })?;
-    let mut review = CommandSpec::inherited(
+    let review = CommandSpec::inherited(
         root,
         "codex",
-        &[
-            "exec",
-            "review",
-            "--base",
-            "origin/main",
-            "--ephemeral",
-            "-",
-        ],
+        &["exec", "review", "--base", "origin/main", "--ephemeral"],
     );
-    review.stdin = Some(prompt);
     let review_result = execute_checked(runner, &review, "Codex review");
     let changed = !worktree_status(root, runner, "post-review worktree check")?.is_empty();
     if changed {

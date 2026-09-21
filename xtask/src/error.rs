@@ -29,8 +29,6 @@ pub(crate) enum Error {
     },
     #[error("[xtask/smoke] interface value or E2B backend construction failed: {source}")]
     SmokeBackend { source: sandbox_interface::Error },
-    #[error("[xtask/review] failed to read `{path}`: {source}")]
-    ReviewPromptRead { path: PathBuf, source: io::Error },
     #[error("[xtask/review] failed to start `{command}` during {stage}: {source}")]
     ReviewCommandStart {
         stage: &'static str,

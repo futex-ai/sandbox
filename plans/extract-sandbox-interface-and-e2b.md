@@ -88,19 +88,21 @@ Codex CLI's base-branch review mode. It will not implement its own source-code
 analysis or run in CI.
 
 - Add `docs/implementation-review-prompt.md` with the repository-specific
-  review contract: inspect the complete branch diff, do not edit files, report
-  only actionable findings, and give every finding a severity, file and line,
-  context, impact, lettered solution options, and recommended option.
+  review contract and reference it from `AGENTS.md`: inspect the complete
+  branch diff, do not edit files, report only actionable findings, and give
+  every finding a severity, file and line, context, impact, lettered solution
+  options, and recommended option.
 - Implement `xtask/src/review.rs` against the shared injected command-runner
   boundary used by the other automation commands.
 - Fetch `origin/main`, require a clean worktree with no untracked files, require
   the current branch to have an upstream, and require local `HEAD` to equal the
   upstream revision. These checks enforce the required commit-then-push order.
-- Read the review prompt and pipe it to the child process through stdin, using
-  this command from the workspace root:
+- Use Codex's native base-branch review command from the workspace root. Native
+  target flags and supplemental prompt input are mutually exclusive in the
+  installed CLI, so repository instructions carry the reporting contract:
 
   ```sh
-  codex exec review --base origin/main --ephemeral -
+  codex exec review --base origin/main --ephemeral
   ```
 
 - Do not bypass Codex's Git-repository check. Inherit stdout and stderr so the
@@ -133,6 +135,8 @@ and documentation structure should work without a Juno checkout.
 - [x] Implement and test `review` exactly as specified in Review Implementation,
       including its prompt file, Git preflight, Codex invocation, and typed
       failure paths.
+- [x] Align the native review invocation with the installed Codex CLI while
+      keeping the repository reporting contract enforced through `AGENTS.md`.
 - [x] Unit-test workspace discovery, command planning, and the 300-line Rust
       file-length audit in `xtask`.
 - [x] Keep `plans/README.md` linked from the root README and keep this plan in
