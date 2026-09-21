@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendReadFileRequest, BackendWriteFileRequest, ProviderRef, SandboxBackend as _,
+    BackendReadFileRequest, BackendWriteFileRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef,
+    SandboxBackend as _,
 };
 use unimock::{MockFn as _, Unimock, matching};
 
@@ -86,6 +87,28 @@ async fn write_uses_one_atomic_descriptor_relative_process_operation() {
         })
         .await
         .expect("atomic regular-file replacement");
+}
+
+#[tokio::test]
+async fn oversized_write_fails_before_connecting_to_the_provider() {
+    let backend = backend(Unimock::new(()), Unimock::new(()));
+
+    let error = backend
+        .write_file(BackendWriteFileRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            root: "/workspace/repo".to_owned(),
+            path: "src/lib.rs".to_owned(),
+            bytes: vec![0; FILE_TRANSFER_MAX_BYTES + 1],
+        })
+        .await
+        .expect_err("oversized write should fail without provider work");
+
+    assert!(matches!(
+        error,
+        Error::FileTooLarge {
+            limit: FILE_TRANSFER_MAX_BYTES
+        }
+    ));
 }
 
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {

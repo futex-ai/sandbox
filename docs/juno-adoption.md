@@ -13,6 +13,12 @@ sandbox-e2b = { git = "https://github.com/futex-ai/sandbox.git", rev = "<reviewe
 Then update Rust imports to `sandbox_interface` and `sandbox_e2b`, remove the
 old local crate members, and run Juno's full workspace checks.
 
+Image realization now returns `source_sandbox_cleanup_ref`. Persist the image
+provider reference and measured size before passing that cleanup reference to
+the backend's idempotent sandbox destroy operation. Do not translate a cleanup
+failure back into an image-realization failure, because retrying realization
+could rerun user-authored setup commands after the snapshot already exists.
+
 Juno must construct `E2bRuntimeConventions` with the metadata prefix, terminal
 tag prefix, screen-helper path, and image helper and agent process names used
 by its existing resources. Set the process names through

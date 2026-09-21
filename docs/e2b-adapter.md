@@ -37,6 +37,9 @@ delivery-ambiguous; safe reads and idempotent deletes become retryable provider
 unavailability. Control, unary process, and file-response bodies are consumed
 as chunks and stop as soon as their cumulative byte limit is exceeded. Clients
 that carry an API or envd access token never follow HTTP redirects.
+Definitive non-success response headers are mapped without waiting for their
+unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
+because that error body stalls.
 
 Sandbox creation filters on exact configured metadata. Snapshot recovery walks
 bounded cursor pagination and adopts exactly one new correlated snapshot.
@@ -72,7 +75,15 @@ starts a replacement when recovery finds no match. Inspection and output reads
 bind the stored PID to that exact tag. Input and close requests select the tag
 inside the provider operation itself, so a process that reuses the stored PID
 cannot receive input or be killed. Durable log reads share one absolute
-provider deadline and coherent cursor/size reporting.
+provider deadline and coherent cursor/size reporting. Transcript writers use
+the request's exact byte limit rather than a rounded filesystem block limit.
+Oversized replacement writes fail before acquiring mutating sandbox access.
+
+Successful image realization returns the completed snapshot, measured size,
+and source-sandbox cleanup reference without destroying the source first. The
+trusted caller must durably store that completion and then call the backend's
+idempotent sandbox destroy operation. This keeps transient cleanup failures
+from replaying credential-free setup and verification scripts.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and

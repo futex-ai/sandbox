@@ -31,11 +31,15 @@ pub struct BackendRealizeImageRequest {
     pub correlation_name: String,
 }
 
-/// Provider result after image realization and build-sandbox destruction.
+/// Provider result after image realization and before source cleanup.
+///
+/// The caller must durably persist the image identity and size before using the
+/// returned cleanup reference in an idempotent sandbox-destroy operation. This
+/// ordering prevents a cleanup failure from replaying completed build scripts.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendRealizedImage {
-    /// Provider identity of the destroyed ephemeral build sandbox.
-    pub source_sandbox_provider_ref: ProviderRef,
+    /// Provider identity to destroy after image completion is durably stored.
+    pub source_sandbox_cleanup_ref: ProviderRef,
     /// Provider identity of the retained image.
     pub image_provider_ref: ProviderRef,
     /// Observed retained image size in bytes.

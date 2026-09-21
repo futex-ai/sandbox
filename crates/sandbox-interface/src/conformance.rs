@@ -219,6 +219,9 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
             "backend image realization returned a zero size",
         ));
     }
+    backend
+        .destroy_sandbox(realized.source_sandbox_cleanup_ref.clone())
+        .await?;
     let failed_sandbox_id = SandboxId::new();
     let failure = backend
         .realize_image(BackendRealizeImageRequest {

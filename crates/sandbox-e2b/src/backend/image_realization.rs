@@ -69,14 +69,11 @@ pub(super) async fn realize(
                 Err(error)
             }
         },
-        Ok(image) => {
-            sandboxes::destroy(backend, source_provider_ref.clone()).await?;
-            Ok(BackendRealizedImage {
-                source_sandbox_provider_ref: source_provider_ref,
-                image_provider_ref: image.provider_ref,
-                size_bytes: image.size_bytes,
-            })
-        }
+        Ok(image) => Ok(BackendRealizedImage {
+            source_sandbox_cleanup_ref: source_provider_ref,
+            image_provider_ref: image.provider_ref,
+            size_bytes: image.size_bytes,
+        }),
     }
 }
 

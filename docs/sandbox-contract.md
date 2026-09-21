@@ -29,13 +29,20 @@ Every `SandboxBackend` implementation must support:
   reads, input, close, and restored-terminal cleanup;
 - call-local HTTP port ingress with a redacted optional credential;
 - platform image realization with staged files, setup, ordered verification,
-  scrub, measured snapshot, and optional retained failure runtime; and
+  scrub, measured snapshot, an explicit source-cleanup reference, and optional
+  retained failure runtime; and
 - idempotent screen-stack ensure plus exact validated viewport resize.
 
 Creation and snapshot methods separate an initial mutation from recovery. If a
 provider cannot prove whether a mutation arrived, it must return an ambiguous
 result and use stable correlation data to recover exactly one resource. It must
 never silently allocate a duplicate.
+
+Successful image realization and source cleanup are two ordered operations.
+The backend first returns the completed image plus its source-sandbox cleanup
+reference. The trusted caller durably persists the image identity and measured
+size, then idempotently destroys that source. A cleanup failure must never turn
+completed realization into an error that replays setup or verification.
 
 ## Bounds And Failure Safety
 
@@ -50,12 +57,14 @@ terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Port zero, empty required text,
 oversized values, unknown profiles, and unsupported network policies fail
-before provider dispatch.
+before provider dispatch. In particular, an oversized replacement write must
+fail before connecting to or resuming its sandbox.
 
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
 sufficient identity fence because a numeric process ID can be reused between
-the two calls.
+the two calls. Provider-side transcripts enforce the requested byte count
+exactly, including limits that are smaller than or not aligned to 1 KiB.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact

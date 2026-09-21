@@ -119,6 +119,13 @@ impl E2bHttpTransport for ReqwestE2bHttpTransport {
             }
         };
         let status = response.status().as_u16();
+        if !(200..=299).contains(&status) {
+            return Ok(HttpResponse {
+                status,
+                body: Vec::new(),
+                next_token: None,
+            });
+        }
         let next_token = match response.headers().get("x-next-token") {
             Some(value) => match value.to_str() {
                 Ok(value) if value.trim().is_empty() => None,

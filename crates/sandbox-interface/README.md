@@ -30,6 +30,9 @@ unsupported viewport dimensions before an adapter dispatches work.
 The public `conformance` module exercises creation, recovery, image
 realization, split-stream execution, private ingress, and terminal identity.
 Adapters should run it alongside provider-specific transport and failure tests.
+Image realization deliberately returns its source cleanup reference: callers
+persist the completed image first, then destroy that source idempotently so a
+cleanup retry cannot rerun build scripts.
 
 ## Quick Start
 

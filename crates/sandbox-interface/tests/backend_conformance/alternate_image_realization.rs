@@ -35,7 +35,7 @@ pub(super) fn realize(request: BackendRealizeImageRequest) -> Result<BackendReal
     assert_eq!(request.input_files[0].bytes, b"input");
     assert_eq!(request.verify_commands, ["true"]);
     Ok(BackendRealizedImage {
-        source_sandbox_provider_ref: ProviderRef::new("alternate-image-source"),
+        source_sandbox_cleanup_ref: ProviderRef::new("alternate-image-source"),
         image_provider_ref: ProviderRef::new("alternate-image"),
         size_bytes: 4096,
     })

@@ -39,11 +39,20 @@ close operations use envd's atomic tag selector so PID reuse cannot retarget
 them. File reads use one descriptor-relative, non-following helper; writes stage
 their payload, perform one descriptor-relative atomic replacement below the
 trusted root, and run immediate plus delayed bounded cleanup after failure.
+Oversized writes fail before sandbox connection. Terminal transcript writers
+enforce arbitrary byte limits exactly rather than rounding to filesystem
+blocks.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming.
 Credentialed clients do not follow redirects, and envd URLs are validated
-before call-local credentials are attached.
+before call-local credentials are attached. Definitive rejection headers are
+mapped without waiting for an unused response body.
+
+Image realization returns its completed snapshot and source cleanup reference
+before source destruction. Consumers persist the image result first and then
+destroy the source idempotently, so cleanup failures cannot replay setup or
+verification commands.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed

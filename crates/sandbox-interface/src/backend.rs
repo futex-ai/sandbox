@@ -126,7 +126,10 @@ pub enum BackendSnapshotRecovery {
 #[unimock::unimock(api = SandboxBackendMock)]
 #[async_trait]
 pub trait SandboxBackend: Send + Sync {
-    /// Realizes one platform image and destroys its ephemeral build sandbox.
+    /// Realizes one platform image and returns its separate source cleanup target.
+    ///
+    /// Callers must durably persist the completed image before idempotently
+    /// destroying the returned source sandbox.
     async fn realize_image(
         &self,
         request: BackendRealizeImageRequest,

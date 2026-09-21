@@ -48,14 +48,17 @@ fn pty_start_caps_only_the_private_provider_log() {
     assert_eq!(body["process"]["cmd"], "/bin/bash");
     assert_eq!(body["process"]["args"][0], "-lc");
     assert_eq!(
-        body["process"]["envs"]["SANDBOX_TERMINAL_LOG_BLOCKS"],
-        "2048"
+        body["process"]["envs"]["SANDBOX_TERMINAL_LOG_LIMIT"],
+        (2 * 1024 * 1024).to_string()
     );
     let wrapper = body["process"]["args"][1]
         .as_str()
         .expect("wrapper command");
-    assert!(wrapper.contains("ulimit -S -f \"$SANDBOX_TERMINAL_LOG_BLOCKS\""));
+    assert!(wrapper.contains("/usr/bin/head -c \"$SANDBOX_TERMINAL_LOG_LIMIT\""));
+    assert!(wrapper.contains("/usr/bin/mkfifo -m 600"));
+    assert!(wrapper.contains("> \"$SANDBOX_TERMINAL_LOG_PATH\""));
     assert!(wrapper.contains("ulimit -S -f unlimited"));
+    assert!(!wrapper.contains("SANDBOX_TERMINAL_LOG_BLOCKS"));
     assert!(!wrapper.contains("--log-size"));
     assert!(!wrapper.contains("/dev/null"));
 }

@@ -46,6 +46,7 @@ pub(super) async fn write(
     backend: &E2bSandboxBackend,
     request: BackendWriteFileRequest,
 ) -> Result<()> {
+    validate_write_size(request.bytes.len())?;
     let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
     write_to_connection(
         backend,
@@ -64,11 +65,7 @@ pub(super) async fn write_to_connection(
     path: String,
     bytes: Vec<u8>,
 ) -> Result<()> {
-    if bytes.len() > FILE_TRANSFER_MAX_BYTES {
-        return Err(Error::FileTooLarge {
-            limit: FILE_TRANSFER_MAX_BYTES,
-        });
-    }
+    validate_write_size(bytes.len())?;
     backend
         .processes
         .write_regular_file(
@@ -76,6 +73,15 @@ pub(super) async fn write_to_connection(
             ProcessRegularFileWriteRequest { root, path, bytes },
         )
         .await
+}
+
+fn validate_write_size(byte_count: usize) -> Result<()> {
+    if byte_count > FILE_TRANSFER_MAX_BYTES {
+        return Err(Error::FileTooLarge {
+            limit: FILE_TRANSFER_MAX_BYTES,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]

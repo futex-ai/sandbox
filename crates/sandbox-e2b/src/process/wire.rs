@@ -12,20 +12,24 @@ use super::{
     types::{ProcessCommand, ProcessPtyRequest},
 };
 
-const FILE_LIMIT_BLOCK_BYTES: usize = 1024;
 const TERMINAL_WRAPPER: &str = concat!(
-    "ulimit -S -f \"$SANDBOX_TERMINAL_LOG_BLOCKS\"; ",
-    "exec /usr/bin/script -q -f --log-out \"$SANDBOX_TERMINAL_LOG_PATH\" ",
+    "set -eu; ",
+    "transcript_pipe=\"$SANDBOX_TERMINAL_LOG_PATH.pipe\"; ",
+    "/usr/bin/rm -f -- \"$transcript_pipe\"; ",
+    "/usr/bin/mkfifo -m 600 -- \"$transcript_pipe\"; ",
+    "( (set +e; /usr/bin/head -c \"$SANDBOX_TERMINAL_LOG_LIMIT\" ",
+    "< \"$transcript_pipe\" > \"$SANDBOX_TERMINAL_LOG_PATH\"; ",
+    "head_status=$?; /usr/bin/rm -f -- \"$transcript_pipe\"; ",
+    "exit \"$head_status\") & ); ",
+    "exec /usr/bin/script -q -f --log-out \"$transcript_pipe\" ",
     "-c '/bin/bash -c \"ulimit -S -f unlimited; exec /bin/bash -il\"'"
 );
 
 pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
     let envs = BTreeMap::from([
         (
-            "SANDBOX_TERMINAL_LOG_BLOCKS".to_owned(),
-            (request.log_limit / FILE_LIMIT_BLOCK_BYTES)
-                .max(1)
-                .to_string(),
+            "SANDBOX_TERMINAL_LOG_LIMIT".to_owned(),
+            request.log_limit.to_string(),
         ),
         ("SANDBOX_TERMINAL_LOG_PATH".to_owned(), request.log_path),
         ("LANG".to_owned(), "C.UTF-8".to_owned()),
@@ -198,3 +202,7 @@ pub(super) struct ProcessInfoWire {
 #[cfg(test)]
 #[path = "_tests_/selector_tests.rs"]
 mod selector_tests;
+
+#[cfg(test)]
+#[path = "_tests_/wire_tests.rs"]
+mod wire_tests;

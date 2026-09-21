@@ -17,7 +17,7 @@ use crate::{
 use super::configured::E2bSandboxBackend;
 
 #[tokio::test]
-async fn image_realization_uploads_input_files_before_setup() {
+async fn image_completion_precedes_separate_source_cleanup() {
     let control = Unimock::new((
         E2bControlApiMock::list_sandboxes
             .next_call(matching!(_))
@@ -108,6 +108,10 @@ async fn image_realization_uploads_input_files_before_setup() {
         .expect("image should realize");
 
     assert_eq!(image.size_bytes, 4096);
+    backend
+        .destroy_sandbox(image.source_sandbox_cleanup_ref)
+        .await
+        .expect("persisted image source should clean up separately");
 }
 
 #[tokio::test]

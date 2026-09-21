@@ -319,5 +319,27 @@ errors remain typed, and failed writes clean their temporary files.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms and review the complete
       branch diff for secrets, artifacts, and unrelated edits.
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.
+
+## Milestone 9: Final Review Finding Remediation
+
+Resolve every finding from the post-push review without replaying completed
+image builds or weakening the provider-neutral byte and validation contracts.
+
+- [x] Split successful image completion from idempotent source-sandbox cleanup
+      so a cleanup failure cannot replay setup and verification commands.
+- [x] Reject oversized file writes before connecting to or resuming a provider
+      sandbox.
+- [x] Preserve definitive provider rejection statuses without waiting for an
+      unused response body or treating the mutation as delivery-ambiguous.
+- [x] Enforce arbitrary terminal transcript limits as exact byte counts.
+- [x] Move the smoke-test bodies into the repository-required `_tests_` tree.
+- [x] Add focused regression coverage for all behavioral findings and update
+      the public contract and adapter documentation.
+- [x] Run formatting, focused regressions, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
+      unrelated edits.
 - [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.

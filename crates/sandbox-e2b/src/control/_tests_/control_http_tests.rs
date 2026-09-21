@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::E2bAdapterError;
+use crate::control::helpers::ensure_status;
 
 use super::{E2bHttpTransport, HttpRequest, Method, ReqwestE2bHttpTransport, response_limit_error};
 
@@ -63,6 +64,32 @@ async fn mutating_request_timeout_preserves_delivery_ambiguity() {
         "unexpected timeout result: {result:?}"
     );
     server.join().expect("stalled server should finish");
+}
+
+#[tokio::test]
+async fn definitive_mutation_rejection_does_not_wait_for_its_body() {
+    let (api_base, server) = rejected_server(401);
+    let transport = ReqwestE2bHttpTransport::new_with_timeouts(
+        api_base,
+        "api-key".to_owned(),
+        Duration::from_millis(50),
+        Duration::from_millis(50),
+        Duration::from_millis(50),
+    )
+    .expect("timeout-configured transport");
+
+    let response = transport
+        .send(request(Method::Post, true))
+        .await
+        .expect("rejection headers prove the mutation outcome");
+
+    assert_eq!(response.status, 401);
+    assert!(response.body.is_empty());
+    assert!(matches!(
+        ensure_status(response.status, &[200], true),
+        Err(E2bAdapterError::Unauthorized)
+    ));
+    server.join().expect("rejection server should finish");
 }
 
 #[tokio::test]
@@ -145,6 +172,22 @@ fn redirect_server(location: String) -> (String, JoinHandle<()>) {
             "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         )
         .expect("write redirect response");
+    });
+    (format!("http://{address}"), server)
+}
+
+fn rejected_server(status: u16) -> (String, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind rejection server");
+    let address = listener.local_addr().expect("rejection server address");
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept rejected request");
+        let _request = read_request_headers(&mut stream);
+        write!(
+            stream,
+            "HTTP/1.1 {status} Rejected\r\nContent-Length: 5\r\nConnection: close\r\n\r\n"
+        )
+        .expect("write rejection headers");
+        std::thread::sleep(Duration::from_millis(200));
     });
     (format!("http://{address}"), server)
 }
