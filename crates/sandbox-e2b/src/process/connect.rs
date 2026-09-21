@@ -13,6 +13,7 @@ use super::{
     http::{ConnectHttpTransport, ReqwestConnectHttpTransport},
     mapping::{map_file_result, map_result},
     regular_file_write::ProcessRegularFileWriteRequest,
+    selector::ProcessSelector,
     types::{
         ProcessCommand, ProcessConnectOutput, ProcessConnection, ProcessFileChunk,
         ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,
@@ -170,20 +171,24 @@ impl ProcessTransport for ConnectProcessTransport {
     async fn send_input(
         &self,
         connection: ProcessConnection,
-        pid: u32,
+        selector: ProcessSelector,
         input: Vec<u8>,
     ) -> DomainResult<()> {
         map_result(
-            self.unary_empty(connection, "SendInput", &send_input(pid, input), true)
+            self.unary_empty(connection, "SendInput", &send_input(selector, input), true)
                 .await,
             true,
             &self.backend_id,
         )
     }
 
-    async fn kill(&self, connection: ProcessConnection, pid: u32) -> DomainResult<()> {
+    async fn kill(
+        &self,
+        connection: ProcessConnection,
+        selector: ProcessSelector,
+    ) -> DomainResult<()> {
         match self
-            .unary_empty(connection, "SendSignal", &signal(pid), false)
+            .unary_empty(connection, "SendSignal", &signal(selector), false)
             .await
         {
             Ok(()) | Err(Error::NotFound) => Ok(()),

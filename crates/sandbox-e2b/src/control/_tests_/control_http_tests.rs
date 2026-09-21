@@ -1,10 +1,10 @@
 //! Control-plane HTTP timeout regressions.
 
 use std::{
-    io::{Read, Write},
+    io::{ErrorKind, Read, Write},
     net::{TcpListener, TcpStream},
     thread::JoinHandle,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use crate::E2bAdapterError;
@@ -65,6 +65,40 @@ async fn mutating_request_timeout_preserves_delivery_ambiguity() {
     server.join().expect("stalled server should finish");
 }
 
+#[tokio::test]
+async fn credentialed_control_client_does_not_follow_redirects() {
+    let target = TcpListener::bind("127.0.0.1:0").expect("bind redirect target");
+    let target_address = target.local_addr().expect("redirect target address");
+    target
+        .set_nonblocking(true)
+        .expect("nonblocking redirect target");
+    let target = std::thread::spawn(move || capture_redirect_target(target));
+    let (api_base, redirect) = redirect_server(format!("http://{target_address}/stolen"));
+    let transport = ReqwestE2bHttpTransport::new_with_timeouts(
+        api_base,
+        "api-key".to_owned(),
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+        Duration::from_secs(1),
+    )
+    .expect("redirect-test transport");
+
+    let response = transport
+        .send(request(Method::Get, false))
+        .await
+        .expect("redirect response should remain local");
+
+    assert_eq!(response.status, 302);
+    redirect.join().expect("redirect server should finish");
+    assert!(
+        target
+            .join()
+            .expect("redirect target should finish")
+            .is_none(),
+        "credentialed client followed a cross-origin redirect"
+    );
+}
+
 fn request(method: Method, ambiguous_on_failure: bool) -> HttpRequest {
     HttpRequest {
         method,
@@ -93,6 +127,46 @@ fn stalled_server(send_headers: bool) -> (String, JoinHandle<()>) {
         std::thread::sleep(Duration::from_secs(2));
     });
     (format!("http://{address}"), server)
+}
+
+fn redirect_server(location: String) -> (String, JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind redirect server");
+    let address = listener.local_addr().expect("redirect server address");
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept redirect request");
+        let request = read_request_headers(&mut stream);
+        assert!(
+            String::from_utf8_lossy(&request)
+                .to_ascii_lowercase()
+                .contains("x-api-key: api-key")
+        );
+        write!(
+            stream,
+            "HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        )
+        .expect("write redirect response");
+    });
+    (format!("http://{address}"), server)
+}
+
+fn capture_redirect_target(listener: TcpListener) -> Option<Vec<u8>> {
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let request = read_request_headers(&mut stream);
+                stream
+                    .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+                    .expect("write redirect target response");
+                return Some(request);
+            }
+            Err(error) if error.kind() == ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) if error.kind() == ErrorKind::WouldBlock => return None,
+            Err(error) => panic!("accept redirect target: {error}"),
+        }
+    }
 }
 
 fn read_request_headers(stream: &mut TcpStream) -> Vec<u8> {

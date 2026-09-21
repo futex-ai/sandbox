@@ -15,7 +15,7 @@ use crate::{
     ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
     ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
     ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
-    ProcessSplitOutput, ProcessTransportMock,
+    ProcessSelector, ProcessSplitOutput, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -174,8 +174,11 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 })
             }),
         ProcessTransportMock::send_input
-            .each_call(matching!(_, 9, _))
-            .answers(&|_, _, _, _| Ok(())),
+            .each_call(matching!(_, _, _))
+            .answers(&|_, _, selector, _| {
+                assert!(matches!(selector, ProcessSelector::Tag(_)));
+                Ok(())
+            }),
         ProcessTransportMock::read_file
             .each_call(matching!(_, _, 0, 4096, _))
             .answers(&|_, _, _, _, _, _| {
@@ -221,8 +224,11 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 })
             }),
         ProcessTransportMock::kill
-            .each_call(matching!(_, 9))
-            .answers(&|_, _, _| Ok(())),
+            .each_call(matching!(_, _))
+            .answers(&|_, _, selector| {
+                assert!(matches!(selector, ProcessSelector::Tag(_)));
+                Ok(())
+            }),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(process));

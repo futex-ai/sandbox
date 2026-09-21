@@ -51,10 +51,6 @@ impl TerminalIdentity {
         ))
     }
 
-    pub(super) const fn pid(self) -> u32 {
-        self.pid
-    }
-
     pub(super) const fn terminal_id(self) -> TerminalId {
         self.terminal_id
     }

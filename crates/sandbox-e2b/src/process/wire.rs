@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 use crate::error::{Error, Result};
 
-use super::types::{ProcessCommand, ProcessPtyRequest};
+use super::{
+    selector::ProcessSelector,
+    types::{ProcessCommand, ProcessPtyRequest},
+};
 
 const FILE_LIMIT_BLOCK_BYTES: usize = 1024;
 const TERMINAL_WRAPPER: &str = concat!(
@@ -71,22 +74,22 @@ fn process_start(command: String, args: Vec<String>, cwd: Option<String>) -> Sta
 
 pub(super) fn selector(pid: u32) -> SelectorRequestWire {
     SelectorRequestWire {
-        process: SelectorWire { pid },
+        process: SelectorWire::from(ProcessSelector::Pid(pid)),
     }
 }
 
-pub(super) fn send_input(pid: u32, input: Vec<u8>) -> SendInputRequestWire {
+pub(super) fn send_input(selector: ProcessSelector, input: Vec<u8>) -> SendInputRequestWire {
     SendInputRequestWire {
-        process: SelectorWire { pid },
+        process: SelectorWire::from(selector),
         input: InputWire {
             pty: STANDARD.encode(input),
         },
     }
 }
 
-pub(super) fn signal(pid: u32) -> SignalRequestWire {
+pub(super) fn signal(selector: ProcessSelector) -> SignalRequestWire {
     SignalRequestWire {
-        process: SelectorWire { pid },
+        process: SelectorWire::from(selector),
         signal: "SIGNAL_SIGKILL",
     }
 }
@@ -145,8 +148,19 @@ pub(super) struct SelectorRequestWire {
 }
 
 #[derive(Serialize)]
-struct SelectorWire {
-    pid: u32,
+#[serde(untagged)]
+enum SelectorWire {
+    Pid { pid: u32 },
+    Tag { tag: String },
+}
+
+impl From<ProcessSelector> for SelectorWire {
+    fn from(selector: ProcessSelector) -> Self {
+        match selector {
+            ProcessSelector::Pid(pid) => Self::Pid { pid },
+            ProcessSelector::Tag(tag) => Self::Tag { tag },
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -180,3 +194,7 @@ pub(super) struct ProcessInfoWire {
     pub(super) pid: u32,
     pub(super) tag: Option<String>,
 }
+
+#[cfg(test)]
+#[path = "_tests_/selector_tests.rs"]
+mod selector_tests;

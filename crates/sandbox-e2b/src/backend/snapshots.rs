@@ -101,7 +101,7 @@ async fn reconnect_source(backend: &E2bSandboxBackend, source_provider_ref: &Pro
         .is_err()
     {
         tracing::warn!(
-            backend_id = %backend.config.backend_id,
+            backend_id = %backend.config.backend_id(),
             "E2B source reconnect after snapshot did not complete"
         );
     }
@@ -135,7 +135,7 @@ pub(super) async fn delete(backend: &E2bSandboxBackend, provider_ref: ProviderRe
 fn map_control(backend: &E2bSandboxBackend, error: AdapterError) -> Error {
     mapping::control(
         error,
-        &backend.config.backend_id,
+        backend.config.backend_id(),
         Some(ResourceKind::Snapshot),
     )
 }

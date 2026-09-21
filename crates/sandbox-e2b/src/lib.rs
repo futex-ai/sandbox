@@ -22,6 +22,7 @@ pub use self::process::{
     ConnectProcessTransport, DynProcessTransport, ProcessCommand, ProcessConnectOutput,
     ProcessConnection, ProcessFileChunk, ProcessFileValidation, ProcessInfo, ProcessOutputCapture,
     ProcessPtyRequest, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
-    ProcessSplitOutput, ProcessTransport, ProcessTransportMock, SplitProcessCommand,
+    ProcessSelector, ProcessSplitOutput, ProcessTransport, ProcessTransportMock,
+    SplitProcessCommand,
 };
 pub use self::runtime_conventions::E2bRuntimeConventions;

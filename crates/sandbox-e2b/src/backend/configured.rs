@@ -41,15 +41,15 @@ impl E2bSandboxBackend {
     pub fn new(config: E2bAdapterConfig) -> Result<Self> {
         let control = mapping::control_result(
             ReqwestE2bControlApi::new(
-                config.api_base.clone(),
-                config.api_key.clone(),
-                config.sandbox_domain.clone(),
-                config.idle_timeout_seconds,
+                config.api_base().to_owned(),
+                config.api_key().to_owned(),
+                config.sandbox_domain().to_owned(),
+                config.idle_timeout_seconds(),
             ),
-            &config.backend_id,
+            config.backend_id(),
             None,
         )?;
-        let processes = ConnectProcessTransport::new(config.backend_id.clone())?;
+        let processes = ConnectProcessTransport::new(config.backend_id().to_owned())?;
         Ok(Self {
             config,
             control: Arc::new(control),

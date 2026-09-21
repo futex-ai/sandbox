@@ -6,8 +6,8 @@ milestones are finished.
 
 ## Active
 
-- None.
+- [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)
 
 ## Completed
 
-- [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)
+- None.

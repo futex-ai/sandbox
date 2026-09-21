@@ -8,6 +8,7 @@ use uuid::Uuid;
 use super::{
     connect::ConnectProcessTransport,
     mapping::map_file_result,
+    regular_file_cleanup,
     types::{ProcessCommand, ProcessConnection, ProcessOutputCapture},
 };
 
@@ -153,27 +154,58 @@ pub(super) async fn write(
     let staging_path = format!("/tmp/.sandbox-e2b-stage-{nonce}");
     let temporary_name = format!(".sandbox-e2b-write-{nonce}");
     let expected_size = request.bytes.len();
-    map_file_result(
+    let upload = map_file_result(
         transport
             .http
             .upload(connection.clone(), staging_path.clone(), request.bytes)
             .await,
         &transport.backend_id,
-    )?;
+    );
+    if let Err(error) = upload {
+        regular_file_cleanup::cleanup(
+            transport,
+            connection,
+            request.root,
+            request.path,
+            staging_path,
+            temporary_name,
+        )
+        .await;
+        return Err(error);
+    }
     let output = transport
         .run_helper(
-            connection,
+            connection.clone(),
             command(
-                request.root,
-                request.path,
-                staging_path,
-                temporary_name,
+                request.root.clone(),
+                request.path.clone(),
+                staging_path.clone(),
+                temporary_name.clone(),
                 expected_size,
             ),
             WRITE_TIMEOUT,
         )
-        .await?;
-    match output.exit_code {
+        .await;
+    let result = match output {
+        Ok(output) => map_output(transport, output.exit_code),
+        Err(error) => Err(error),
+    };
+    if result.is_err() {
+        regular_file_cleanup::cleanup(
+            transport,
+            connection,
+            request.root,
+            request.path,
+            staging_path,
+            temporary_name,
+        )
+        .await;
+    }
+    result
+}
+
+fn map_output(transport: &ConnectProcessTransport, exit_code: Option<i32>) -> Result<()> {
+    match exit_code {
         Some(0) => Ok(()),
         Some(45) => Err(Error::InvalidFilePath { field: "root" }),
         Some(46) => Err(Error::FileNotRegular),

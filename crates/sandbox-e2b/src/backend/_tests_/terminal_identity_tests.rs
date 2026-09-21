@@ -10,7 +10,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessInfo,
-    ProcessTransportMock,
+    ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -25,7 +25,7 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
             .each_call(matching!("sandbox"))
             .answers_arc(Arc::new(|_, _| Ok(access()))),
     );
-    let processes = Unimock::new(
+    let processes = Unimock::new((
         ProcessTransportMock::list
             .each_call(matching!(_))
             .answers_arc(Arc::new(move |_, _| {
@@ -34,7 +34,17 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
                     tag: Some(wrong_tag.clone()),
                 }])
             })),
-    );
+        ProcessTransportMock::send_input
+            .next_call(matching!(_, _, _))
+            .answers(&|_, _, _, _| {
+                Err(Error::NotFound {
+                    resource: ResourceKind::Terminal,
+                })
+            }),
+        ProcessTransportMock::kill
+            .next_call(matching!(_, _))
+            .answers(&|_, _, _| Ok(())),
+    ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
 
@@ -65,11 +75,54 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
             })
             .await,
     );
-    assert_not_found(
-        backend
-            .close_terminal(ProviderRef::new("sandbox"), provider_ref)
-            .await,
+    backend
+        .close_terminal(ProviderRef::new("sandbox"), provider_ref)
+        .await
+        .expect("closing an absent tag is idempotent");
+}
+
+#[tokio::test]
+async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
+    let terminal_id = TerminalId::new();
+    let terminal_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
+    let expected_tag = format!("sandbox-terminal-{terminal_id}");
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .each_call(matching!("sandbox"))
+            .answers_arc(Arc::new(|_, _| Ok(access()))),
     );
+    let write_tag = expected_tag.clone();
+    let close_tag = expected_tag;
+    let processes = Unimock::new((
+        ProcessTransportMock::send_input
+            .next_call(matching!(_, _, _))
+            .answers_arc(Arc::new(move |_, _, selector, input| {
+                assert_eq!(selector, ProcessSelector::Tag(write_tag.clone()));
+                assert_eq!(input, b"safe");
+                Ok(())
+            })),
+        ProcessTransportMock::kill
+            .next_call(matching!(_, _))
+            .answers_arc(Arc::new(move |_, _, selector| {
+                assert_eq!(selector, ProcessSelector::Tag(close_tag.clone()));
+                Ok(())
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    backend
+        .write_terminal(BackendInputRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            terminal_provider_ref: terminal_ref.clone(),
+            input: b"safe".to_vec(),
+        })
+        .await
+        .expect("tag-addressed input");
+    backend
+        .close_terminal(ProviderRef::new("sandbox"), terminal_ref)
+        .await
+        .expect("tag-addressed close");
 }
 
 fn assert_not_found<T>(result: sandbox_interface::Result<T>) {

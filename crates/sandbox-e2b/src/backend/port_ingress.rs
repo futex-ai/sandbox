@@ -21,7 +21,7 @@ pub(super) async fn resolve(
             .control
             .connect_sandbox(request.sandbox_provider_ref.as_str())
             .await,
-        &backend.config.backend_id,
+        backend.config.backend_id(),
         Some(ResourceKind::Sandbox),
     )?;
     mapping::ensure_sandbox_identity(&request.sandbox_provider_ref, &access.sandbox_id)?;

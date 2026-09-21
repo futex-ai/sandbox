@@ -23,6 +23,20 @@ fn runtime_conventions_have_neutral_defaults() {
 }
 
 #[test]
+fn validated_configuration_exposes_read_only_values() {
+    let config = config(vec!["203.0.113.10/32".to_owned()]).expect("valid config");
+
+    assert_eq!(config.backend_id(), "e2b");
+    assert_eq!(config.api_base(), "https://api.e2b.app");
+    assert_eq!(config.idle_timeout_seconds(), 600);
+    assert_eq!(config.profiles().len(), 1);
+    assert_eq!(
+        config.runtime_conventions(),
+        &E2bRuntimeConventions::default()
+    );
+}
+
+#[test]
 fn runtime_conventions_accept_deployment_owned_values() {
     let conventions = E2bRuntimeConventions::new(
         "tenant_7",
@@ -36,13 +50,13 @@ fn runtime_conventions_accept_deployment_owned_values() {
         .unwrap()
         .with_runtime_conventions(conventions.clone());
 
-    assert_eq!(config.runtime_conventions, conventions);
+    assert_eq!(config.runtime_conventions(), &conventions);
     assert_eq!(
-        config.runtime_conventions.image_helper_process_name(),
+        config.runtime_conventions().image_helper_process_name(),
         "tenant-helper"
     );
     assert_eq!(
-        config.runtime_conventions.image_agent_process_name(),
+        config.runtime_conventions().image_agent_process_name(),
         "tenant-agent"
     );
 }

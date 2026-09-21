@@ -1,10 +1,25 @@
 //! Atomic regular-file replacement helper coverage.
 
-use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
+use std::{
+    fs,
+    os::unix::fs::symlink,
+    path::Path,
+    process::Command,
+    sync::{Arc, Mutex},
+};
 
+use bytes::Bytes;
+use sandbox_interface::Error;
 use tempfile::tempdir;
+use unimock::{MockFn, Unimock, matching};
 
-use super::command;
+use crate::{E2bAdapterError, ProcessConnection};
+
+use super::{ProcessRegularFileWriteRequest, command, write};
+use crate::process::{
+    connect::ConnectProcessTransport,
+    http::{ByteStream, stream as stream_call, upload as upload_call},
+};
 
 #[test]
 fn writer_replaces_a_regular_file_through_directory_descriptors() {
@@ -66,6 +81,65 @@ fn writer_rejects_a_symlinked_parent_without_writing_outside_root() {
     assert!(!outside.path().join("target.txt").exists());
 }
 
+#[tokio::test]
+async fn failed_writer_attempts_run_bounded_remote_cleanup() {
+    let staged_path = Arc::new(Mutex::new(None));
+    let cleanup_request = Arc::new(Mutex::new(None));
+    let http = Unimock::new((
+        upload_call.next_call(matching!(_, _, _)).answers_arc({
+            let staged_path = staged_path.clone();
+            Arc::new(move |_, _, path, _| {
+                *staged_path.lock().expect("staging path lock") = Some(path);
+                Ok(())
+            })
+        }),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers(&|_, _, _, _| Err(E2bAdapterError::Unavailable)),
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers_arc({
+                let cleanup_request = cleanup_request.clone();
+                Arc::new(move |_, _, _, request| {
+                    *cleanup_request.lock().expect("cleanup request lock") = Some(request);
+                    Ok(completed_stream())
+                })
+            }),
+    ));
+    let transport = ConnectProcessTransport {
+        http: Arc::new(http),
+        backend_id: "e2b".to_owned(),
+    };
+
+    let result = write(
+        &transport,
+        connection(),
+        ProcessRegularFileWriteRequest {
+            root: "/workspace".to_owned(),
+            path: "src/lib.rs".to_owned(),
+            bytes: b"replacement".to_vec(),
+        },
+    )
+    .await;
+
+    assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
+    let staged_path = staged_path
+        .lock()
+        .expect("staging path lock")
+        .clone()
+        .expect("uploaded staging path");
+    let cleanup = cleanup_request
+        .lock()
+        .expect("cleanup request lock")
+        .clone()
+        .expect("cleanup helper request");
+    let cleanup: serde_json::Value = serde_json::from_slice(&cleanup).expect("cleanup JSON");
+    let args = cleanup["process"]["args"].as_array().expect("cleanup args");
+    assert!(args.iter().any(|value| value == &staged_path));
+    assert!(args.iter().any(|value| value == "/workspace"));
+    assert!(args.iter().any(|value| value == "src/lib.rs"));
+}
+
 fn run(root: &Path, path: &str, staged: &Path, expected_size: usize) -> std::process::Output {
     let command = command(
         root.to_string_lossy().into_owned(),
@@ -78,4 +152,28 @@ fn run(root: &Path, path: &str, staged: &Path, expected_size: usize) -> std::pro
         .args(command.args)
         .output()
         .expect("run atomic writer")
+}
+
+fn connection() -> ProcessConnection {
+    ProcessConnection::new(
+        "sandbox".to_owned(),
+        "e2b.app".to_owned(),
+        "access-token".to_owned(),
+    )
+}
+
+fn completed_stream() -> ByteStream {
+    let start = frame(br#"{"event":{"start":{"pid":7}}}"#);
+    let end = frame(br#"{"event":{"end":{"exitCode":0,"exited":true}}}"#);
+    Box::pin(futures_util::stream::iter(vec![
+        Ok(Bytes::from(start)),
+        Ok(Bytes::from(end)),
+    ]))
+}
+
+fn frame(payload: &[u8]) -> Vec<u8> {
+    let mut frame = vec![0];
+    frame.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+    frame.extend_from_slice(payload);
+    frame
 }

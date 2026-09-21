@@ -22,22 +22,32 @@ pub struct E2bProfile {
 }
 
 /// Complete configuration for one E2B backend registration.
+///
+/// Validated fields cannot be changed after construction.
+///
+/// ```compile_fail
+/// use sandbox_e2b::E2bAdapterConfig;
+///
+/// fn bypass_validation(config: &mut E2bAdapterConfig) {
+///     config.api_base.clear();
+/// }
+/// ```
 #[derive(Clone, Eq, PartialEq)]
 pub struct E2bAdapterConfig {
     /// Stable backend ID persisted on consumer resources.
-    pub backend_id: String,
+    backend_id: String,
     /// Injectable root E2B control API base URL.
-    pub api_base: String,
+    api_base: String,
     /// E2B sandbox routing domain.
-    pub(crate) sandbox_domain: String,
+    sandbox_domain: String,
     /// Worker-only E2B API key value.
-    pub api_key: String,
+    api_key: String,
     /// Logical profile-to-template mappings.
-    pub profiles: HashMap<String, E2bProfile>,
+    profiles: HashMap<String, E2bProfile>,
     /// Sandbox idle timeout in seconds before E2B auto-pause.
-    pub idle_timeout_seconds: u32,
+    idle_timeout_seconds: u32,
     /// Names used to correlate resources and invoke template-owned helpers.
-    pub runtime_conventions: E2bRuntimeConventions,
+    runtime_conventions: E2bRuntimeConventions,
 }
 
 impl fmt::Debug for E2bAdapterConfig {
@@ -96,8 +106,46 @@ impl E2bAdapterConfig {
         self
     }
 
-    pub(crate) fn profile(&self, name: &str) -> Result<&E2bProfile> {
-        self.profiles.get(name).ok_or(Error::InvalidRequest)
+    /// Borrows the stable backend ID persisted by consumers.
+    #[must_use]
+    pub fn backend_id(&self) -> &str {
+        &self.backend_id
+    }
+
+    /// Borrows the validated HTTPS control API origin.
+    #[must_use]
+    pub fn api_base(&self) -> &str {
+        &self.api_base
+    }
+
+    /// Borrows the normalized logical profile catalog.
+    #[must_use]
+    pub fn profiles(&self) -> &HashMap<String, E2bProfile> {
+        &self.profiles
+    }
+
+    /// Returns the nonzero sandbox idle timeout in seconds.
+    #[must_use]
+    pub const fn idle_timeout_seconds(&self) -> u32 {
+        self.idle_timeout_seconds
+    }
+
+    /// Borrows validated deployment-owned runtime naming conventions.
+    #[must_use]
+    pub const fn runtime_conventions(&self) -> &E2bRuntimeConventions {
+        &self.runtime_conventions
+    }
+
+    pub(crate) fn api_key(&self) -> &str {
+        &self.api_key
+    }
+
+    pub(crate) fn sandbox_domain(&self) -> &str {
+        &self.sandbox_domain
+    }
+
+    pub(crate) fn profile(&self, name: &str) -> Option<&E2bProfile> {
+        self.profiles.get(name)
     }
 }
 

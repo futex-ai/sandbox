@@ -165,7 +165,7 @@ async fn realize_in_sandbox(
 }
 
 fn scrub_command(backend: &E2bSandboxBackend) -> String {
-    let conventions = &backend.config.runtime_conventions;
+    let conventions = backend.config.runtime_conventions();
     format!(
         "set -- {} {}\n{QUIESCE_AND_SCRUB}",
         conventions.image_helper_process_name(),

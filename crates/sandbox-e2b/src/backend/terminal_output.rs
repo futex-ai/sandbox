@@ -40,7 +40,7 @@ pub(super) async fn read(
         };
         let process = identity.resolve(
             listed,
-            backend.config.runtime_conventions.terminal_tag_prefix(),
+            backend.config.runtime_conventions().terminal_tag_prefix(),
         )?;
         let helper_timeout =
             provider_deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -126,6 +126,6 @@ async fn wait_for_output(request: &BackendOutputRequest, started: tokio::time::I
 
 fn provider_read_timeout(backend: &E2bSandboxBackend) -> Error {
     Error::BackendUnavailable {
-        backend_id: backend.config.backend_id.clone(),
+        backend_id: backend.config.backend_id().to_owned(),
     }
 }

@@ -79,7 +79,7 @@ pub(super) async fn connection(
 ) -> Result<ProcessConnection, DomainError> {
     let access = control_result(
         backend.control.connect_sandbox(sandbox_ref.as_str()).await,
-        &backend.config.backend_id,
+        backend.config.backend_id(),
         Some(ResourceKind::Sandbox),
     )?;
     ensure_sandbox_identity(sandbox_ref, &access.sandbox_id)?;
@@ -104,7 +104,7 @@ pub(super) async fn read_only_connection(
             .control
             .get_sandbox_read_access(sandbox_ref.as_str())
             .await,
-        &backend.config.backend_id,
+        backend.config.backend_id(),
         Some(ResourceKind::Sandbox),
     )?;
     ensure_sandbox_identity(sandbox_ref, &access.sandbox_id)?;

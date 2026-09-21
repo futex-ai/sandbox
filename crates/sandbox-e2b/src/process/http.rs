@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
+use url::Url;
 
 use crate::error::{Error, Result};
 use crate::response_body::{ResponseByteStream, collect_bounded};
@@ -53,6 +54,7 @@ impl ReqwestConnectHttpTransport {
     pub(super) fn new() -> Result<Self> {
         let client = match reqwest::Client::builder()
             .timeout(Duration::from_secs(310))
+            .redirect(reqwest::redirect::Policy::none())
             .build()
         {
             Ok(client) => client,
@@ -66,19 +68,21 @@ impl ReqwestConnectHttpTransport {
         connection: &ProcessConnection,
         method: &str,
         content_type: &str,
-    ) -> reqwest::RequestBuilder {
-        self.client
-            .post(format!(
-                "https://49983-{}.{}/process.Process/{method}",
-                connection.sandbox_id, connection.sandbox_domain
-            ))
+    ) -> Result<reqwest::RequestBuilder> {
+        let mut url = envd_base_url(connection)?;
+        url.path_segments_mut()
+            .map_err(|_| Error::InvalidRequest)?
+            .extend(["process.Process", method]);
+        Ok(self
+            .client
+            .post(url)
             .header("Content-Type", content_type)
             .header("Connect-Protocol-Version", "1")
             .header("X-Access-Token", &connection.access_token)
             .header(
                 "User-Agent",
                 concat!("sandbox-e2b/", env!("CARGO_PKG_VERSION")),
-            )
+            ))
     }
 
     fn file_request(
@@ -86,24 +90,40 @@ impl ReqwestConnectHttpTransport {
         connection: &ProcessConnection,
         method: reqwest::Method,
         path: &str,
-    ) -> reqwest::RequestBuilder {
-        let query = url::form_urlencoded::Serializer::new(String::new())
-            .append_pair("path", path)
-            .finish();
-        self.client
-            .request(
-                method,
-                format!(
-                    "https://49983-{}.{}/files?{query}",
-                    connection.sandbox_id, connection.sandbox_domain,
-                ),
-            )
+    ) -> Result<reqwest::RequestBuilder> {
+        let mut url = envd_base_url(connection)?;
+        url.set_path("/files");
+        url.query_pairs_mut().append_pair("path", path);
+        Ok(self
+            .client
+            .request(method, url)
             .header("X-Access-Token", &connection.access_token)
             .header(
                 "User-Agent",
                 concat!("sandbox-e2b/", env!("CARGO_PKG_VERSION")),
-            )
+            ))
     }
+}
+
+fn envd_base_url(connection: &ProcessConnection) -> Result<Url> {
+    let expected_host = format!(
+        "49983-{}.{}",
+        connection.sandbox_id, connection.sandbox_domain
+    );
+    let url =
+        Url::parse(&format!("https://{expected_host}/")).map_err(|_| Error::InvalidRequest)?;
+    if url.scheme() != "https"
+        || url.host_str() != Some(expected_host.as_str())
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.port().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(Error::InvalidRequest);
+    }
+    Ok(url)
 }
 
 #[async_trait]
@@ -116,7 +136,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
     ) -> Result<ByteStream> {
         let request_body = server_streaming_request_body(&request_json)?;
         let response = match self
-            .request(&connection, &method, "application/connect+json")
+            .request(&connection, &method, "application/connect+json")?
             .body(request_body)
             .send()
             .await
@@ -140,7 +160,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
         ambiguous: bool,
     ) -> Result<Vec<u8>> {
         let response = match self
-            .request(&connection, &method, "application/json")
+            .request(&connection, &method, "application/json")?
             .body(request_json)
             .send()
             .await
@@ -177,7 +197,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             return Err(Error::InvalidRequest);
         };
         let response = match self
-            .file_request(&connection, reqwest::Method::GET, &path)
+            .file_request(&connection, reqwest::Method::GET, &path)?
             .header("Range", format!("bytes={offset}-{end}"))
             .send()
             .await
@@ -196,7 +216,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
         bytes: Vec<u8>,
     ) -> Result<()> {
         let response = match self
-            .file_request(&connection, reqwest::Method::POST, &path)
+            .file_request(&connection, reqwest::Method::POST, &path)?
             .header("Content-Type", "application/octet-stream")
             .body(bytes)
             .send()

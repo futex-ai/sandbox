@@ -29,6 +29,7 @@ fn connect_requests_use_the_sandbox_specific_envd_host() {
 
     let request = transport
         .request(&connection, "List", "application/json")
+        .expect("validated envd URL")
         .build()
         .expect("request");
 
@@ -43,6 +44,31 @@ fn connect_requests_use_the_sandbox_specific_envd_host() {
     );
     assert!(!request.headers().contains_key("E2b-Sandbox-Id"));
     assert!(!request.headers().contains_key("E2b-Sandbox-Port"));
+}
+
+#[test]
+fn connect_requests_reject_authority_injection_before_adding_a_token() {
+    let transport = ReqwestConnectHttpTransport::new().expect("transport");
+    for sandbox_id in [
+        "sandbox@attacker.example/",
+        "sandbox/path",
+        "sandbox#fragment",
+    ] {
+        let connection = ProcessConnection::new(
+            sandbox_id.to_owned(),
+            "e2b.app".to_owned(),
+            "access-token".to_owned(),
+        );
+
+        assert!(matches!(
+            transport.request(&connection, "List", "application/json"),
+            Err(E2bAdapterError::InvalidRequest)
+        ));
+        assert!(matches!(
+            transport.file_request(&connection, reqwest::Method::GET, "/tmp/file"),
+            Err(E2bAdapterError::InvalidRequest)
+        ));
+    }
 }
 
 #[test]

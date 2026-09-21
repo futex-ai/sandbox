@@ -32,12 +32,12 @@ pub(super) async fn execute(
     }
     let Some(exit_code) = output.exit_code else {
         return Err(Error::BackendUnavailable {
-            backend_id: backend.config.backend_id.clone(),
+            backend_id: backend.config.backend_id().to_owned(),
         });
     };
     if !output.exited {
         return Err(Error::BackendUnavailable {
-            backend_id: backend.config.backend_id.clone(),
+            backend_id: backend.config.backend_id().to_owned(),
         });
     }
     Ok(ReadOnlyExecOutput {

@@ -10,7 +10,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     E2bAdapterError, ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessPtyRequest,
-    ProcessTransport,
+    ProcessSelector, ProcessTransport,
 };
 
 use super::ConnectProcessTransport;
@@ -179,7 +179,7 @@ async fn oversized_stream_and_ambiguous_input_fail_closed() {
         .await
         .expect_err("oversized output should fail");
     let input_error = ambiguous
-        .send_input(connection(), 7, b"input".to_vec())
+        .send_input(connection(), ProcessSelector::Pid(7), b"input".to_vec())
         .await
         .expect_err("ambiguous input should fail");
 

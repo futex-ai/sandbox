@@ -42,11 +42,20 @@ never silently allocate a duplicate.
 Paths must remain under their trusted absolute root and must identify regular
 files without following a symlink escape. Replacement writes must bind parent
 directories and replace the leaf atomically so concurrent path changes cannot
-redirect a write. File transfers are capped at 256 MiB. Provider response and
-process output limits are enforced while bytes are consumed. A bounded
-one-shot process must be terminated when collection fails after its PID is
-known. Port zero, empty required text, oversized values, and unsupported
-network policies fail before provider dispatch.
+redirect a write. Failed replacement attempts must make a bounded cleanup
+attempt for all provider-side staging and destination-temporary files. File
+transfers are capped at 256 MiB. Provider response and process output limits
+are enforced while bytes are consumed. A bounded one-shot process must be
+terminated when collection fails after its PID is known. Credentialed HTTP
+clients must not follow redirects, and credentials may be attached only after
+the exact destination host is validated. Port zero, empty required text,
+oversized values, unknown profiles, and unsupported network policies fail
+before provider dispatch.
+
+Terminal input and close operations must select the durable terminal identity
+atomically in the provider mutation. A separate list-then-mutate check is not a
+sufficient identity fence because a numeric process ID can be reused between
+the two calls.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact

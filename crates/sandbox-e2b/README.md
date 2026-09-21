@@ -24,22 +24,26 @@ trait-backed test or alternate transports. Construction itself sends no E2B
 request.
 
 `E2bAdapterConfig` validates the API origin, API key, idle timeout, logical
-profiles, template IDs, and denied IP/CIDR destinations. Its neutral runtime
-conventions use the `sandbox` metadata prefix, `sandbox-terminal-` process-tag
-prefix, `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup
-process names. Deployments that must adopt existing resources can supply an
+profiles, template IDs, and denied IP/CIDR destinations, then keeps those
+values externally immutable. Its neutral runtime conventions use the `sandbox`
+metadata prefix, `sandbox-terminal-` process-tag prefix,
+`/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
+Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
 Creates use exact metadata to recover ambiguous delivery. Snapshot recovery
 uses bounded, cursor-safe inventory traversal. Terminal identities combine an
-E2B PID with the consumer terminal ID and verify the configured process tag on
-every operation. File reads use one descriptor-relative, non-following helper;
-writes stage their payload and perform one descriptor-relative, non-following
-atomic replacement below the trusted root. One-shot processes are killed when
-collection times out or fails after observing their PID. HTTP bodies, process
-output, and terminal output are bounded while streaming, and private ingress
-credentials are call-local and redacted from `Debug`.
+E2B PID with the consumer terminal ID; reads verify both values, while input and
+close operations use envd's atomic tag selector so PID reuse cannot retarget
+them. File reads use one descriptor-relative, non-following helper; writes stage
+their payload, perform one descriptor-relative atomic replacement below the
+trusted root, and run immediate plus delayed bounded cleanup after failure.
+One-shot processes are killed when collection times out or fails after
+observing their PID. HTTP bodies, process output, and terminal output are
+bounded while streaming.
+Credentialed clients do not follow redirects, and envd URLs are validated
+before call-local credentials are attached.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed

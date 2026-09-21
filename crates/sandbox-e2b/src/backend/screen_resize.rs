@@ -49,7 +49,7 @@ pub(super) async fn resize(
             command(
                 request.viewport,
                 budget,
-                backend.config.runtime_conventions.screen_helper_path(),
+                backend.config.runtime_conventions().screen_helper_path(),
             ),
         )
         .await
@@ -126,6 +126,6 @@ fn acknowledge(
 
 fn unavailable(backend: &E2bSandboxBackend) -> Error {
     Error::BackendUnavailable {
-        backend_id: backend.config.backend_id.clone(),
+        backend_id: backend.config.backend_id().to_owned(),
     }
 }

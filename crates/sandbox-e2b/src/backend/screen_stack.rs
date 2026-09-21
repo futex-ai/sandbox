@@ -56,7 +56,7 @@ pub(super) async fn ensure(
         return Ok(ScreenStackOutcome::Ready { capabilities });
     }
     Err(Error::BackendUnavailable {
-        backend_id: backend.config.backend_id.clone(),
+        backend_id: backend.config.backend_id().to_owned(),
     })
 }
 
@@ -104,7 +104,7 @@ async fn run(
             SplitProcessCommand {
                 command: backend
                     .config
-                    .runtime_conventions
+                    .runtime_conventions()
                     .screen_helper_path()
                     .to_owned(),
                 args,

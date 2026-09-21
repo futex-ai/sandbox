@@ -5,7 +5,7 @@ use std::{fmt, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use sandbox_interface::Result;
 
-use super::regular_file_write::ProcessRegularFileWriteRequest;
+use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
 
 /// Call-local E2B envd connection details.
 #[derive(Clone, Eq, PartialEq)]
@@ -243,11 +243,11 @@ pub trait ProcessTransport: Send + Sync {
     async fn send_input(
         &self,
         connection: ProcessConnection,
-        pid: u32,
+        selector: ProcessSelector,
         input: Vec<u8>,
     ) -> Result<()>;
     /// Idempotently kills one provider process.
-    async fn kill(&self, connection: ProcessConnection, pid: u32) -> Result<()>;
+    async fn kill(&self, connection: ProcessConnection, selector: ProcessSelector) -> Result<()>;
     /// Reads a bounded region of one private provider log within `timeout`.
     async fn read_file(
         &self,

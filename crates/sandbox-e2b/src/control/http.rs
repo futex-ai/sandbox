@@ -69,6 +69,7 @@ impl ReqwestE2bHttpTransport {
             .connect_timeout(connect_timeout)
             .read_timeout(read_timeout)
             .timeout(request_timeout)
+            .redirect(reqwest::redirect::Policy::none())
             .build()
         {
             Ok(client) => client,

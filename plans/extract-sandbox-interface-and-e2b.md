@@ -292,3 +292,32 @@ user direction.
       worktree-integrity check pass, then report every finding with a number,
       severity, context, impact, lettered solution options, and recommendation,
       without changing the implementation.
+
+## Milestone 8: Review Finding Remediation
+
+Resolve the explicitly approved follow-up review findings without weakening the
+provider-neutral contract. At the end of this milestone, credentials cannot
+cross redirects or attacker-shaped routes, terminal mutations use atomic
+provider identity, validated configuration stays immutable, handled profile
+errors remain typed, and failed writes clean their temporary files.
+
+- [x] Disable redirects for every HTTP client that carries a provider
+      credential, with regression coverage.
+- [x] Construct and validate the exact envd URL before attaching an access
+      token, for both process and file requests.
+- [x] Address terminal input and close operations by their unique provider tag
+      in one request so PID reuse cannot retarget them.
+- [x] Make validated adapter configuration externally immutable and expose
+      read-only accessors where callers need them.
+- [x] Return the provider-neutral `UnknownProfile` error before provider
+      dispatch when sandbox creation names an unconfigured profile.
+- [x] Remove upload staging and destination-temporary files after every failed
+      replacement-write attempt.
+- [x] Update the adapter and protocol documentation for the tightened safety
+      guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms and review the complete
+      branch diff for secrets, artifacts, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.

@@ -11,6 +11,7 @@ use crate::error::{Error, Result};
 use super::connect::ConnectProcessTransport;
 use super::framing::{FrameDecoder, ProcessEvent, decode_event};
 use super::mapping::map_result;
+use super::selector::ProcessSelector;
 use super::types::{ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessRunOutput};
 use super::wire::{command_start, encode};
 
@@ -151,7 +152,7 @@ impl ConnectProcessTransport {
         let Some(pid) = pid else {
             return;
         };
-        let Ok(request) = encode(&super::wire::signal(pid)) else {
+        let Ok(request) = encode(&super::wire::signal(ProcessSelector::Pid(pid))) else {
             return;
         };
         let kill = self

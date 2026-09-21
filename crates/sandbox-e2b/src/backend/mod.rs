@@ -22,6 +22,10 @@ mod terminals;
 mod backend_tests;
 
 #[cfg(test)]
+#[path = "_tests_/sandbox_create_tests.rs"]
+mod sandbox_create_tests;
+
+#[cfg(test)]
 #[path = "_tests_/backend_conformance_tests.rs"]
 mod backend_conformance_tests;
 

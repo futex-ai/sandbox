@@ -19,7 +19,7 @@ pub(super) async fn managed(
     backend: &E2bSandboxBackend,
     deployment_id: String,
 ) -> Result<Vec<BackendManagedSandbox>> {
-    let conventions = &backend.config.runtime_conventions;
+    let conventions = backend.config.runtime_conventions();
     let metadata = BTreeMap::from([(conventions.metadata_key("deployment_id"), deployment_id)]);
     Ok(
         control_result(backend, backend.control.list_sandboxes(metadata).await)?
@@ -53,6 +53,9 @@ pub(super) async fn create(
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
     validate_network(request.network)?;
+    let Some(profile) = backend.config.profile(&request.profile) else {
+        return Err(Error::UnknownProfile);
+    };
     let metadata = metadata(backend, &request);
     let existing = control_result(
         backend,
@@ -61,7 +64,6 @@ pub(super) async fn create(
     if let Some(existing) = exactly_one(existing)? {
         return Ok(map_sandbox(existing));
     }
-    let profile = control_result(backend, backend.config.profile(&request.profile))?;
     let template_id = request.snapshot_provider_ref.map_or_else(
         || profile.template.clone(),
         |reference| reference.as_str().to_owned(),
@@ -73,7 +75,7 @@ pub(super) async fn create(
             metadata: metadata.clone(),
             allow_public_egress: profile.allow_public_egress,
             denied_destinations: profile.denied_destinations.clone(),
-            idle_timeout_seconds: backend.config.idle_timeout_seconds,
+            idle_timeout_seconds: backend.config.idle_timeout_seconds(),
         })
         .await;
     match created {
@@ -87,7 +89,7 @@ pub(super) async fn create(
             exactly_one(recovered)?
                 .map(map_sandbox)
                 .ok_or_else(|| Error::BackendUnavailable {
-                    backend_id: backend.config.backend_id.clone(),
+                    backend_id: backend.config.backend_id().to_owned(),
                 })
         }
         Err(error) => Err(map_control(backend, error)),
@@ -173,7 +175,7 @@ pub(super) async fn destroy(backend: &E2bSandboxBackend, provider_ref: ProviderR
 }
 
 fn metadata(backend: &E2bSandboxBackend, request: &BackendCreateSandboxRequest) -> SandboxMetadata {
-    let conventions = &backend.config.runtime_conventions;
+    let conventions = backend.config.runtime_conventions();
     let mut metadata = BTreeMap::from([
         (
             conventions.metadata_key("deployment_id"),
@@ -227,7 +229,7 @@ fn map_sandbox(sandbox: ControlSandbox) -> BackendSandbox {
 fn map_control(backend: &E2bSandboxBackend, error: AdapterError) -> Error {
     mapping::control(
         error,
-        &backend.config.backend_id,
+        backend.config.backend_id(),
         Some(ResourceKind::Sandbox),
     )
 }

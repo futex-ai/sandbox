@@ -7,7 +7,9 @@ use sandbox_interface::{
     ResourceKind, Result, TerminalState,
 };
 
-use crate::process::{ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessPtyRequest};
+use crate::process::{
+    ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessPtyRequest, ProcessSelector,
+};
 
 use super::{
     configured::E2bSandboxBackend,
@@ -24,14 +26,14 @@ pub(super) async fn clean_restored(
 ) -> Result<()> {
     let connection = mapping::connection(backend, &sandbox_ref).await?;
     let processes = backend.processes.list(connection.clone()).await?;
-    let terminal_tag_prefix = backend.config.runtime_conventions.terminal_tag_prefix();
+    let terminal_tag_prefix = backend.config.runtime_conventions().terminal_tag_prefix();
     for process in processes
         .into_iter()
         .filter(|process| tagged_terminal(process, terminal_tag_prefix).is_some())
     {
         backend
             .processes
-            .kill(connection.clone(), process.pid)
+            .kill(connection.clone(), ProcessSelector::Pid(process.pid))
             .await?;
     }
     let cleanup = backend
@@ -65,7 +67,7 @@ pub(super) async fn create(
         return Ok(terminal);
     }
     let tag = terminal_tag(
-        backend.config.runtime_conventions.terminal_tag_prefix(),
+        backend.config.runtime_conventions().terminal_tag_prefix(),
         request.terminal_id,
     );
     let directory = backend
@@ -121,7 +123,7 @@ async fn recover_connected(
     terminal_id: sandbox_interface::TerminalId,
 ) -> Result<Option<BackendTerminal>> {
     let tag = terminal_tag(
-        backend.config.runtime_conventions.terminal_tag_prefix(),
+        backend.config.runtime_conventions().terminal_tag_prefix(),
         terminal_id,
     );
     let matching = backend
@@ -154,7 +156,7 @@ pub(super) async fn inspect(
     if identity
         .resolve(
             backend.processes.list(connection).await?,
-            backend.config.runtime_conventions.terminal_tag_prefix(),
+            backend.config.runtime_conventions().terminal_tag_prefix(),
         )?
         .is_none()
     {
@@ -172,20 +174,13 @@ pub(super) async fn inspect(
 pub(super) async fn write(backend: &E2bSandboxBackend, request: BackendInputRequest) -> Result<()> {
     let identity = TerminalIdentity::parse(&request.terminal_provider_ref)?;
     let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
-    if identity
-        .resolve(
-            backend.processes.list(connection.clone()).await?,
-            backend.config.runtime_conventions.terminal_tag_prefix(),
-        )?
-        .is_none()
-    {
-        return Err(Error::NotFound {
-            resource: ResourceKind::Terminal,
-        });
-    }
+    let tag = terminal_tag(
+        backend.config.runtime_conventions().terminal_tag_prefix(),
+        identity.terminal_id(),
+    );
     backend
         .processes
-        .send_input(connection, identity.pid(), request.input)
+        .send_input(connection, ProcessSelector::Tag(tag), request.input)
         .await
 }
 
@@ -196,14 +191,12 @@ pub(super) async fn close(
 ) -> Result<()> {
     let identity = TerminalIdentity::parse(&terminal_ref)?;
     let connection = mapping::connection(backend, &sandbox_ref).await?;
-    if identity
-        .resolve(
-            backend.processes.list(connection.clone()).await?,
-            backend.config.runtime_conventions.terminal_tag_prefix(),
-        )?
-        .is_none()
-    {
-        return Ok(());
-    }
-    backend.processes.kill(connection, identity.pid()).await
+    let tag = terminal_tag(
+        backend.config.runtime_conventions().terminal_tag_prefix(),
+        identity.terminal_id(),
+    );
+    backend
+        .processes
+        .kill(connection, ProcessSelector::Tag(tag))
+        .await
 }
