@@ -9,7 +9,19 @@ use std::{
 
 use crate::E2bAdapterError;
 
-use super::{E2bHttpTransport, HttpRequest, Method, ReqwestE2bHttpTransport};
+use super::{E2bHttpTransport, HttpRequest, Method, ReqwestE2bHttpTransport, response_limit_error};
+
+#[test]
+fn accepted_mutation_body_overflow_preserves_delivery_ambiguity() {
+    assert!(matches!(
+        response_limit_error(201, true),
+        E2bAdapterError::DeliveryAmbiguous
+    ));
+    assert!(matches!(
+        response_limit_error(200, false),
+        E2bAdapterError::ResponseTooLarge
+    ));
+}
 
 #[tokio::test]
 async fn response_body_timeout_is_typed_as_unavailable() {

@@ -20,23 +20,27 @@ Denied destinations are parsed as IP addresses, canonicalized, sorted, and
 deduplicated.
 
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
-prefix, and absolute screen-helper path. Neutral defaults are suitable for new
+prefix, absolute screen-helper path, and exact helper and agent process names
+stopped before an image snapshot. Neutral defaults are suitable for new
 deployments. Existing deployments should explicitly supply their current
-values so recovery can find already-created resources. Unsafe prefixes,
-relative paths, parent-directory components, whitespace, and oversized values
-are rejected.
+values so recovery and snapshot cleanup find the right resources. Unsafe
+prefixes, paths, shell characters, whitespace, and process names longer than
+Linux's 15-byte task-name limit are rejected.
 
 ## Transport And Reconciliation
 
 Control and process transports are traits and can be injected. Control calls
 use bounded connect, read, and total timeouts. Mutating timeouts remain
 delivery-ambiguous; safe reads and idempotent deletes become retryable provider
-unavailability.
+unavailability. Control, unary process, and file-response bodies are consumed
+as chunks and stop as soon as their cumulative byte limit is exceeded.
 
 Sandbox creation filters on exact configured metadata. Snapshot recovery walks
 bounded cursor pagination and adopts exactly one new correlated snapshot.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
-fail closed.
+fail closed. If an accepted create response cannot be decoded or omits the
+identity or credentials needed to identify the created resource, the result
+remains delivery-ambiguous and enters recovery.
 
 Envd routing is derived from adapter configuration, not a response-provided
 host. Access tokens and private-traffic credentials stay inside call-local
@@ -45,8 +49,13 @@ types and are redacted from debug output.
 ## Files, Processes, Terminals, And Screens
 
 Regular-file reads use a descriptor-relative helper with non-following opens
-and `fstat` on the opened leaf. Process execution is direct-argv and keeps
-stdout, stderr, deadlines, and overflow outcomes separate.
+and `fstat` on the opened leaf. Replacement writes stage the bounded payload,
+then traverse the trusted root through non-following directory descriptors and
+atomically replace the leaf. Process execution is direct-argv and keeps stdout,
+stderr, deadlines, and overflow outcomes separate. A one-shot process whose
+collection times out, overflows, or fails decoding is killed with a bounded
+cleanup call once its PID has been observed; persistent terminal connections
+are left running intentionally.
 
 Terminal recovery lists processes by the configured stable tag and never
 starts a replacement when recovery finds no match. Subsequent operations bind
@@ -55,8 +64,9 @@ reads share one absolute provider deadline and coherent cursor/size reporting.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and
-reserves time to confirm remote process termination. A custom screen-capable
-template is built and published by the separate template release project;
+requires a normal helper exit before reporting success. Port zero is rejected
+before connecting to a sandbox. A custom screen-capable template is built and
+published by the separate template release project;
 `E2B_SCREEN_TEMPLATE_ID` selects one only for the ignored live smoke test.
 
 ## Live Tests

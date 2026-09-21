@@ -7,9 +7,11 @@ mod config;
 mod control;
 mod error;
 mod process;
+mod response_body;
+mod runtime_conventions;
 
 pub use self::backend::configured::E2bSandboxBackend;
-pub use self::config::{E2bAdapterConfig, E2bProfile, E2bRuntimeConventions};
+pub use self::config::{E2bAdapterConfig, E2bProfile};
 pub use self::control::{
     ControlCreateSandbox, ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess,
     ControlSandboxState, ControlSnapshot, DynE2bControlApi, E2bControlApi, E2bControlApiMock,
@@ -19,6 +21,7 @@ pub use self::error::{Error as E2bAdapterError, Result as E2bAdapterResult};
 pub use self::process::{
     ConnectProcessTransport, DynProcessTransport, ProcessCommand, ProcessConnectOutput,
     ProcessConnection, ProcessFileChunk, ProcessFileValidation, ProcessInfo, ProcessOutputCapture,
-    ProcessPtyRequest, ProcessRegularFileRequest, ProcessRunOutput, ProcessSplitOutput,
-    ProcessTransport, ProcessTransportMock, SplitProcessCommand,
+    ProcessPtyRequest, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
+    ProcessSplitOutput, ProcessTransport, ProcessTransportMock, SplitProcessCommand,
 };
+pub use self::runtime_conventions::E2bRuntimeConventions;

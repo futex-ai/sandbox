@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     ControlSandboxAccess, ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile,
-    ProcessFileValidation, ProcessRunOutput, ProcessTransportMock,
+    E2bRuntimeConventions, ProcessRegularFileWriteRequest, ProcessRunOutput, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -44,20 +44,12 @@ async fn image_realization_uploads_input_files_before_setup() {
             .returns(Ok(())),
     ));
     let processes = Unimock::new((
-        ProcessTransportMock::validate_file
-            .next_call(matching!(_, "/tmp", "artifact.bin", true))
-            .returns(Ok(ProcessFileValidation {
-                canonical_root: "/tmp".to_owned(),
-                canonical_path: "/tmp/artifact.bin".to_owned(),
-                exists: false,
-                regular: false,
-                symlink: false,
-                size: 0,
-            })),
-        ProcessTransportMock::upload_file
-            .next_call(matching!(_, "/tmp/artifact.bin", _))
-            .answers(&|_, _, _, bytes| {
-                assert_eq!(bytes, b"artifact");
+        ProcessTransportMock::write_regular_file
+            .next_call(matching!(_, _))
+            .answers(&|_, _, request: ProcessRegularFileWriteRequest| {
+                assert_eq!(request.root, "/tmp");
+                assert_eq!(request.path, "artifact.bin");
+                assert_eq!(request.bytes, b"artifact");
                 Ok(())
             }),
         ProcessTransportMock::run
@@ -143,7 +135,9 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
             .answers(&|_, _, command| {
                 let script = command.args.last().expect("shell script argument");
                 assert!(!script.contains("/root/"));
-                assert!(script.contains("f[i]rna-helper|f[i]rna-agent"));
+                assert!(script.contains("tenant-helper"));
+                assert!(script.contains("tenant-agent"));
+                assert!(script.contains("pkill -TERM -x"));
                 assert!(script.contains("sandbox_home=\"${HOME:?"));
                 assert!(script.contains("-user \"$sandbox_uid\""));
                 assert!(script.contains("! -name '.*'"));
@@ -155,7 +149,14 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
                 })
             }),
     ));
-    let backend = backend(control, processes);
+    let conventions = E2bRuntimeConventions::default()
+        .with_image_process_names("tenant-helper", "tenant-agent")
+        .expect("safe image process names");
+    let backend = backend_with_config(
+        control,
+        processes,
+        config().with_runtime_conventions(conventions),
+    );
 
     let error = backend
         .realize_image(BackendRealizeImageRequest {
@@ -178,7 +179,15 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
 }
 
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {
-    E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes))
+    backend_with_config(control, processes, config())
+}
+
+fn backend_with_config(
+    control: Unimock,
+    processes: Unimock,
+    config: E2bAdapterConfig,
+) -> E2bSandboxBackend {
+    E2bSandboxBackend::with_transports(config, Arc::new(control), Arc::new(processes))
 }
 
 fn success() -> ProcessRunOutput {

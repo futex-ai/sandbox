@@ -26,17 +26,20 @@ request.
 `E2bAdapterConfig` validates the API origin, API key, idle timeout, logical
 profiles, template IDs, and denied IP/CIDR destinations. Its neutral runtime
 conventions use the `sandbox` metadata prefix, `sandbox-terminal-` process-tag
-prefix, and `/usr/local/bin/sandbox-screen` helper. Deployments that must adopt
-existing resources can supply an `E2bRuntimeConventions` value; prefixes and
-the absolute helper path are validated before use.
+prefix, `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup
+process names. Deployments that must adopt existing resources can supply an
+`E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
+cleanup process names are validated before use.
 
 Creates use exact metadata to recover ambiguous delivery. Snapshot recovery
 uses bounded, cursor-safe inventory traversal. Terminal identities combine an
 E2B PID with the consumer terminal ID and verify the configured process tag on
 every operation. File reads use one descriptor-relative, non-following helper;
-writes validate their trusted root and target. Process and terminal output is
-bounded, and private ingress credentials are call-local and redacted from
-`Debug`.
+writes stage their payload and perform one descriptor-relative, non-following
+atomic replacement below the trusted root. One-shot processes are killed when
+collection times out or fails after observing their PID. HTTP bodies, process
+output, and terminal output are bounded while streaming, and private ingress
+credentials are call-local and redacted from `Debug`.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
@@ -88,7 +91,8 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
 
 ### Key Code
 
-- `src/config.rs` — validated profiles and runtime conventions.
+- `src/config.rs` — validated profiles and adapter configuration.
+- `src/runtime_conventions.rs` — validated deployment and cleanup names.
 - `src/backend/configured.rs` — backend construction and trait dispatch.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.

@@ -103,3 +103,30 @@ async fn helper_stream_overflow_is_unavailable() {
         assert!(matches!(error, Error::BackendUnavailable { .. }));
     }
 }
+
+#[tokio::test]
+async fn resize_rejects_acknowledgment_from_a_signalled_helper() {
+    let viewport = ScreenViewportSize::new(390, 700).expect("supported viewport");
+    let processes = Unimock::new(
+        ProcessTransportMock::run_split
+            .next_call(matching!(_, _))
+            .returns(Ok(ProcessSplitOutput {
+                stdout: br#"{"version":1,"width":390,"height":700}"#.to_vec(),
+                exit_code: Some(0),
+                exited: false,
+                ..ProcessSplitOutput::default()
+            })),
+    );
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control()), Arc::new(processes));
+
+    let result = backend
+        .resize_screen_stack(BackendResizeScreenStackRequest {
+            sandbox_provider_ref: ProviderRef::new("provider"),
+            viewport,
+            deadline_at: None,
+        })
+        .await;
+
+    assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
+}

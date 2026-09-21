@@ -1,17 +1,18 @@
 //! Bounded Reqwest transport for Connect JSON unary and streaming calls.
 
-use std::{pin::Pin, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
-use bytes::Bytes;
-use futures_core::Stream;
 use futures_util::StreamExt;
 
 use crate::error::{Error, Result};
+use crate::response_body::{ResponseByteStream, collect_bounded};
 
 use super::{framing::encode_frame, types::ProcessConnection};
 
-pub(crate) type ByteStream = Pin<Box<dyn Stream<Item = Result<Bytes>> + Send>>;
+pub(crate) type ByteStream = ResponseByteStream;
+
+const MAX_UNARY_RESPONSE_BYTES: usize = 1024 * 1024;
 
 #[unimock::unimock(api = [stream, unary, download, upload])]
 #[async_trait]
@@ -152,15 +153,13 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             Err(source) => return Err(Error::internal_with(source, "send Connect unary request")),
         };
         map_status(response.status().as_u16(), ambiguous)?;
-        match response.bytes().await {
-            Ok(bytes) if bytes.len() <= 1024 * 1024 => Ok(bytes.to_vec()),
-            Ok(_) => Err(Error::ResponseTooLarge),
-            Err(source) if ambiguous => {
-                let _ = source;
-                Err(Error::DeliveryAmbiguous)
-            }
-            Err(source) => Err(Error::internal_with(source, "read Connect unary response")),
-        }
+        read_bounded_response(
+            response,
+            MAX_UNARY_RESPONSE_BYTES,
+            ambiguous,
+            "read Connect unary response",
+        )
+        .await
     }
 
     async fn download(
@@ -187,11 +186,7 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             Err(source) => return Err(Error::internal_with(source, "download envd file")),
         };
         map_status(response.status().as_u16(), false)?;
-        match response.bytes().await {
-            Ok(bytes) if bytes.len() <= max_bytes => Ok(bytes.to_vec()),
-            Ok(_) => Err(Error::ResponseTooLarge),
-            Err(source) => Err(Error::internal_with(source, "read envd file response")),
-        }
+        read_bounded_response(response, max_bytes, false, "read envd file response").await
     }
 
     async fn upload(
@@ -211,6 +206,34 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
             Err(source) => return Err(Error::internal_with(source, "upload envd file")),
         };
         map_status(response.status().as_u16(), false)
+    }
+}
+
+async fn read_bounded_response(
+    response: reqwest::Response,
+    maximum: usize,
+    ambiguous: bool,
+    context: &'static str,
+) -> Result<Vec<u8>> {
+    if response
+        .content_length()
+        .is_some_and(|length| length > maximum as u64)
+    {
+        return Err(if ambiguous {
+            Error::DeliveryAmbiguous
+        } else {
+            Error::ResponseTooLarge
+        });
+    }
+    let response_stream: ResponseByteStream =
+        Box::pin(response.bytes_stream().map(move |item| match item {
+            Ok(bytes) => Ok(bytes),
+            Err(_) if ambiguous => Err(Error::DeliveryAmbiguous),
+            Err(source) => Err(Error::internal_with(source, context)),
+        }));
+    match collect_bounded(response_stream, maximum).await {
+        Err(Error::ResponseTooLarge) if ambiguous => Err(Error::DeliveryAmbiguous),
+        result => result,
     }
 }
 

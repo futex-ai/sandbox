@@ -18,6 +18,8 @@ fn runtime_conventions_have_neutral_defaults() {
         conventions.screen_helper_path(),
         "/usr/local/bin/sandbox-screen"
     );
+    assert_eq!(conventions.image_helper_process_name(), "sandbox-helper");
+    assert_eq!(conventions.image_agent_process_name(), "sandbox-agent");
 }
 
 #[test]
@@ -27,12 +29,38 @@ fn runtime_conventions_accept_deployment_owned_values() {
         "tenant-terminal-",
         "/opt/tenant/bin/screen-helper",
     )
+    .unwrap()
+    .with_image_process_names("tenant-helper", "tenant-agent")
     .unwrap();
     let config = config(vec!["203.0.113.10/32".to_owned()])
         .unwrap()
         .with_runtime_conventions(conventions.clone());
 
     assert_eq!(config.runtime_conventions, conventions);
+    assert_eq!(
+        config.runtime_conventions.image_helper_process_name(),
+        "tenant-helper"
+    );
+    assert_eq!(
+        config.runtime_conventions.image_agent_process_name(),
+        "tenant-agent"
+    );
+}
+
+#[test]
+fn runtime_conventions_reject_unsafe_image_process_names() {
+    for (helper, agent) in [
+        ("", "sandbox-agent"),
+        ("helper name", "sandbox-agent"),
+        ("../helper", "sandbox-agent"),
+        ("sandbox-helper", "agent|other"),
+        ("sandbox-helper", "a-name-that-is-too-long"),
+    ] {
+        assert!(matches!(
+            E2bRuntimeConventions::default().with_image_process_names(helper, agent),
+            Err(E2bAdapterError::InvalidRequest)
+        ));
+    }
 }
 
 #[test]

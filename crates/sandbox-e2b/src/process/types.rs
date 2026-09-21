@@ -5,6 +5,8 @@ use std::{fmt, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use sandbox_interface::Result;
 
+use super::regular_file_write::ProcessRegularFileWriteRequest;
+
 /// Call-local E2B envd connection details.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ProcessConnection {
@@ -262,6 +264,13 @@ pub trait ProcessTransport: Send + Sync {
         connection: ProcessConnection,
         request: ProcessRegularFileRequest,
     ) -> Result<ProcessFileChunk>;
+    /// Atomically replaces one regular file through descriptor-relative,
+    /// non-following traversal below `root`.
+    async fn write_regular_file(
+        &self,
+        connection: ProcessConnection,
+        request: ProcessRegularFileWriteRequest,
+    ) -> Result<()>;
     /// Canonicalizes and classifies one transfer target inside the sandbox.
     async fn validate_file(
         &self,

@@ -4,6 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
+use futures_util::StreamExt;
 use sandbox_interface::Error as DomainError;
 use unimock::{MockFn, Unimock, matching};
 
@@ -11,7 +12,7 @@ use crate::process::{
     ConnectProcessTransport, ProcessCommand, ProcessConnection, ProcessOutputCapture,
     ProcessTransport,
     framing::encode_frame,
-    http::{ByteStream, ConnectHttpTransport, stream as stream_call},
+    http::{ByteStream, ConnectHttpTransport, stream as stream_call, unary as unary_call},
 };
 
 #[tokio::test]
@@ -58,7 +59,25 @@ async fn exact_limit_tail_capture_is_complete() {
 
 #[tokio::test]
 async fn hard_limit_capture_still_rejects_overflow() {
-    let error = process_transport(vec![data_event("123456")])
+    let events = vec![
+        event_frame(r#"{"event":{"start":{"pid":31}}}"#),
+        data_event("123456"),
+    ];
+    let mock = Unimock::new((
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers_arc(Arc::new(move |_, _, _, _| Ok(byte_stream(events.clone())))),
+        unary_call
+            .next_call(matching!(_, "SendSignal", _, false))
+            .answers(&|_, _, _, request: Vec<u8>, _| {
+                assert_eq!(
+                    request,
+                    br#"{"process":{"pid":31},"signal":"SIGNAL_SIGKILL"}"#
+                );
+                Ok(Vec::new())
+            }),
+    ));
+    let error = transport(mock)
         .run(
             connection(),
             command(ProcessOutputCapture::HardLimit { max_bytes: 5 }),
@@ -69,12 +88,43 @@ async fn hard_limit_capture_still_rejects_overflow() {
     assert!(matches!(error, DomainError::Internal(_)));
 }
 
+#[tokio::test]
+async fn helper_deadline_after_start_kills_the_observed_process() {
+    let started = event_frame(r#"{"event":{"start":{"pid":37}}}"#);
+    let mock = Unimock::new((
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers_arc(Arc::new(move |_, _, _, _| {
+                let first = futures_util::stream::iter([Ok(Bytes::from(started.clone()))]);
+                Ok(Box::pin(first.chain(futures_util::stream::pending())))
+            })),
+        unary_call
+            .next_call(matching!(_, "SendSignal", _, false))
+            .returns(Ok(Vec::new())),
+    ));
+
+    let error = transport(mock)
+        .run_helper(
+            connection(),
+            command(ProcessOutputCapture::HardLimit { max_bytes: 5 }),
+            Duration::from_millis(5),
+        )
+        .await
+        .expect_err("an unfinished helper must fail after cleanup");
+
+    assert!(matches!(error, DomainError::BackendUnavailable { .. }));
+}
+
 fn process_transport(events: Vec<Vec<u8>>) -> ConnectProcessTransport {
     let mock = Unimock::new(
         stream_call
             .next_call(matching!(_, "Start", _))
             .answers_arc(Arc::new(move |_, _, _, _| Ok(byte_stream(events.clone())))),
     );
+    transport(mock)
+}
+
+fn transport(mock: Unimock) -> ConnectProcessTransport {
     let http: Arc<dyn ConnectHttpTransport> = Arc::new(mock);
     ConnectProcessTransport {
         http,

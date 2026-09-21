@@ -3,8 +3,10 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
+use futures_util::StreamExt;
 
 use crate::error::{Error, Result};
+use crate::response_body::{ResponseByteStream, collect_bounded};
 
 const MAX_CONTROL_RESPONSE_BYTES: usize = 1024 * 1024;
 const CONTROL_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -128,27 +130,36 @@ impl E2bHttpTransport for ReqwestE2bHttpTransport {
             .content_length()
             .is_some_and(|length| length > MAX_CONTROL_RESPONSE_BYTES as u64)
         {
-            return Err(Error::ResponseTooLarge);
+            return Err(response_limit_error(status, ambiguous_on_failure));
         }
-        let body = match response.bytes().await {
-            Ok(body) => body,
-            Err(source) => {
-                return Err(request_error(
+        let response_stream: ResponseByteStream =
+            Box::pin(response.bytes_stream().map(move |item| match item {
+                Ok(bytes) => Ok(bytes),
+                Err(source) => Err(request_error(
                     source,
                     ambiguous_on_failure,
                     "read E2B control response",
-                ));
+                )),
+            }));
+        let body = match collect_bounded(response_stream, MAX_CONTROL_RESPONSE_BYTES).await {
+            Err(Error::ResponseTooLarge) => {
+                return Err(response_limit_error(status, ambiguous_on_failure));
             }
+            result => result?,
         };
-        if body.len() > MAX_CONTROL_RESPONSE_BYTES {
-            return Err(Error::ResponseTooLarge);
-        }
         Ok(HttpResponse {
             status,
-            body: body.to_vec(),
+            body,
             next_token,
         })
     }
+}
+
+fn response_limit_error(status: u16, ambiguous: bool) -> Error {
+    if ambiguous && (200..=299).contains(&status) {
+        return Error::DeliveryAmbiguous;
+    }
+    Error::ResponseTooLarge
 }
 
 fn request_error(source: reqwest::Error, ambiguous: bool, context: &'static str) -> Error {

@@ -1,17 +1,14 @@
 //! Validated adapter configuration and deployment-owned profiles.
 
-use std::{collections::HashMap, fmt, net::IpAddr, path::Component, path::Path};
+use std::{collections::HashMap, fmt, net::IpAddr};
 
 use sandbox_interface::{SANDBOX_PROFILE_MAX_ITEMS, valid_sandbox_profile_name};
 use url::Url;
 
 use crate::error::{Error, Result};
+use crate::runtime_conventions::E2bRuntimeConventions;
 
 const DEFAULT_SANDBOX_DOMAIN: &str = "e2b.app";
-const DEFAULT_METADATA_PREFIX: &str = "sandbox";
-const DEFAULT_TERMINAL_TAG_PREFIX: &str = "sandbox-terminal-";
-const DEFAULT_SCREEN_HELPER_PATH: &str = "/usr/local/bin/sandbox-screen";
-const CONVENTION_MAX_BYTES: usize = 255;
 
 /// One deployment-owned E2B template and network posture.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -22,68 +19,6 @@ pub struct E2bProfile {
     pub allow_public_egress: bool,
     /// Additional deployment-owned egress destinations to deny.
     pub denied_destinations: Vec<String>,
-}
-
-/// Deployment-specific names embedded in E2B metadata and template processes.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct E2bRuntimeConventions {
-    metadata_prefix: String,
-    terminal_tag_prefix: String,
-    screen_helper_path: String,
-}
-
-impl E2bRuntimeConventions {
-    /// Validates conventions used to find resources created by one deployment.
-    pub fn new(
-        metadata_prefix: impl Into<String>,
-        terminal_tag_prefix: impl Into<String>,
-        screen_helper_path: impl Into<String>,
-    ) -> Result<Self> {
-        let conventions = Self {
-            metadata_prefix: metadata_prefix.into(),
-            terminal_tag_prefix: terminal_tag_prefix.into(),
-            screen_helper_path: screen_helper_path.into(),
-        };
-        if !valid_metadata_prefix(&conventions.metadata_prefix)
-            || !valid_terminal_tag_prefix(&conventions.terminal_tag_prefix)
-            || !valid_absolute_path(&conventions.screen_helper_path)
-        {
-            return Err(Error::InvalidRequest);
-        }
-        Ok(conventions)
-    }
-
-    /// Prefix used for E2B resource-correlation metadata keys.
-    #[must_use]
-    pub fn metadata_prefix(&self) -> &str {
-        &self.metadata_prefix
-    }
-
-    /// Prefix used for durable terminal process tags.
-    #[must_use]
-    pub fn terminal_tag_prefix(&self) -> &str {
-        &self.terminal_tag_prefix
-    }
-
-    /// Absolute helper executable installed by compatible screen templates.
-    #[must_use]
-    pub fn screen_helper_path(&self) -> &str {
-        &self.screen_helper_path
-    }
-
-    pub(crate) fn metadata_key(&self, suffix: &str) -> String {
-        format!("{}_{suffix}", self.metadata_prefix)
-    }
-}
-
-impl Default for E2bRuntimeConventions {
-    fn default() -> Self {
-        Self {
-            metadata_prefix: DEFAULT_METADATA_PREFIX.to_owned(),
-            terminal_tag_prefix: DEFAULT_TERMINAL_TAG_PREFIX.to_owned(),
-            screen_helper_path: DEFAULT_SCREEN_HELPER_PATH.to_owned(),
-        }
-    }
 }
 
 /// Complete configuration for one E2B backend registration.
@@ -164,41 +99,6 @@ impl E2bAdapterConfig {
     pub(crate) fn profile(&self, name: &str) -> Result<&E2bProfile> {
         self.profiles.get(name).ok_or(Error::InvalidRequest)
     }
-}
-
-fn valid_metadata_prefix(value: &str) -> bool {
-    nonempty_canonical(value)
-        && value.len() <= CONVENTION_MAX_BYTES
-        && value.starts_with(|character: char| character.is_ascii_lowercase())
-        && !value.ends_with('_')
-        && !value.contains("__")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
-}
-
-fn valid_terminal_tag_prefix(value: &str) -> bool {
-    nonempty_canonical(value)
-        && value.len() <= CONVENTION_MAX_BYTES
-        && value.ends_with('-')
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-}
-
-fn valid_absolute_path(value: &str) -> bool {
-    nonempty_canonical(value)
-        && value.len() <= CONVENTION_MAX_BYTES
-        && value != "/"
-        && !value.ends_with('/')
-        && !value.contains("//")
-        && !value
-            .bytes()
-            .any(|byte| byte.is_ascii_whitespace() || byte.is_ascii_control())
-        && Path::new(value).is_absolute()
-        && Path::new(value)
-            .components()
-            .all(|component| !matches!(component, Component::CurDir | Component::ParentDir))
 }
 
 fn nonempty_canonical(value: &str) -> bool {

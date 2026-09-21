@@ -15,6 +15,14 @@ use super::types::{ProcessCommand, ProcessConnection, ProcessOutputCapture, Proc
 use super::wire::{command_start, encode};
 
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
+const KILL_DEADLINE: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(super) enum CollectionMode {
+    StartPersistent,
+    ObservePersistent,
+    RunOneShot,
+}
 
 impl ConnectProcessTransport {
     pub(super) async fn collect(
@@ -24,13 +32,14 @@ impl ConnectProcessTransport {
         request: &impl Serialize,
         wait: Duration,
         output_capture: ProcessOutputCapture,
-        return_after_start: bool,
+        mode: CollectionMode,
     ) -> Result<CollectedEvents> {
         let request = encode(request)?;
         let deadline = tokio::time::Instant::now() + wait;
         let mut stream = match tokio::time::timeout_at(
             deadline,
-            self.http.stream(connection, method.to_owned(), request),
+            self.http
+                .stream(connection.clone(), method.to_owned(), request),
         )
         .await
         {
@@ -39,45 +48,54 @@ impl ConnectProcessTransport {
         };
         let mut decoder = FrameDecoder::new(MAX_FRAME_BYTES);
         let mut collected = CollectedEvents::default();
-        while let Some(remaining) = deadline.checked_duration_since(tokio::time::Instant::now()) {
-            let fragment = match tokio::time::timeout(remaining, stream.next()).await {
-                Ok(Some(fragment)) => fragment?,
-                Ok(None) | Err(_) => break,
-            };
-            let decoded = decoder.push(&fragment);
-            let mut complete = false;
-            for frame in decoded.frames {
-                if frame.end_stream {
-                    complete = true;
-                    break;
-                }
-                match decode_event(&frame.payload)? {
-                    ProcessEvent::Start(pid) => {
-                        collected.pid = Some(pid);
-                        if return_after_start {
-                            complete = true;
-                            break;
-                        }
-                    }
-                    ProcessEvent::Data { bytes, .. } => {
-                        collected.capture(bytes, output_capture)?;
-                    }
-                    ProcessEvent::End { exit_code, exited } => {
-                        collected.exit_code = Some(exit_code);
-                        collected.exited = exited;
+        let collection: Result<()> = async {
+            while let Some(remaining) = deadline.checked_duration_since(tokio::time::Instant::now())
+            {
+                let fragment = match tokio::time::timeout(remaining, stream.next()).await {
+                    Ok(Some(fragment)) => fragment?,
+                    Ok(None) | Err(_) => break,
+                };
+                let decoded = decoder.push(&fragment);
+                let mut complete = false;
+                for frame in decoded.frames {
+                    if frame.end_stream {
                         complete = true;
                         break;
                     }
-                    ProcessEvent::KeepAlive => {}
+                    match decode_event(&frame.payload)? {
+                        ProcessEvent::Start(pid) => {
+                            collected.pid = Some(pid);
+                            if mode == CollectionMode::StartPersistent {
+                                complete = true;
+                                break;
+                            }
+                        }
+                        ProcessEvent::Data { bytes, .. } => {
+                            collected.capture(bytes, output_capture)?;
+                        }
+                        ProcessEvent::End { exit_code, exited } => {
+                            collected.exit_code = Some(exit_code);
+                            collected.exited = exited;
+                            complete = true;
+                            break;
+                        }
+                        ProcessEvent::KeepAlive => {}
+                    }
+                }
+                if let Some(error) = decoded.terminal_error {
+                    return Err(error);
+                }
+                if complete {
+                    return Ok(());
                 }
             }
-            if let Some(error) = decoded.terminal_error {
-                return Err(error);
-            }
-            if complete {
-                return Ok(collected);
-            }
+            Ok(())
         }
+        .await;
+        if mode == CollectionMode::RunOneShot && collected.exit_code.is_none() {
+            self.kill_best_effort(connection, collected.pid).await;
+        }
+        collection?;
         Ok(collected)
     }
 
@@ -91,7 +109,14 @@ impl ConnectProcessTransport {
         let read_only = command.read_only;
         let body = command_start(command);
         let collected = self
-            .collect(connection, "Start", &body, timeout, output_capture, false)
+            .collect(
+                connection,
+                "Start",
+                &body,
+                timeout,
+                output_capture,
+                CollectionMode::RunOneShot,
+            )
             .await;
         let events = match collected {
             Err(Error::ResponseTooLarge) if read_only => {
@@ -113,12 +138,27 @@ impl ConnectProcessTransport {
         command: ProcessCommand,
         timeout: Duration,
     ) -> DomainResult<ProcessRunOutput> {
-        match tokio::time::timeout(timeout, self.run_for(connection, command, timeout)).await {
-            Ok(Ok(output)) if output.exit_code.is_some() => Ok(output),
-            Ok(Err(error)) => Err(error),
-            Ok(Ok(_)) | Err(_) => Err(DomainError::BackendUnavailable {
+        match self.run_for(connection, command, timeout).await {
+            Ok(output) if output.exit_code.is_some() => Ok(output),
+            Err(error) => Err(error),
+            Ok(_) => Err(DomainError::BackendUnavailable {
                 backend_id: self.backend_id.clone(),
             }),
+        }
+    }
+
+    pub(super) async fn kill_best_effort(&self, connection: ProcessConnection, pid: Option<u32>) {
+        let Some(pid) = pid else {
+            return;
+        };
+        let Ok(request) = encode(&super::wire::signal(pid)) else {
+            return;
+        };
+        let kill = self
+            .http
+            .unary(connection, "SendSignal".to_owned(), request, false);
+        if !matches!(tokio::time::timeout(KILL_DEADLINE, kill).await, Ok(Ok(_))) {
+            tracing::debug!(event = "e2b_process_kill_unconfirmed");
         }
     }
 }

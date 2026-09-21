@@ -73,7 +73,13 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 true,
             )
             .await?;
-        map_access(response, &self.sandbox_domain)
+        if response.sandbox_id.is_empty() {
+            return Err(Error::DeliveryAmbiguous);
+        }
+        match map_access(response, &self.sandbox_domain) {
+            Ok(access) => Ok(access),
+            Err(_) => Err(Error::DeliveryAmbiguous),
+        }
     }
 
     async fn get_sandbox(&self, sandbox_id: &str) -> Result<ControlSandbox> {
@@ -155,6 +161,9 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 true,
             )
             .await?;
+        if response.snapshot_id.is_empty() {
+            return Err(Error::DeliveryAmbiguous);
+        }
         Ok(ControlSnapshot {
             snapshot_id: response.snapshot_id,
         })

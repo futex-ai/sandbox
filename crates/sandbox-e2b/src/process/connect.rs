@@ -9,8 +9,10 @@ use serde::{Serialize, de::DeserializeOwned};
 use crate::error::{Error, Result};
 
 use super::{
+    connect_helpers::CollectionMode,
     http::{ConnectHttpTransport, ReqwestConnectHttpTransport},
     mapping::{map_file_result, map_result},
+    regular_file_write::ProcessRegularFileWriteRequest,
     types::{
         ProcessCommand, ProcessConnectOutput, ProcessConnection, ProcessFileChunk,
         ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,
@@ -86,7 +88,7 @@ impl ProcessTransport for ConnectProcessTransport {
                 &body,
                 START_TIMEOUT,
                 ProcessOutputCapture::HardLimit { max_bytes: 0 },
-                true,
+                CollectionMode::StartPersistent,
             )
             .await,
             false,
@@ -115,7 +117,7 @@ impl ProcessTransport for ConnectProcessTransport {
                 &selector(pid),
                 wait,
                 ProcessOutputCapture::HardLimit { max_bytes },
-                false,
+                CollectionMode::ObservePersistent,
             )
             .await,
             false,
@@ -206,6 +208,14 @@ impl ProcessTransport for ConnectProcessTransport {
         request: ProcessRegularFileRequest,
     ) -> DomainResult<ProcessFileChunk> {
         super::regular_file::read(self, connection, request).await
+    }
+
+    async fn write_regular_file(
+        &self,
+        connection: ProcessConnection,
+        request: ProcessRegularFileWriteRequest,
+    ) -> DomainResult<()> {
+        super::regular_file_write::write(self, connection, request).await
     }
 
     async fn validate_file(

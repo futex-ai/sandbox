@@ -14,7 +14,7 @@ use unimock::{MockFn, Unimock, matching};
 use crate::{
     ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
     ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
-    ProcessFileValidation, ProcessInfo, ProcessRegularFileRequest, ProcessRunOutput,
+    ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
     ProcessSplitOutput, ProcessTransportMock,
 };
 
@@ -184,26 +184,14 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                     total_size: 11,
                 })
             }),
-        ProcessTransportMock::validate_file
-            .each_call(matching!(_, _, _, _))
-            .answers(&|_, _, root, path, _| {
-                let canonical_path = format!("{root}/{path}");
-                Ok(ProcessFileValidation {
-                    canonical_root: root,
-                    canonical_path,
-                    exists: path == "conformance.txt",
-                    regular: path == "conformance.txt",
-                    symlink: false,
-                    size: if path == "conformance.txt" { 13 } else { 0 },
-                })
-            }),
-        ProcessTransportMock::upload_file
-            .each_call(matching!(_, _, _))
-            .answers(&|_, _, path, bytes| {
-                if path == "/workspace/conformance.txt" {
-                    assert_eq!(bytes, b"file-transfer");
+        ProcessTransportMock::write_regular_file
+            .each_call(matching!(_, _))
+            .answers(&|_, _, request: ProcessRegularFileWriteRequest| {
+                if request.path == "conformance.txt" {
+                    assert_eq!(request.root, "/workspace");
+                    assert_eq!(request.bytes, b"file-transfer");
                 } else {
-                    assert_eq!(bytes, b"input");
+                    assert_eq!(request.bytes, b"input");
                 }
                 Ok(())
             }),

@@ -105,7 +105,11 @@ fn acknowledge(
     viewport: ScreenViewportSize,
     output: ProcessSplitOutput,
 ) -> Result<ScreenViewportSize> {
-    if output.exit_code != Some(0) || output.stdout_overflowed || output.stderr_overflowed {
+    if !output.exited
+        || output.exit_code != Some(0)
+        || output.stdout_overflowed
+        || output.stderr_overflowed
+    {
         return Err(unavailable(backend));
     }
     let Ok(acknowledgment) = serde_json::from_slice::<ResizeAcknowledgment>(&output.stdout) else {

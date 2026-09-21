@@ -164,12 +164,21 @@ async fn statuses_and_missing_secure_token_are_typed() {
     ));
     assert!(matches!(
         tokenless.create_sandbox(create_request()).await,
-        Err(E2bAdapterError::Internal(_))
+        Err(E2bAdapterError::DeliveryAmbiguous)
     ));
     assert!(matches!(
         traffic_tokenless.create_sandbox(create_request()).await,
-        Err(E2bAdapterError::Internal(_))
+        Err(E2bAdapterError::DeliveryAmbiguous)
     ));
+}
+
+#[tokio::test]
+async fn accepted_snapshot_with_malformed_body_preserves_delivery_ambiguity() {
+    let (client, _) = recording_client(vec![json_response(201, "not-json")]);
+
+    let result = client.create_snapshot("source", "snapshot").await;
+
+    assert!(matches!(result, Err(E2bAdapterError::DeliveryAmbiguous)));
 }
 
 #[tokio::test]

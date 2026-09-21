@@ -34,6 +34,24 @@ async fn ingress_uses_the_exact_port_and_distinct_traffic_token() {
 }
 
 #[tokio::test]
+async fn ingress_rejects_port_zero_without_contacting_the_provider() {
+    let backend = E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    );
+
+    let result = backend
+        .port_ingress(BackendPortIngressRequest {
+            sandbox_provider_ref: ProviderRef::new("provider"),
+            port: 0,
+        })
+        .await;
+
+    assert!(matches!(result, Err(Error::InvalidPort)));
+}
+
+#[tokio::test]
 async fn ingress_rejects_a_mismatched_provider_identity() {
     let control = Unimock::new(
         E2bControlApiMock::connect_sandbox

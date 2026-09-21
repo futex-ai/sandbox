@@ -1,13 +1,13 @@
 //! E2B envd regular-file transfer operations.
 
-use std::path::Path;
-
 use sandbox_interface::{
     BackendFileContent, BackendReadFileRequest, BackendWriteFileRequest, Error,
     FILE_TRANSFER_MAX_BYTES, Result,
 };
 
-use crate::process::{ProcessConnection, ProcessRegularFileRequest};
+use crate::process::{
+    ProcessConnection, ProcessRegularFileRequest, ProcessRegularFileWriteRequest,
+};
 
 use super::{configured::E2bSandboxBackend, mapping};
 
@@ -69,34 +69,13 @@ pub(super) async fn write_to_connection(
             limit: FILE_TRANSFER_MAX_BYTES,
         });
     }
-    let validation = backend
-        .processes
-        .validate_file(connection.clone(), root, path, true)
-        .await?;
-    validate_target(&validation, true)?;
     backend
         .processes
-        .upload_file(connection, validation.canonical_path, bytes)
+        .write_regular_file(
+            connection,
+            ProcessRegularFileWriteRequest { root, path, bytes },
+        )
         .await
-}
-
-fn validate_target(
-    validation: &crate::process::ProcessFileValidation,
-    allow_missing: bool,
-) -> Result<()> {
-    if !Path::new(&validation.canonical_path).starts_with(&validation.canonical_root) {
-        return Err(Error::FileOutsideRoot);
-    }
-    if validation.symlink {
-        return Err(Error::FileNotRegular);
-    }
-    if validation.exists && !validation.regular {
-        return Err(Error::FileNotRegular);
-    }
-    if !validation.exists && !allow_missing {
-        return Err(Error::FileNotRegular);
-    }
-    Ok(())
 }
 
 #[cfg(test)]

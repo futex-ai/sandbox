@@ -7,10 +7,9 @@ use crate::error::Result;
 use super::connect::ConnectProcessTransport;
 use super::framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_event};
 use super::types::{ProcessConnection, ProcessSplitOutput, SplitProcessCommand};
-use super::wire::{argv_start, encode, signal};
+use super::wire::{argv_start, encode};
 
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
-const KILL_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 
 impl ConnectProcessTransport {
     pub(super) async fn collect_split(
@@ -89,21 +88,6 @@ impl ConnectProcessTransport {
         }
         collection?;
         Ok(collected)
-    }
-
-    async fn kill_best_effort(&self, connection: ProcessConnection, pid: Option<u32>) {
-        let Some(pid) = pid else {
-            return;
-        };
-        let Ok(request) = encode(&signal(pid)) else {
-            return;
-        };
-        let kill = self
-            .http
-            .unary(connection, "SendSignal".to_owned(), request, false);
-        if !matches!(tokio::time::timeout(KILL_DEADLINE, kill).await, Ok(Ok(_))) {
-            tracing::debug!(event = "e2b_split_run_kill_unconfirmed");
-        }
     }
 }
 

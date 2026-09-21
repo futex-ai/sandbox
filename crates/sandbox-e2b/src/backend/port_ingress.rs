@@ -13,6 +13,9 @@ pub(super) async fn resolve(
     backend: &E2bSandboxBackend,
     request: BackendPortIngressRequest,
 ) -> Result<PortIngress> {
+    if request.port == 0 {
+        return Err(Error::InvalidPort);
+    }
     let access = mapping::control_result(
         backend
             .control

@@ -8,9 +8,9 @@ use sandbox_interface::{
 };
 
 use crate::{
-    config::E2bRuntimeConventions,
     control::{ControlCreateSandbox, ControlSandbox, SandboxMetadata},
     error::Error as AdapterError,
+    runtime_conventions::E2bRuntimeConventions,
 };
 
 use super::{configured::E2bSandboxBackend, mapping};

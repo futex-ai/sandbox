@@ -7,11 +7,13 @@ mod framing;
 mod http;
 mod mapping;
 mod regular_file;
+mod regular_file_write;
 mod split_run;
 mod types;
 mod wire;
 
 pub use self::connect::ConnectProcessTransport;
+pub use self::regular_file_write::ProcessRegularFileWriteRequest;
 pub use self::types::{
     DynProcessTransport, ProcessCommand, ProcessConnectOutput, ProcessConnection, ProcessFileChunk,
     ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,

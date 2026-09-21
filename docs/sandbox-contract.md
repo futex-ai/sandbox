@@ -40,15 +40,19 @@ never silently allocate a duplicate.
 ## Bounds And Failure Safety
 
 Paths must remain under their trusted absolute root and must identify regular
-files without following a symlink escape. File transfers are capped at 256 MiB.
-Process and image-command output is independently bounded and reports
-truncation. Port zero, empty required text, oversized values, and unsupported
+files without following a symlink escape. Replacement writes must bind parent
+directories and replace the leaf atomically so concurrent path changes cannot
+redirect a write. File transfers are capped at 256 MiB. Provider response and
+process output limits are enforced while bytes are consumed. A bounded
+one-shot process must be terminated when collection fails after its PID is
+known. Port zero, empty required text, oversized values, and unsupported
 network policies fail before provider dispatch.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
-must not exceed 8,294,400 pixels. An adapter that cannot confirm resize process
-termination returns `ScreenViewportResizeUnconfirmed`; the caller must retain
-its session fence and arrange cleanup.
+must not exceed 8,294,400 pixels. Resize success requires an exact
+acknowledgment and a confirmed normal helper exit. An adapter that cannot
+confirm resize process termination returns `ScreenViewportResizeUnconfirmed`;
+the caller must retain its session fence and arrange cleanup.
 
 Provider diagnostics returned through handled errors must not contain secret
 values or opaque backend handles. Unknown profile errors do not echo an

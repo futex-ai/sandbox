@@ -21,7 +21,7 @@ const HELPER_OUTPUT_LIMIT: usize = 4096;
 const SIZE_MARKER: &str = "__SANDBOX_IMAGE_SIZE__=";
 const QUIESCE_AND_SCRUB: &str = r#"set -eu
 jobs -pr | xargs -r kill || true
-pkill -TERM -f 'f[i]rna-helper|f[i]rna-agent' || true
+for sandbox_process_name in "$@"; do pkill -TERM -x -- "$sandbox_process_name" || true; done
 if mountpoint -q /drives/me; then fusermount3 -u /drives/me || umount -l /drives/me; fi
 pkill -TERM -f '[s]andbox-drive-' || true
 rm -rf /tmp/sandbox-drive
@@ -145,7 +145,7 @@ async fn realize_in_sandbox(
     run_phase(
         backend,
         connection.clone(),
-        QUIESCE_AND_SCRUB.to_owned(),
+        scrub_command(backend),
         ImagePhase::Scrub,
     )
     .await?;
@@ -162,6 +162,15 @@ async fn realize_in_sandbox(
         provider_ref: image_provider_ref,
         size_bytes,
     })
+}
+
+fn scrub_command(backend: &E2bSandboxBackend) -> String {
+    let conventions = &backend.config.runtime_conventions;
+    format!(
+        "set -- {} {}\n{QUIESCE_AND_SCRUB}",
+        conventions.image_helper_process_name(),
+        conventions.image_agent_process_name(),
+    )
 }
 
 async fn write_input_files(
