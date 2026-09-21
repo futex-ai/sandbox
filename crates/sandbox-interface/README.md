@@ -33,8 +33,9 @@ guessing a class.
 Direct process requests require a non-empty command, at most 128 KiB across
 the command and arguments, at most 64 MiB for each captured stream, and a
 deadline no longer than 300 seconds.
-Multi-file image preparation validates every file-size bound before provider
-access, and handled diagnostics redact known sensitive values even when one is
+Multi-file image preparation validates every file path and size bound before
+provider access. Image measurement must fail rather than persist a partial
+total, and handled diagnostics redact known sensitive values even when one is
 split by a bounded-output cutoff.
 
 The public `conformance` module exercises creation, recovery, image

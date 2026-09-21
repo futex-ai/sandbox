@@ -33,6 +33,9 @@ before later work can fail. Cleanup always attempts every tracked terminal,
 snapshot, and sandbox; an operation error remains the reported error even if a
 cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
+Authenticated control routes reject dot-segment provider identifiers before
+dispatch. Image preparation validates every input path and size before it
+connects, and incomplete filesystem-size measurements fail closed.
 
 ## Developer Setup
 
@@ -57,7 +60,9 @@ cargo xtask smoke-test
 ```
 
 None of these commands contacts E2B. GitHub Actions runs the same deterministic
-checks without provider secrets.
+checks without provider secrets. Without `--all`, the file-length command
+checks branch, staged, unstaged, and untracked Rust files; `cargo xtask check`
+and the explicit `--all` form audit the complete workspace.
 
 ## Optional Live E2B Tests
 

@@ -121,7 +121,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
         let response: SandboxAccessBody = self
             .json(
                 Method::Post,
-                format!("/sandboxes/{}/connect", path_segment(sandbox_id)),
+                format!("/sandboxes/{}/connect", path_segment(sandbox_id)?),
                 Some(body),
                 &[200, 201],
                 false,
@@ -134,7 +134,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()> {
         self.empty(
             Method::Post,
-            format!("/sandboxes/{}/pause", path_segment(sandbox_id)),
+            format!("/sandboxes/{}/pause", path_segment(sandbox_id)?),
             Some(encode(&PauseBody { memory: true })?),
             &[204, 409],
         )
@@ -144,7 +144,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
     async fn kill_sandbox(&self, sandbox_id: &str) -> Result<()> {
         self.empty(
             Method::Delete,
-            format!("/sandboxes/{}", path_segment(sandbox_id)),
+            format!("/sandboxes/{}", path_segment(sandbox_id)?),
             None,
             &[204, 404],
         )
@@ -155,7 +155,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
         let response: SnapshotInfoBody = self
             .json(
                 Method::Post,
-                format!("/sandboxes/{}/snapshots", path_segment(sandbox_id)),
+                format!("/sandboxes/{}/snapshots", path_segment(sandbox_id)?),
                 Some(encode(&SnapshotBody { name })?),
                 &[201],
                 true,
@@ -188,7 +188,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
     async fn delete_snapshot(&self, snapshot_id: &str) -> Result<()> {
         self.empty(
             Method::Delete,
-            format!("/templates/{}", path_segment(snapshot_id)),
+            format!("/templates/{}", path_segment(snapshot_id)?),
             None,
             &[204, 404],
         )
@@ -207,3 +207,7 @@ mod control_pagination_tests;
 #[cfg(test)]
 #[path = "_tests_/read_access_tests.rs"]
 mod read_access_tests;
+
+#[cfg(test)]
+#[path = "_tests_/control_route_tests.rs"]
+mod control_route_tests;

@@ -1,15 +1,21 @@
 //! Rust file-length audit for repository source files.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::command::{CommandRunner, CommandSpec};
 use crate::error::{Error, Result};
 
 const MAX_LINES: usize = 300;
 const ROOTS: &[&str] = &["crates", "xtask"];
 
-pub(crate) fn run(root: &Path, _all: bool) -> Result<()> {
-    let files = rust_files(root)?;
+pub(crate) fn run(root: &Path, all: bool, runner: &dyn CommandRunner) -> Result<()> {
+    let files = if all {
+        rust_files(root)?
+    } else {
+        changed_rust_files(root, runner)?
+    };
     let mut violations = Vec::new();
     for path in files {
         let contents = read_file(&path)?;
@@ -29,6 +35,74 @@ pub(crate) fn run(root: &Path, _all: bool) -> Result<()> {
             details: violations.join("\n"),
         })
     }
+}
+
+fn changed_rust_files(root: &Path, runner: &dyn CommandRunner) -> Result<Vec<PathBuf>> {
+    let mut files = BTreeSet::new();
+    for args in [
+        &[
+            "diff",
+            "--name-only",
+            "-z",
+            "--diff-filter=ACMR",
+            "origin/main",
+            "--",
+            "crates",
+            "xtask",
+        ][..],
+        &[
+            "ls-files",
+            "-z",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "crates",
+            "xtask",
+        ][..],
+    ] {
+        for relative in git_paths(root, runner, args)? {
+            let path = root.join(relative);
+            if path.is_file() && path.extension().is_some_and(|extension| extension == "rs") {
+                files.insert(path);
+            }
+        }
+    }
+    Ok(files.into_iter().collect())
+}
+
+fn git_paths(root: &Path, runner: &dyn CommandRunner, args: &[&str]) -> Result<Vec<PathBuf>> {
+    let spec = CommandSpec::captured(root, "git", args);
+    let outcome = match runner.execute(&spec) {
+        Ok(outcome) => outcome,
+        Err(source) => {
+            return Err(Error::CommandStart {
+                command: spec.label(),
+                source,
+            });
+        }
+    };
+    if !outcome.success {
+        return Err(Error::CommandFailed {
+            command: spec.label(),
+            code: outcome.code,
+        });
+    }
+    let mut paths = Vec::new();
+    for value in outcome.stdout.split(|byte| *byte == 0) {
+        if value.is_empty() {
+            continue;
+        }
+        let value = match std::str::from_utf8(value) {
+            Ok(value) => value,
+            Err(_) => {
+                return Err(Error::FileLengthGitNonUtf8 {
+                    command: spec.label(),
+                });
+            }
+        };
+        paths.push(PathBuf::from(value));
+    }
+    Ok(paths)
 }
 
 fn rust_files(root: &Path) -> Result<Vec<PathBuf>> {

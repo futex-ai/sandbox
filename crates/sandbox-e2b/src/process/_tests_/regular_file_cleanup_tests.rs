@@ -134,6 +134,28 @@ fn cleanup_rejects_a_commit_claim_for_different_same_size_bytes() {
 }
 
 #[test]
+fn cleanup_recovers_a_commit_after_the_writer_removed_its_state() {
+    let root = tempdir().expect("temporary write root");
+    let stage = tempdir().expect("temporary staging root");
+    fs::create_dir(root.path().join("src")).expect("nested directory");
+    let state = stage.path().join("missing-state");
+    let target = root.path().join("src/lib.rs");
+    fs::write(&target, b"replacement").expect("committed target");
+
+    let output = run(
+        root.path(),
+        "src/lib.rs",
+        &stage.path().join("missing-upload"),
+        ".missing-temporary",
+        &state,
+        b"replacement".len(),
+    );
+
+    assert_eq!(output.status.code(), Some(51));
+    assert_eq!(fs::read(target).expect("committed target"), b"replacement");
+}
+
+#[test]
 fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
     let root = tempdir().expect("temporary write root");
     let stage = tempdir().expect("temporary staging root");

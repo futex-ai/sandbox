@@ -13,11 +13,14 @@ It is not a runtime dependency of either published library crate.
 ## What This Crate Does
 
 `check` runs locked metadata, formatting, Clippy with warnings denied,
-all-feature tests, file-length validation, and the smoke test. `review` fetches
-`origin/main`, proves the worktree is clean and the current commit is pushed,
-uses Codex's native base-branch reviewer, and verifies the worktree is still
-unchanged afterward. The repository instructions apply the reporting contract
-in `docs/implementation-review-prompt.md` to that reviewer.
+all-feature tests, a full file-length validation, and the smoke test. The
+standalone file-length command checks Rust files changed from `origin/main`,
+including staged, unstaged, and untracked files; `--all` scans every Rust file
+under `crates/` and `xtask/`. `review` fetches `origin/main`, proves the
+worktree is clean and the current commit is pushed, uses Codex's native
+base-branch reviewer, and verifies the worktree is still unchanged afterward.
+The repository instructions apply the reporting contract in
+`docs/implementation-review-prompt.md` to that reviewer.
 
 External commands cross one injected runner boundary. Unit tests use a fake
 runner, so they do not contact Git remotes or invoke Codex.
@@ -26,6 +29,7 @@ runner, so they do not contact Git remotes or invoke Codex.
 
 ```bash
 cargo xtask check
+cargo xtask rust-file-length-lint
 cargo xtask rust-file-length-lint --all
 cargo xtask smoke-test
 # After committing and pushing:

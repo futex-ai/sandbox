@@ -68,7 +68,10 @@ test ! -e "$sandbox_home/.netrc"
 test ! -e "$sandbox_home/.ssh/id_rsa"
 test -z "${GIT_ASKPASS:-}${SSH_ASKPASS:-}${SSH_AUTH_SOCK:-}${AWS_ACCESS_KEY_ID:-}${GOOGLE_APPLICATION_CREDENTIALS:-}"
 "#;
-const SIZE_COMMAND: &str = "du -sbx / 2>/dev/null | awk '{print \"__SANDBOX_IMAGE_SIZE__=\" $1}'";
+const SIZE_COMMAND: &str = r#"sandbox_size_output="$(du -sbx / 2>/dev/null)" || exit $?
+sandbox_size="${sandbox_size_output%%[!0-9]*}"
+test -n "$sandbox_size"
+printf '__SANDBOX_IMAGE_SIZE__=%s\n' "$sandbox_size""#;
 
 pub(super) async fn prepare(
     backend: &E2bSandboxBackend,
@@ -120,6 +123,7 @@ async fn prepare_source(
     } = request;
     for input in &input_files {
         files::validate_write_size(input.bytes.len())?;
+        files::validate_transfer_paths(&input.root, &input.path)?;
     }
     let connection = mapping::connection(backend, &source_provider_ref).await?;
     write_input_files(backend, connection.clone(), input_files).await?;
@@ -220,3 +224,7 @@ fn parse_size(output: ProcessRunOutput) -> Result<u64> {
     );
     Err(Error::ImageSizeUnavailable)
 }
+
+#[cfg(test)]
+#[path = "_tests_/image_safety_tests.rs"]
+mod image_safety_tests;

@@ -46,6 +46,9 @@ reads. This includes a successful HTTP response whose JSON does not match the
 safe operation's response type. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
 operation-specific recovery fence resolves the outcome.
+Opaque provider IDs equal to `.` or `..` are rejected before route
+construction, so URL normalization cannot move an API-key-authenticated call
+outside its intended sandbox or snapshot endpoint.
 
 Sandbox creation filters on exact configured metadata, including the stable
 runtime-or-browser consumer value. Managed inventory returns a recognized
@@ -83,7 +86,10 @@ then sync the containing directory before success. Writer exits that could
 follow a commit claim use this same reconciliation path;
 definitive pre-commit rejections retain their typed errors. If neither outcome
 can be confirmed, `FileWriteUnconfirmed`
-requires the caller to keep the sandbox fenced rather than retry. Process
+requires the caller to keep the sandbox fenced rather than retry. After a
+durable replacement, a normally completing writer removes its commit marker;
+an uncertain writer leaves its atomic fence available for cleanup
+reconciliation. Process
 execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
 outcomes separate. Each decoded process-data event must contain exactly one of
 PTY, stdout, or stderr; multiple populated channels fail as malformed instead
@@ -102,10 +108,10 @@ working directory, `PYTHONPATH`, user-site packages, and startup customization
 therefore cannot run before descriptor checks, digest verification, cleanup,
 or transcript setup.
 
-Before either read or write acquires sandbox access, the adapter rejects a root
-that is not an absolute normalized path and a target that is not a normalized
-relative path. Both fields are byte-bounded and reject empty components, dot
-components, parent traversal, and NUL bytes.
+Before any read, write, or staged image input acquires sandbox access, the
+adapter rejects a root that is not an absolute normalized path and a target
+that is not a normalized relative path. Both fields are byte-bounded and
+reject empty components, dot components, parent traversal, and NUL bytes.
 
 Terminal recovery lists processes by the configured stable tag and never
 starts a replacement when recovery finds no match. Inspection and output reads
@@ -128,10 +134,11 @@ writes fail before acquiring mutating sandbox access.
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
 runtime, and returns the measured size, but never lists or creates a sandbox or
-snapshot and never destroys the source. It validates every staged file's size
-before connecting to the source, so one invalid later file cannot leave earlier
-files written. The caller separately records each create intent, dispatches it
-once, and uses the adapter's recover-only methods after dispatch starts. Empty
+snapshot and never destroys the source. It validates every staged file's path
+and size before connecting to the source, so one invalid later file cannot
+leave earlier files written. The caller separately records each create intent,
+dispatches it once, and uses the adapter's recover-only methods after dispatch
+starts. Empty
 recovery inventory remains `InProgress`, so an
 eventual-consistency gap cannot replay build commands, allocate a second paid
 sandbox, or create a second image. Image scrub sends TERM to both configured
@@ -141,7 +148,9 @@ restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
 helpers with bounded TERM/KILL polling and fail unless their exit is confirmed.
 Setup, verification, scrub, and size measurement run through non-login shells,
 so staged files or setup commands cannot install a login profile that skips a
-later safety phase or fabricates the measured size.
+later safety phase or fabricates the measured size. The measurement propagates
+filesystem traversal and I/O failures rather than accepting `du`'s partial
+output.
 
 The terminal transcript descriptor and byte limit are installed by the trusted
 non-login wrapper. Only after capture is active does the one intended

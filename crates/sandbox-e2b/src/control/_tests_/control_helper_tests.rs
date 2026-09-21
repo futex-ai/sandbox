@@ -43,7 +43,7 @@ fn handled_control_statuses_map_without_response_payloads() {
 #[test]
 fn opaque_path_segments_cannot_escape_provider_routes() {
     assert_eq!(
-        path_segment("team/snapshot:tag?x=1"),
+        path_segment("team/snapshot:tag?x=1").expect("safe opaque identifier"),
         "team%2Fsnapshot%3Atag%3Fx%3D1"
     );
 }

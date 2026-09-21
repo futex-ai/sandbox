@@ -80,7 +80,11 @@ try:
             os.unlink(temporary, dir_fd=directory)
         except FileNotFoundError:
             pass
-        outcome = REVOKED
+        os.fsync(directory)
+        if target_matches(directory, target, expected, expected_digest):
+            outcome = COMMITTED
+        else:
+            outcome = REVOKED
     elif state_value == 'commit:' + expected_digest:
         if target_matches(directory, temporary, expected, expected_digest):
             try:

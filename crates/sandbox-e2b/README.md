@@ -46,7 +46,9 @@ descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
 without relying on a timing delay. Both the writer and cleanup path verify the
 requested bytes before replacement. An unconfirmed revocation returns a
-fencing error instead of pretending the write safely failed.
+fencing error instead of pretending the write safely failed. A writer removes
+its commit marker after the replacement and containing directory are durable;
+an uncertain writer retains a revocation or commit fence for reconciliation.
 Malformed or oversized trusted roots and relative paths fail before a file
 operation acquires provider access. Oversized writes fail before sandbox
 connection. Every trusted Python helper uses isolated module lookup with site
@@ -66,29 +68,33 @@ process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
-attached. Definitive rejection headers are mapped without waiting for an
-unused response body. DNS, connection, timeout, and response-stream failures
-remain typed as provider unavailability; failed mutating delivery remains
-ambiguous. A successful safe response with malformed JSON is also retryable
-provider unavailability, while malformed output after an accepted mutation
-keeps the delivery outcome ambiguous.
+attached. Provider IDs equal to `.` or `..` are rejected before an
+API-key-authenticated control request can be built. Definitive rejection
+headers are mapped without waiting for an unused response body. DNS,
+connection, timeout, and response-stream failures remain typed as provider
+unavailability; failed mutating delivery remains ambiguous. A successful safe
+response with malformed JSON is also retryable provider unavailability, while
+malformed output after an accepted mutation keeps the delivery outcome
+ambiguous.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
-or destroys a provider resource. Every staged input size is checked before the
-adapter connects or writes the first file. Consumers dispatch source and
-snapshot creates once, use only their recovery methods after each dispatch
-starts, and persist preparation's measured size before snapshot dispatch.
-Empty recovery inventory stays in progress instead of replaying preparation
-or allocating another resource. Before measuring a prepared source, configured
-image processes must exit after bounded TERM/KILL escalation. Restored-sandbox
-cleanup and image preparation apply the same bounded escalation to inherited
-drive helpers and fail unless those helpers are confirmed gone. Terminal
-log-directory creation and restored cleanup traverse from directory
-descriptors with non-following opens; an intermediate symlink makes the
-operation fail without touching its target. Image setup, verification, scrub,
-and size measurement use non-login shells, so a staged or setup-created profile
-cannot skip a later safety phase or forge its result. The terminal transcript
+or destroys a provider resource. Every staged input path and size is checked
+before the adapter connects or writes the first file. Consumers dispatch
+source and snapshot creates once, use only their recovery methods after each
+dispatch starts, and persist preparation's measured size before snapshot
+dispatch. Empty recovery inventory stays in progress instead of replaying
+preparation or allocating another resource. Before measuring a prepared
+source, configured image processes must exit after bounded TERM/KILL
+escalation. Size traversal or I/O failure returns `ImageSizeUnavailable`
+instead of accepting a partial total. Restored-sandbox cleanup and image
+preparation apply the same bounded escalation to inherited drive helpers and
+fail unless those helpers are confirmed gone. Terminal log-directory creation
+and restored cleanup traverse from directory descriptors with non-following
+opens; an intermediate symlink makes the operation fail without touching its
+target. Image setup, verification, scrub, and size measurement use non-login
+shells, so a staged or setup-created profile cannot skip a later safety phase
+or forge its result. The terminal transcript
 wrapper opens the expected log through non-following directory descriptors,
 passes only that open descriptor to the recorder, and starts before the
 captured interactive shell loads the user's login profile. Reads require the

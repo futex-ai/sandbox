@@ -44,6 +44,7 @@ fn writer_replaces_a_regular_file_through_directory_descriptors() {
         b"replacement"
     );
     assert!(!staged.exists());
+    assert!(fs::symlink_metadata(staged.with_extension("state")).is_err());
 }
 
 #[test]

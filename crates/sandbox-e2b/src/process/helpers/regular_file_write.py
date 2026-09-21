@@ -116,6 +116,7 @@ try:
     os.replace(temporary, target, src_dir_fd=directory, dst_dir_fd=directory)
     temporary = None
     os.fsync(directory)
+    os.unlink(state)
 except (IndexError, ValueError):
     stop(INVALID_PATH)
 except OSError:

@@ -10,7 +10,7 @@ pub(crate) fn run(root: &Path, runner: &dyn CommandRunner) -> Result<()> {
     for command in commands() {
         command::run(root, runner, command.program, command.args)?;
     }
-    file_length::run(root, true)?;
+    file_length::run(root, true, runner)?;
     smoke::run()
 }
 

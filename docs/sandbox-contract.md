@@ -79,20 +79,24 @@ a commit claim uses the same reconciliation; definitive pre-commit validation
 failures preserve their typed errors. If no outcome can be proven, the backend
 returns
 `FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
-reconciled or destroyed. File transfers are capped at 256 MiB. Every file in a
-multi-file image-preparation request must pass that bound before the backend
+reconciled or destroyed. A normally completed replacement removes its resolved
+state marker, while an uncertain writer retains an atomic marker as its fence.
+File transfers are capped at 256 MiB. Every file in a multi-file
+image-preparation request must pass its path and size checks before the backend
 acquires provider access or writes any earlier file. Provider response and
 process output limits are enforced while bytes are consumed. A bounded
 one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
-the exact destination host is validated. Port zero, empty required text,
-oversized values, unknown profiles, and unsupported network policies fail
-before provider dispatch. A direct process command cannot be empty; its command
-and arguments total at most 128 KiB, each requested stream limit is at most 64
-MiB, and its deadline is at most 300 seconds. These bounds must be checked
-before acquiring provider sandbox access. In particular, an oversized
-replacement write must fail before connecting to or resuming its sandbox.
+the exact destination host is validated. Opaque provider identifiers equal to
+`.` or `..` must fail before authenticated route construction. Port zero,
+empty required text, oversized values, unknown profiles, and unsupported
+network policies fail before provider dispatch. A direct process command
+cannot be empty; its command and arguments total at most 128 KiB, each
+requested stream limit is at most 64 MiB, and its deadline is at most 300
+seconds. These bounds must be checked before acquiring provider sandbox
+access. In particular, an oversized replacement write must fail before
+connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
@@ -104,7 +108,8 @@ Inherited credential or drive helpers must be stopped with bounded escalation,
 and maintenance or image preparation fails unless their exit is confirmed.
 Provider-owned image verification, scrub, and measurement must not load a
 user-controlled login profile before executing; such a profile could otherwise
-skip a safety command or forge its result.
+skip a safety command or forge its result. Image-size traversal and I/O errors
+must fail the measurement rather than return a partial total.
 Provider terminal storage creation and restored cleanup must traverse absolute
 paths through non-following directory descriptors. An intermediate symlink
 must fail closed without creating or removing anything through its target.

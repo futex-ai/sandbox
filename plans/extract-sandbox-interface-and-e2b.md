@@ -607,3 +607,36 @@ helper.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 19: Final Routing And Resource Remediation
+
+Resolve every finding from the post-isolation review. At the end of this
+milestone, opaque provider identifiers cannot alter authenticated control
+routes, invalid image inputs cannot partially mutate a source, image size
+measurement fails closed, completed writes do not accumulate state markers,
+and incremental file-length checks inspect only relevant Rust files.
+
+- [x] Record all five review findings and add failing regressions first for
+      control-route dot segments, image-path preflight, failed size
+      measurement, completed-write marker cleanup, and incremental file
+      selection.
+- [x] Reject `.` and `..` provider identifiers before building any E2B control
+      route.
+- [x] Validate every staged image file's path and size before acquiring
+      provider access or writing an earlier file.
+- [x] Preserve `du` failures so incomplete image-size totals cannot be
+      accepted as successful measurements.
+- [x] Remove a replacement write's state marker after the writer has confirmed
+      normal completion, without removing fences for uncertain writers.
+- [x] Honor the file-length linter's default incremental scope through the
+      injected command-runner boundary while keeping `--all` as a full scan.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the tightened routing, preflight, measurement, and cleanup guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

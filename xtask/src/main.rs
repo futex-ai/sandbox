@@ -31,7 +31,7 @@ fn run() -> Result<()> {
     match cli.command {
         Command::Check => check::run(&root, &runner),
         Command::Review => review::run(&root, &runner),
-        Command::RustFileLengthLint { all } => file_length::run(&root, all),
+        Command::RustFileLengthLint { all } => file_length::run(&root, all, &runner),
         Command::SmokeTest => smoke::run(),
     }
 }

@@ -91,7 +91,7 @@ impl ReqwestE2bControlApi {
     pub(super) async fn sandbox_detail(&self, sandbox_id: &str) -> Result<SandboxDetailBody> {
         self.json(
             Method::Get,
-            format!("/sandboxes/{}", super::helpers::path_segment(sandbox_id)),
+            format!("/sandboxes/{}", super::helpers::path_segment(sandbox_id)?),
             None,
             &[200],
             false,

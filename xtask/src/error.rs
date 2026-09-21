@@ -21,6 +21,8 @@ pub(crate) enum Error {
     ReadDir { path: PathBuf, source: io::Error },
     #[error("[xtask/rust_file_length_lint] failed to read Rust file `{path}`: {source}")]
     ReadFile { path: PathBuf, source: io::Error },
+    #[error("[xtask/rust_file_length_lint] `{command}` returned non-UTF-8 paths")]
+    FileLengthGitNonUtf8 { command: String },
     #[error("[xtask/rust_file_length_lint] found {count} violation(s):\n{details}")]
     FileLengthViolations { count: usize, details: String },
     #[error("[xtask/smoke] E2B configuration construction failed: {source}")]

@@ -81,7 +81,7 @@ pub(super) async fn write_to_connection(
         .await
 }
 
-fn validate_transfer_paths(root: &str, path: &str) -> Result<()> {
+pub(super) fn validate_transfer_paths(root: &str, path: &str) -> Result<()> {
     validate_transfer_path_length(root, "root")?;
     validate_transfer_path_length(path, "path")?;
     if root != "/" && !valid_path_parts(root.strip_prefix('/'), false) {
