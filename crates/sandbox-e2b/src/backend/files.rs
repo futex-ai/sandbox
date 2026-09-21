@@ -75,7 +75,7 @@ pub(super) async fn write_to_connection(
         .await
 }
 
-fn validate_write_size(byte_count: usize) -> Result<()> {
+pub(super) fn validate_write_size(byte_count: usize) -> Result<()> {
     if byte_count > FILE_TRANSFER_MAX_BYTES {
         return Err(Error::FileTooLarge {
             limit: FILE_TRANSFER_MAX_BYTES,

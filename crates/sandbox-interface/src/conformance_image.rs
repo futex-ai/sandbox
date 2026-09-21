@@ -115,6 +115,21 @@ async fn create_or_recover_snapshot_with_sleeper(
         BackendSnapshotCreateOutcome::InProgress
         | BackendSnapshotCreateOutcome::DeliveryAmbiguous => {}
     }
+    recover_snapshot_with_sleeper(backend, request, sleeper).await
+}
+
+pub(crate) async fn recover_snapshot(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSnapshotRequest,
+) -> Result<BackendSnapshot> {
+    recover_snapshot_with_sleeper(backend, request, &TokioSnapshotRecoverySleeper).await
+}
+
+async fn recover_snapshot_with_sleeper(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSnapshotRequest,
+    sleeper: &dyn SnapshotRecoverySleeper,
+) -> Result<BackendSnapshot> {
     let mut waits_remaining = SNAPSHOT_RECOVERY_WAITS;
     loop {
         match backend.recover_snapshot_create(request.clone()).await? {

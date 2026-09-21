@@ -21,7 +21,9 @@ impl ImageCommandFailure {
     /// Normalizes captured process bytes into the provider-neutral diagnostic.
     ///
     /// Backends pass any sensitive values available at this boundary. Empty
-    /// values are ignored so they cannot rewrite every string boundary.
+    /// values are ignored so they cannot rewrite every string boundary. When
+    /// capture omitted earlier bytes, a leading suffix of a sensitive value is
+    /// redacted before text normalization and final tail bounding.
     #[must_use]
     pub fn from_captured_output(
         bytes: &[u8],
@@ -30,6 +32,7 @@ impl ImageCommandFailure {
         sensitive_values: &[String],
     ) -> Self {
         let stripped = strip_ansi_escapes::strip(bytes);
+        let stripped = redact_truncated_prefix(stripped, capture_truncated, sensitive_values);
         let mut output = String::from_utf8_lossy(&stripped).replace("\r\n", "\n");
         output.retain(|character| matches!(character, '\n' | '\t') || !character.is_control());
         let mut redactions = sensitive_values
@@ -48,6 +51,33 @@ impl ImageCommandFailure {
             output_truncated: capture_truncated || normalized_truncated,
         }
     }
+}
+
+fn redact_truncated_prefix(
+    bytes: Vec<u8>,
+    capture_truncated: bool,
+    sensitive_values: &[String],
+) -> Vec<u8> {
+    if !capture_truncated || bytes.is_empty() {
+        return bytes;
+    }
+    let mut matched = 0;
+    for value in sensitive_values.iter().filter(|value| !value.is_empty()) {
+        let sensitive = value.as_bytes();
+        let maximum = sensitive.len().min(bytes.len());
+        for length in (1..=maximum).rev() {
+            if bytes.starts_with(&sensitive[sensitive.len() - length..]) {
+                matched = matched.max(length);
+                break;
+            }
+        }
+    }
+    if matched == 0 {
+        return bytes;
+    }
+    let mut redacted = b"[REDACTED]".to_vec();
+    redacted.extend_from_slice(&bytes[matched..]);
+    redacted
 }
 
 fn bounded_tail(output: String) -> (String, bool) {

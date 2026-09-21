@@ -116,6 +116,12 @@ pub(super) fn decode_event(payload: &[u8]) -> Result<ProcessEvent> {
         return Ok(ProcessEvent::Start(start.pid));
     }
     if let Some(data) = event.data {
+        let channel_count = usize::from(data.pty.is_some())
+            + usize::from(data.stdout.is_some())
+            + usize::from(data.stderr.is_some());
+        if channel_count != 1 {
+            return Err(Error::MalformedFrame);
+        }
         let (channel, encoded) = if let Some(encoded) = data.pty {
             (ProcessDataChannel::Pty, encoded)
         } else if let Some(encoded) = data.stdout {

@@ -29,12 +29,16 @@ invalid ports, and unsupported viewport dimensions before provider dispatch.
 Direct process requests require a non-empty command, at most 128 KiB across
 the command and arguments, at most 64 MiB for each captured stream, and a
 deadline no longer than 300 seconds.
+Multi-file image preparation validates every file-size bound before provider
+access, and handled diagnostics redact known sensitive values even when one is
+split by a bounded-output cutoff.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
 Both its ordinary and image snapshot probes recover in-progress and
-delivery-ambiguous outcomes with a bounded number of calls. Recovery waits one
-second after each in-progress result, for at most 60 waits, so asynchronous
+delivery-ambiguous outcomes with a bounded number of calls, including the
+ordinary probe's recover-only check after synchronous creation. Recovery waits
+one second after each in-progress result, for at most 60 waits, so asynchronous
 providers receive a real completion window without a burst of polling. Every
 source sandbox created by the image probes is cleaned after preparation,
 result validation, inventory, snapshot, or intentional-failure errors.

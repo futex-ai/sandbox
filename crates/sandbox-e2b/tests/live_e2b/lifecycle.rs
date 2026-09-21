@@ -9,7 +9,7 @@ use sandbox_interface::{
 };
 
 use super::support::{
-    LiveResources, LiveResult, sandbox_request, terminal_request, wait_for_output,
+    LiveResources, LiveResult, recover_snapshot, sandbox_request, terminal_request, wait_for_output,
 };
 
 trait LiveStage<T> {
@@ -67,10 +67,9 @@ pub(super) async fn run(
     .await
     .stage("stateful source output")?;
 
-    let snapshot = snapshot(backend, source.provider_ref.clone())
+    let snapshot = snapshot(backend, source.provider_ref.clone(), resources)
         .await
         .stage("snapshot creation")?;
-    resources.snapshot = Some(snapshot.clone());
     write(
         backend,
         source.provider_ref.clone(),
@@ -134,24 +133,32 @@ pub(super) async fn run(
     Ok(())
 }
 
-async fn snapshot(backend: &E2bSandboxBackend, source: ProviderRef) -> LiveResult<ProviderRef> {
+async fn snapshot(
+    backend: &E2bSandboxBackend,
+    source: ProviderRef,
+    resources: &mut LiveResources,
+) -> LiveResult<ProviderRef> {
     let correlation = format!("sandbox-live-{}", OperationId::new());
     let inventory = backend
         .snapshot_inventory(source.clone(), correlation.clone())
         .await?;
-    let created = backend
-        .create_snapshot(BackendCreateSnapshotRequest {
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
-            source_provider_ref: source,
-            correlation_name: correlation,
-            before: inventory,
-        })
-        .await?;
-    let BackendSnapshotCreateOutcome::Created(created) = created else {
-        return Err(io::Error::other("live snapshot did not complete synchronously").into());
+    let request = BackendCreateSnapshotRequest {
+        snapshot_id: SnapshotId::new(),
+        operation_id: OperationId::new(),
+        source_provider_ref: source,
+        correlation_name: correlation,
+        before: inventory,
     };
-    Ok(created.provider_ref)
+    resources.snapshot_request = Some(request.clone());
+    let snapshot = match backend.create_snapshot(request.clone()).await? {
+        BackendSnapshotCreateOutcome::Created(snapshot) => snapshot.provider_ref,
+        BackendSnapshotCreateOutcome::InProgress
+        | BackendSnapshotCreateOutcome::DeliveryAmbiguous => {
+            recover_snapshot(backend, request).await?
+        }
+    };
+    resources.snapshot = Some(snapshot.clone());
+    Ok(snapshot)
 }
 
 async fn restore(
@@ -246,3 +253,7 @@ async fn write(
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "_tests_/lifecycle_tests.rs"]
+mod lifecycle_tests;

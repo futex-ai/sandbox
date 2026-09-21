@@ -137,6 +137,10 @@ fn malformed_compressed_base64_and_json_frames_fail_closed() {
         Err(E2bAdapterError::MalformedFrame)
     ));
     assert!(matches!(
+        decode_event(br#"{"event":{"data":{"stdout":"b3V0","stderr":"ZXJy"}}}"#),
+        Err(E2bAdapterError::MalformedFrame)
+    ));
+    assert!(matches!(
         decode_event(br#"{"event":{"start":{"pid":1},"keepalive":{}}}"#),
         Err(E2bAdapterError::MalformedFrame)
     ));

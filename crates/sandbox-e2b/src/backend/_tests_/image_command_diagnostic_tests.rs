@@ -161,6 +161,40 @@ async fn setup_failure_redacts_connection_identity_and_access_token() {
     ));
 }
 
+#[tokio::test]
+async fn truncated_setup_failure_redacts_a_token_suffix_at_the_tail_boundary() {
+    let sandbox_id = SandboxId::new();
+    let control = retained_control("opaque-provider-id");
+    let processes = Unimock::new(
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
+            .returns(Ok(ProcessRunOutput {
+                bytes: b"local-token after-boundary".to_vec(),
+                exit_code: Some(7),
+                exited: true,
+                output_truncated: true,
+            })),
+    );
+
+    let error = backend(control, processes)
+        .prepare_image(request(
+            sandbox_id,
+            "opaque-provider-id",
+            "exit 7",
+            Vec::new(),
+        ))
+        .await
+        .expect_err("a boundary-spanning token should return a safe diagnostic");
+
+    assert!(matches!(
+        error,
+        Error::ImageSetupFailed {
+            command: Some(ImageCommandFailure { ref output, .. }),
+            ..
+        } if output.as_deref() == Some("[REDACTED] after-boundary")
+    ));
+}
+
 fn retained_control(provider: &'static str) -> Unimock {
     Unimock::new(
         E2bControlApiMock::connect_sandbox

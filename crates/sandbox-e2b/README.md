@@ -52,7 +52,10 @@ bounded while streaming. Direct process requests are validated before the
 adapter acquires sandbox access: commands must be non-empty, combined argv is
 capped at 128 KiB, each stream cap is at most 64 MiB, and deadlines cannot
 exceed 300 seconds. Failed image-command diagnostics redact the call-local
-opaque sandbox ID and envd access token before returning bounded output.
+opaque sandbox ID and envd access token before returning bounded output,
+including a sensitive suffix split by the streaming tail boundary. Malformed
+process data with zero or multiple output channels is rejected instead of
+silently losing bytes.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Definitive rejection headers are mapped without waiting for an
@@ -64,15 +67,16 @@ keeps the delivery outcome ambiguous.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
-or destroys a provider resource. Consumers dispatch source and snapshot creates
-once, use only their recovery methods after each dispatch starts, and persist
-preparation's measured size before snapshot dispatch. Empty recovery inventory
-stays in progress instead of replaying preparation or allocating another
-resource. Before measuring a prepared source, configured image processes must
-exit after bounded TERM/KILL escalation. Restored-sandbox cleanup and image
-preparation apply the same bounded escalation to inherited drive helpers and
-fail unless those helpers are confirmed gone. Terminal log-directory creation
-and restored cleanup traverse from directory descriptors with non-following
+or destroys a provider resource. Every staged input size is checked before the
+adapter connects or writes the first file. Consumers dispatch source and
+snapshot creates once, use only their recovery methods after each dispatch
+starts, and persist preparation's measured size before snapshot dispatch.
+Empty recovery inventory stays in progress instead of replaying preparation
+or allocating another resource. Before measuring a prepared source, configured
+image processes must exit after bounded TERM/KILL escalation. Restored-sandbox
+cleanup and image preparation apply the same bounded escalation to inherited
+drive helpers and fail unless those helpers are confirmed gone. Terminal
+log-directory creation and restored cleanup traverse from directory descriptors with non-following
 opens; an intermediate symlink makes the operation fail without touching its
 target.
 
@@ -123,6 +127,11 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
   live_e2b_private_screen_bridges -- --ignored
 ```
+
+The lifecycle test records its snapshot request before dispatch and uses
+recover-only polling after in-progress or delivery-ambiguous results. Cleanup
+retries recovery when the initial flow did not obtain a deletable snapshot
+handle.
 
 ### Key Code
 

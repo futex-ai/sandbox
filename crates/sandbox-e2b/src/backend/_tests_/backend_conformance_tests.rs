@@ -25,6 +25,7 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
     let create_index = Arc::new(AtomicUsize::new(0));
     let sandbox_list_index = Arc::new(AtomicUsize::new(0));
     let snapshot_created = Arc::new(AtomicBool::new(false));
+    let snapshot_recovery_index = Arc::new(AtomicUsize::new(0));
     let control = Unimock::new((
         E2bControlApiMock::list_sandboxes
             .each_call(matching!(_))
@@ -82,8 +83,12 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
             .each_call(matching!(_, _))
             .answers_arc({
                 let snapshot_created = snapshot_created.clone();
+                let snapshot_recovery_index = snapshot_recovery_index.clone();
                 Arc::new(move |_, sandbox_id, _| {
-                    if sandbox_id == "source" && snapshot_created.load(Ordering::Relaxed) {
+                    if sandbox_id == "source"
+                        && snapshot_created.load(Ordering::Relaxed)
+                        && snapshot_recovery_index.fetch_add(1, Ordering::Relaxed) > 0
+                    {
                         Ok(vec![ControlSnapshot {
                             snapshot_id: "snapshot".to_owned(),
                         }])

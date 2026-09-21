@@ -77,9 +77,11 @@ a commit claim uses the same reconciliation; definitive pre-commit validation
 failures preserve their typed errors. If no outcome can be proven, the backend
 returns
 `FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
-reconciled or destroyed. File
-transfers are capped at 256 MiB. Provider response and process output limits
-are enforced while bytes are consumed. A bounded one-shot process must be
+reconciled or destroyed. File transfers are capped at 256 MiB. Every file in a
+multi-file image-preparation request must pass that bound before the backend
+acquires provider access or writes any earlier file. Provider response and
+process output limits are enforced while bytes are consumed. A bounded
+one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Port zero, empty required text,
@@ -91,6 +93,8 @@ before acquiring provider sandbox access. In particular, an oversized
 replacement write must fail before connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
+Each provider process-data event must contain exactly one of PTY, stdout, or
+stderr output; an event with no channel or multiple channels is malformed.
 Inherited credential or drive helpers must be stopped with bounded escalation,
 and maintenance or image preparation fails unless their exit is confirmed.
 Provider terminal storage creation and restored cleanup must traverse absolute
@@ -112,8 +116,10 @@ the caller must retain its session fence and arrange cleanup.
 
 Provider diagnostics returned through handled errors must not contain secret
 values or opaque backend handles. Image-command failures must redact every
-provider identifier and credential known to the adapter before returning
-captured output. Unknown profile errors do not echo an untrusted profile name.
+provider identifier and credential known to the adapter before applying the
+final output bound. If streaming capture already omitted earlier bytes, a
+leading fragment that can be the suffix of a known sensitive value must also
+be redacted. Unknown profile errors do not echo an untrusted profile name.
 
 ## Conformance
 
@@ -121,6 +127,9 @@ The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
 Its ordinary and image snapshot probes accept immediate completion or recover
 in-progress and delivery-ambiguous outcomes with a bounded number of calls.
+This includes the ordinary probe's recover-only verification after an
+immediately completed create, because recovery inventory may still be
+eventually consistent.
 After every in-progress recovery response, the harness waits one second before
 polling again, with no more than 60 waits. The harness cleans every image source
 it creates, including after preparation, prepared-result validation,

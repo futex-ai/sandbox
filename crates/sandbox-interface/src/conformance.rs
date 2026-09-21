@@ -59,14 +59,8 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
     let snapshot =
         crate::conformance_image::create_or_recover_snapshot(backend, snapshot_request.clone())
             .await?;
-    let recovered_snapshot = backend
-        .recover_snapshot_create(snapshot_request.clone())
-        .await?;
-    let crate::BackendSnapshotRecovery::Recovered(recovered_snapshot) = recovered_snapshot else {
-        return Err(Error::internal_message(
-            "backend did not recover a created snapshot",
-        ));
-    };
+    let recovered_snapshot =
+        crate::conformance_image::recover_snapshot(backend, snapshot_request.clone()).await?;
     if recovered_snapshot.provider_ref != snapshot.provider_ref {
         return Err(Error::internal_message(
             "backend snapshot recovery changed provider identity",

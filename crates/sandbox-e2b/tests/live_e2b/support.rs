@@ -10,12 +10,14 @@ use std::{
 
 use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 use sandbox_interface::{
-    BackendCreateSandboxRequest, BackendOutputRequest, BackendTerminal,
-    BackendTerminalCreateRequest, Error as SandboxError, OperationId, ProviderRef, ResourceOwner,
-    SandboxBackend, SandboxId, TerminalId,
+    BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendOutputRequest,
+    BackendSnapshotRecovery, BackendTerminal, BackendTerminalCreateRequest, Error as SandboxError,
+    OperationId, ProviderRef, ResourceOwner, SandboxBackend, SandboxId, TerminalId,
 };
 
 const LOG_LIMIT: usize = 2 * 1024 * 1024;
+const SNAPSHOT_RECOVERY_ATTEMPTS: usize = 60;
+const SNAPSHOT_RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
 
 pub(super) type LiveResult<T> = Result<T, Box<dyn Error>>;
 
@@ -31,6 +33,7 @@ pub(super) struct LiveResources {
     pub(super) sandboxes: Vec<ProviderRef>,
     pub(super) terminals: Vec<(ProviderRef, ProviderRef)>,
     pub(super) snapshot: Option<ProviderRef>,
+    pub(super) snapshot_request: Option<BackendCreateSnapshotRequest>,
 }
 
 impl LiveResources {
@@ -50,6 +53,25 @@ impl LiveResources {
                 first_error.get_or_insert(error);
             }
         }
+        let snapshot = if let Some(snapshot) = &self.snapshot {
+            Some(snapshot.clone())
+        } else if let Some(request) = &self.snapshot_request {
+            match recover_snapshot(backend, request.clone()).await {
+                Ok(snapshot) => Some(snapshot),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        if let Some(snapshot) = snapshot
+            && let Err(error) = backend.delete_snapshot(snapshot.clone()).await
+            && !matches!(error, SandboxError::NotFound { .. })
+        {
+            first_error.get_or_insert(error);
+        }
         for sandbox in self.sandboxes.iter().rev() {
             if let Err(error) = backend.destroy_sandbox(sandbox.clone()).await
                 && !matches!(error, SandboxError::NotFound { .. })
@@ -57,17 +79,38 @@ impl LiveResources {
                 first_error.get_or_insert(error);
             }
         }
-        if let Some(snapshot) = &self.snapshot
-            && let Err(error) = backend.delete_snapshot(snapshot.clone()).await
-            && !matches!(error, SandboxError::NotFound { .. })
-        {
-            first_error.get_or_insert(error);
-        }
         match first_error {
             Some(error) => Err(Box::new(error)),
             None => Ok(()),
         }
     }
+}
+
+pub(super) async fn recover_snapshot(
+    backend: &E2bSandboxBackend,
+    request: BackendCreateSnapshotRequest,
+) -> sandbox_interface::Result<ProviderRef> {
+    for attempt in 0..=SNAPSHOT_RECOVERY_ATTEMPTS {
+        match backend.recover_snapshot_create(request.clone()).await? {
+            BackendSnapshotRecovery::Recovered(snapshot) => return Ok(snapshot.provider_ref),
+            BackendSnapshotRecovery::ReconciliationRequired => {
+                return Err(SandboxError::SnapshotReconciliationRequired {
+                    retained_sandbox: None,
+                });
+            }
+            BackendSnapshotRecovery::InProgress if attempt == SNAPSHOT_RECOVERY_ATTEMPTS => {
+                return Err(SandboxError::SnapshotReconciliationRequired {
+                    retained_sandbox: None,
+                });
+            }
+            BackendSnapshotRecovery::InProgress => {
+                tokio::time::sleep(SNAPSHOT_RECOVERY_INTERVAL).await;
+            }
+        }
+    }
+    Err(SandboxError::SnapshotReconciliationRequired {
+        retained_sandbox: None,
+    })
 }
 
 pub(super) fn live_config(api_key: String, template: String) -> E2bAdapterConfig {

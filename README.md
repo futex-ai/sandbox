@@ -69,7 +69,9 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
 `E2B_TEMPLATE_ID` selects a lifecycle-test template; it defaults to E2B's
 `base` template. `E2B_SCREEN_TEMPLATE_ID` must identify a compatible template
 published by the separately owned template release project. The tests attempt
-cleanup even after an operation fails.
+cleanup even after an operation fails. The lifecycle test stores its snapshot
+request in cleanup state before dispatch and recovers uncertain or
+eventually-consistent creation instead of losing the provider cleanup handle.
 
 ## Review Workflow
 

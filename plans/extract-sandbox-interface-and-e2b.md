@@ -483,6 +483,38 @@ without bursting their APIs.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.
+
+## Milestone 15: Boundary And Recovery Review Remediation
+
+Resolve every finding from the seventh clean post-push review. At the end of
+this milestone, bounded diagnostics redact secrets before truncation, image
+requests fail validation before touching a provider, snapshot recovery accepts
+eventually consistent inventory without losing cleanup handles, and malformed
+multi-channel process events fail closed.
+
+- [x] Add failing regressions first for boundary-spanning secret redaction,
+      image-input preflight, recover-only conformance polling, ambiguous live
+      snapshot recovery, and multi-channel process data rejection.
+- [x] Redact complete sensitive values before applying the final bounded image
+      diagnostic tail, including values that cross the tail boundary.
+- [x] Validate every image input file size before acquiring provider access or
+      writing any earlier input.
+- [x] Pace and bound the conformance harness's recover-only snapshot check so
+      eventually consistent providers are accepted.
+- [x] Retain and recover the live lifecycle snapshot request after in-progress
+      or delivery-ambiguous creation so cleanup can track the created snapshot.
+- [x] Reject malformed process data events unless exactly one output channel is
+      present.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      every clarified guarantee.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
 - [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from

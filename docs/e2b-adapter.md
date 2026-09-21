@@ -59,7 +59,9 @@ host. The complete HTTPS URL must parse to the exact configured envd hostname
 before the access-token header is added. Access tokens and private-traffic
 credentials stay inside call-local types and are redacted from debug output.
 Failed setup and verification diagnostics also redact the active opaque
-sandbox ID and envd access token from captured command output.
+sandbox ID and envd access token before the final 4 KiB tail is selected. A
+known value split by the streaming tail boundary has its visible suffix
+redacted as well.
 An unconfigured logical profile returns the handled provider-neutral
 `UnknownProfile` error before any provider request.
 
@@ -79,9 +81,11 @@ definitive pre-commit rejections retain their typed errors. If neither outcome
 can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. Process
 execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
-outcomes separate. Before acquiring sandbox access, the adapter rejects an
-empty command, more than 128 KiB across the command and arguments, a stdout or
-stderr limit above 64 MiB, or a deadline above 300 seconds. File and
+outcomes separate. Each decoded process-data event must contain exactly one of
+PTY, stdout, or stderr; multiple populated channels fail as malformed instead
+of silently dropping output. Before acquiring sandbox access, the adapter
+rejects an empty command, more than 128 KiB across the command and arguments,
+a stdout or stderr limit above 64 MiB, or a deadline above 300 seconds. File and
 maintenance helpers require a normal process exit; a default zero exit code on
 a signal event is not success. A one-shot process whose collection times out,
 overflows, or fails decoding is killed with a bounded cleanup call once its PID
@@ -105,9 +109,11 @@ mutating sandbox access.
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
 runtime, and returns the measured size, but never lists or creates a sandbox or
-snapshot and never destroys the source. The caller separately records each
-create intent, dispatches it once, and uses the adapter's recover-only methods
-after dispatch starts. Empty recovery inventory remains `InProgress`, so an
+snapshot and never destroys the source. It validates every staged file's size
+before connecting to the source, so one invalid later file cannot leave earlier
+files written. The caller separately records each create intent, dispatches it
+once, and uses the adapter's recover-only methods after dispatch starts. Empty
+recovery inventory remains `InProgress`, so an
 eventual-consistency gap cannot replay build commands, allocate a second paid
 sandbox, or create a second image. Image scrub sends TERM to both configured
 process names, waits for bounded disappearance, escalates to KILL, and fails
@@ -127,6 +133,9 @@ published by the separate template release project;
 The `live-e2b` feature only compiles credentialed tests. Every live test is also
 marked ignored, so `cargo test --workspace --all-features` remains offline.
 Running an ignored test requires an explicit API key, may incur provider cost,
-and executes cleanup for tracked terminals, sandboxes, and snapshots. Live
+and executes cleanup for tracked terminals, sandboxes, and snapshots. The
+lifecycle test retains each snapshot request before dispatch, polls recovery
+after an in-progress or delivery-ambiguous response, and retries that recovery
+during cleanup when no provider snapshot handle was obtained. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.

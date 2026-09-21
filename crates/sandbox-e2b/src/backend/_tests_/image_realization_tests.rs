@@ -3,8 +3,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
-    SandboxBackend, SandboxId,
+    BackendPrepareImageRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef, RealizeImageFileInput,
+    ResourceOwner, SandboxBackend, SandboxId,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -150,6 +150,41 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
         .expect_err("the test scrub response should fail realization");
 
     assert!(matches!(error, Error::ImageScrubFailed));
+}
+
+#[tokio::test]
+async fn oversized_image_input_fails_before_connecting_or_writing_an_earlier_file() {
+    let backend = backend(Unimock::new(()), Unimock::new(()));
+
+    let error = backend
+        .prepare_image(BackendPrepareImageRequest {
+            sandbox_id: SandboxId::new(),
+            source_provider_ref: ProviderRef::new("untouched-source"),
+            owner: ResourceOwner::platform(Uuid::now_v7()),
+            input_files: vec![
+                RealizeImageFileInput {
+                    root: "/tmp".to_owned(),
+                    path: "small.bin".to_owned(),
+                    bytes: b"small".to_vec(),
+                },
+                RealizeImageFileInput {
+                    root: "/tmp".to_owned(),
+                    path: "oversized.bin".to_owned(),
+                    bytes: vec![0; FILE_TRANSFER_MAX_BYTES + 1],
+                },
+            ],
+            setup_script: "true".to_owned(),
+            verify_commands: Vec::new(),
+        })
+        .await
+        .expect_err("all inputs should be validated before provider access");
+
+    assert!(matches!(
+        error,
+        Error::FileTooLarge {
+            limit: FILE_TRANSFER_MAX_BYTES
+        }
+    ));
 }
 
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {

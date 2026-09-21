@@ -118,6 +118,9 @@ async fn prepare_source(
         verify_commands,
         ..
     } = request;
+    for input in &input_files {
+        files::validate_write_size(input.bytes.len())?;
+    }
     let connection = mapping::connection(backend, &source_provider_ref).await?;
     write_input_files(backend, connection.clone(), input_files).await?;
     run_phase(
