@@ -135,7 +135,19 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 assert!(command.args[1].contains("pkill -KILL -f"));
                 assert!(command.args[1].contains("pgrep -f"));
                 assert!(command.args[1].contains("sandbox_drive_stop_attempt"));
-                assert!(command.args[1].contains("/tmp/sandbox-drive"));
+                assert!(
+                    command
+                        .args
+                        .iter()
+                        .any(|argument| argument == "/tmp/sandbox-drive")
+                );
+                assert!(command.args[3].contains("os.O_NOFOLLOW"));
+                assert!(
+                    !command.args[1].lines().any(|line| {
+                        line.contains("rm -rf") && line.contains("/tmp/sandbox/terminals")
+                    }),
+                    "terminal cleanup must not traverse an intermediate symlink"
+                );
                 Ok(crate::ProcessRunOutput {
                     bytes: Vec::new(),
                     exit_code: Some(0),

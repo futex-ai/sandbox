@@ -428,5 +428,33 @@ allowed by its own interface without leaking resources.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
       unrelated edits.
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.
+
+## Milestone 13: Path Safety And Conformance Completion
+
+Resolve every finding from the fifth clean post-push review. At the end of this
+milestone, terminal storage cannot be redirected through sandbox-owned
+symlinks, every snapshot probe accepts asynchronous provider completion, image
+conformance cleans all created sources, and malformed safe responses remain
+retryable provider failures.
+
+- [x] Replace restored-terminal cleanup and log-directory creation with
+      descriptor-relative, non-following helpers, with symlink-escape
+      regressions added first.
+- [x] Reuse bounded snapshot recovery in the main conformance flow, with a
+      valid asynchronous-backend regression added first.
+- [x] Funnel every post-create image conformance exit through source cleanup,
+      with preparation, validation, and inventory failure regressions added
+      first.
+- [x] Classify malformed successful control reads and safe envd responses as
+      provider unavailability while preserving ambiguous mutation outcomes,
+      with regressions added first.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the completed path-safety, cleanup, and retry guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
+      unrelated edits.
 - [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.

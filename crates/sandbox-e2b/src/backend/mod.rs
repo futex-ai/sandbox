@@ -14,6 +14,7 @@ mod screen_stack;
 mod snapshots;
 mod terminal_identity;
 mod terminal_output;
+mod terminal_storage;
 mod terminals;
 
 #[cfg(test)]

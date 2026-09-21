@@ -43,6 +43,76 @@ async fn omitted_retained_source_diagnostic_is_valid_and_cleanup_still_runs() {
     .expect("the caller-known source should not require duplicate diagnostics");
 }
 
+#[tokio::test]
+async fn preparation_transport_failure_cleans_the_created_source() {
+    let backend = Unimock::new((
+        SandboxBackendMock::create_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::prepare_image
+            .next_call(matching!(_))
+            .returns(Err(Error::BackendUnavailable {
+                backend_id: "test".to_owned(),
+            })),
+        SandboxBackendMock::destroy_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(())),
+    ));
+
+    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+
+    assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
+}
+
+#[tokio::test]
+async fn invalid_prepared_image_cleans_the_created_source() {
+    let backend = Unimock::new((
+        SandboxBackendMock::create_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::prepare_image
+            .next_call(matching!(_))
+            .returns(Ok(BackendPreparedImage {
+                source_provider_ref: ProviderRef::new("different-source"),
+                size_bytes: 4096,
+            })),
+        SandboxBackendMock::destroy_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(())),
+    ));
+
+    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+
+    assert!(matches!(result, Err(Error::Internal(_))));
+}
+
+#[tokio::test]
+async fn snapshot_inventory_failure_cleans_the_created_source() {
+    let backend = Unimock::new((
+        SandboxBackendMock::create_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::prepare_image
+            .next_call(matching!(_))
+            .returns(Ok(BackendPreparedImage {
+                source_provider_ref: ProviderRef::new("prepared-source"),
+                size_bytes: 4096,
+            })),
+        SandboxBackendMock::snapshot_inventory
+            .next_call(matching!(_, _))
+            .returns(Err(Error::BackendUnavailable {
+                backend_id: "test".to_owned(),
+            })),
+        SandboxBackendMock::destroy_sandbox
+            .next_call(matching!(_))
+            .returns(Ok(())),
+    ));
+
+    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+
+    assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
+}
+
 fn backend(
     snapshot_outcome: BackendSnapshotCreateOutcome,
     retained_sandbox: Option<RetainedSandboxRef>,

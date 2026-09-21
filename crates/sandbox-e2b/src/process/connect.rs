@@ -56,7 +56,11 @@ impl ConnectProcessTransport {
             .http
             .unary(connection, method.to_owned(), encode(request)?, ambiguous)
             .await?;
-        decode(&bytes)
+        match decode(&bytes) {
+            Ok(response) => Ok(response),
+            Err(_) if ambiguous => Err(Error::DeliveryAmbiguous),
+            Err(_) => Err(Error::Unavailable),
+        }
     }
 
     async fn unary_empty<T: Serialize>(
@@ -264,6 +268,10 @@ impl ProcessTransport for ConnectProcessTransport {
 #[cfg(test)]
 #[path = "_tests_/connect_transport_tests.rs"]
 mod connect_transport_tests;
+
+#[cfg(test)]
+#[path = "_tests_/connect_response_tests.rs"]
+mod connect_response_tests;
 
 #[cfg(test)]
 #[path = "_tests_/process_capture_tests.rs"]

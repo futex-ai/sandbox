@@ -73,7 +73,7 @@ impl ReqwestE2bControlApi {
         match serde_json::from_slice(&response.body) {
             Ok(value) => Ok((value, response.next_token)),
             Err(_) if ambiguous => Err(Error::DeliveryAmbiguous),
-            Err(source) => Err(Error::internal_with(source, "decode E2B control response")),
+            Err(_) => Err(Error::Unavailable),
         }
     }
 

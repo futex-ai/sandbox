@@ -90,6 +90,9 @@ Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Inherited credential or drive helpers must be stopped with bounded escalation,
 and maintenance or image preparation fails unless their exit is confirmed.
+Provider terminal storage creation and restored cleanup must traverse absolute
+paths through non-following directory descriptors. An intermediate symlink
+must fail closed without creating or removing anything through its target.
 
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
@@ -112,10 +115,11 @@ untrusted profile name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-For image snapshots it accepts immediate completion or recovers in-progress
-and delivery-ambiguous outcomes with a bounded number of calls. The harness
-cleans the sources from its image snapshot and intentional preparation-failure
-probes. Preparation errors may omit a retained-source diagnostic; when one is
+Its ordinary and image snapshot probes accept immediate completion or recover
+in-progress and delivery-ambiguous outcomes with a bounded number of calls.
+The harness cleans every image source it creates, including after preparation,
+prepared-result validation, inventory, snapshot, and intentional-failure
+errors. Preparation errors may omit a retained-source diagnostic; when one is
 present, the harness requires it to identify that source. Every provider
 adapter should run the harness in addition to its own edge-case and transport
 tests.

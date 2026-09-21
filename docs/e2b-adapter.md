@@ -42,7 +42,8 @@ unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
 Control and envd DNS, connection, timeout, request, decode, body, and
 response-stream failures map to retryable provider unavailability for safe
-reads. A failure that can occur after a process start,
+reads. This includes a successful HTTP response whose JSON does not match the
+safe operation's response type. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
 operation-specific recovery fence resolves the outcome.
 
@@ -87,8 +88,11 @@ starts a replacement when recovery finds no match. Inspection and output reads
 bind the stored PID to that exact tag. Input and close requests select the tag
 inside the provider operation itself, so a process that reuses the stored PID
 cannot receive input or be killed. Restored-terminal cleanup also kills by tag,
-then requires its maintenance command to exit normally. Durable log reads
-share one absolute provider deadline and coherent cursor/size reporting.
+then requires its maintenance command to exit normally. Terminal log-directory
+creation and restored cleanup open every path component relative to a directory
+descriptor with symlink following disabled. An intermediate symlink fails the
+operation without creating or deleting content through its target. Durable log
+reads share one absolute provider deadline and coherent cursor/size reporting.
 Transcript writers use the request's exact byte limit rather than a rounded
 filesystem block limit. Oversized replacement writes fail before acquiring
 mutating sandbox access.

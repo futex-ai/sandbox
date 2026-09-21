@@ -5,8 +5,8 @@ use uuid::Uuid;
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendPrepareImageRequest,
     BackendSnapshot, BackendSnapshotCreateOutcome, BackendSnapshotRecovery, Error, OperationId,
-    RealizeImageFileInput, ResourceOwner, Result, SandboxBackend, SandboxId, SandboxNetworkPolicy,
-    SnapshotId,
+    ProviderRef, RealizeImageFileInput, ResourceOwner, Result, SandboxBackend, SandboxId,
+    SandboxNetworkPolicy, SnapshotId,
 };
 
 const SNAPSHOT_RECOVERY_ATTEMPTS: usize = 60;
@@ -20,37 +20,9 @@ pub(crate) async fn exercise(
     let source = backend
         .create_sandbox(source_request(sandbox_id, profile, workspace_id))
         .await?;
-    let prepared = backend
-        .prepare_image(BackendPrepareImageRequest {
-            sandbox_id,
-            source_provider_ref: source.provider_ref.clone(),
-            owner: ResourceOwner::platform(workspace_id),
-            input_files: vec![RealizeImageFileInput {
-                root: "/tmp".to_owned(),
-                path: "sandbox-conformance-input.bin".to_owned(),
-                bytes: b"input".to_vec(),
-            }],
-            setup_script: "test -f /tmp/sandbox-conformance-input.bin".to_owned(),
-            verify_commands: vec!["true".to_owned()],
-        })
-        .await?;
-    if prepared.source_provider_ref != source.provider_ref || prepared.size_bytes == 0 {
-        return Err(Error::internal_message(
-            "backend image preparation changed its source or returned a zero size",
-        ));
-    }
-    let correlation_name = format!("sandbox-conformance-image-{}", OperationId::new());
-    let before = backend
-        .snapshot_inventory(source.provider_ref.clone(), correlation_name.clone())
-        .await?;
-    let snapshot_request = BackendCreateSnapshotRequest {
-        snapshot_id: SnapshotId::new(),
-        operation_id: OperationId::new(),
-        source_provider_ref: source.provider_ref.clone(),
-        correlation_name,
-        before,
-    };
-    let image = match create_or_recover_snapshot(backend, snapshot_request).await {
+    let image_result =
+        prepare_and_snapshot(backend, sandbox_id, &source.provider_ref, workspace_id).await;
+    let image = match image_result {
         Ok(image) => image,
         Err(error) => {
             backend.destroy_sandbox(source.provider_ref).await?;
@@ -64,7 +36,46 @@ pub(crate) async fn exercise(
     exercise_failed_preparation(backend, profile, workspace_id).await
 }
 
-async fn create_or_recover_snapshot(
+async fn prepare_and_snapshot(
+    backend: &dyn SandboxBackend,
+    sandbox_id: SandboxId,
+    source_provider_ref: &ProviderRef,
+    workspace_id: Uuid,
+) -> Result<BackendSnapshot> {
+    let prepared = backend
+        .prepare_image(BackendPrepareImageRequest {
+            sandbox_id,
+            source_provider_ref: source_provider_ref.clone(),
+            owner: ResourceOwner::platform(workspace_id),
+            input_files: vec![RealizeImageFileInput {
+                root: "/tmp".to_owned(),
+                path: "sandbox-conformance-input.bin".to_owned(),
+                bytes: b"input".to_vec(),
+            }],
+            setup_script: "test -f /tmp/sandbox-conformance-input.bin".to_owned(),
+            verify_commands: vec!["true".to_owned()],
+        })
+        .await?;
+    if prepared.source_provider_ref != *source_provider_ref || prepared.size_bytes == 0 {
+        return Err(Error::internal_message(
+            "backend image preparation changed its source or returned a zero size",
+        ));
+    }
+    let correlation_name = format!("sandbox-conformance-image-{}", OperationId::new());
+    let before = backend
+        .snapshot_inventory(source_provider_ref.clone(), correlation_name.clone())
+        .await?;
+    let snapshot_request = BackendCreateSnapshotRequest {
+        snapshot_id: SnapshotId::new(),
+        operation_id: OperationId::new(),
+        source_provider_ref: source_provider_ref.clone(),
+        correlation_name,
+        before,
+    };
+    create_or_recover_snapshot(backend, snapshot_request).await
+}
+
+pub(crate) async fn create_or_recover_snapshot(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
 ) -> Result<BackendSnapshot> {
@@ -98,7 +109,7 @@ async fn exercise_failed_preparation(
     let source = backend
         .create_sandbox(source_request(sandbox_id, profile, workspace_id))
         .await?;
-    let failure = backend
+    let preparation = backend
         .prepare_image(BackendPrepareImageRequest {
             sandbox_id,
             source_provider_ref: source.provider_ref.clone(),
@@ -107,13 +118,12 @@ async fn exercise_failed_preparation(
             setup_script: "exit 7".to_owned(),
             verify_commands: vec!["true".to_owned()],
         })
-        .await
-        .expect_err("backend setup failure should be typed");
-    let valid_failure = match failure {
-        Error::ImageSetupFailed {
+        .await;
+    let valid_failure = match preparation {
+        Err(Error::ImageSetupFailed {
             command: _,
             retained_sandbox,
-        } => retained_sandbox.is_none_or(|retained_sandbox| {
+        }) => retained_sandbox.is_none_or(|retained_sandbox| {
             retained_sandbox.sandbox_id == sandbox_id
                 && retained_sandbox.provider_ref == source.provider_ref
         }),

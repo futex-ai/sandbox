@@ -182,6 +182,15 @@ async fn accepted_snapshot_with_malformed_body_preserves_delivery_ambiguity() {
 }
 
 #[tokio::test]
+async fn accepted_safe_read_with_malformed_body_is_unavailable() {
+    let (client, _) = recording_client(vec![json_response(200, "not-json")]);
+
+    let result = client.get_sandbox("sandbox").await;
+
+    assert!(matches!(result, Err(E2bAdapterError::Unavailable)));
+}
+
+#[tokio::test]
 async fn existing_sandbox_calls_reject_mismatched_response_identity() {
     let (get_client, _) = recording_client(vec![json_response(
         200,

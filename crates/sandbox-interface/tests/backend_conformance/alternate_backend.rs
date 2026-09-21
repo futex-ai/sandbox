@@ -138,15 +138,11 @@ impl SandboxBackend for AlternateBackend {
         _request: BackendCreateSnapshotRequest,
     ) -> Result<BackendSnapshotCreateOutcome> {
         let index = self.next_snapshot.fetch_add(1, Ordering::Relaxed);
-        let provider_ref = ProviderRef::new(format!("alternate-snapshot-{index}"));
         self.snapshots
             .lock()
             .expect("snapshot lock")
-            .push(provider_ref.clone());
-        Ok(BackendSnapshotCreateOutcome::Created(BackendSnapshot {
-            provider_ref,
-            state: SnapshotState::Ready,
-        }))
+            .push(ProviderRef::new(format!("alternate-snapshot-{index}")));
+        Ok(BackendSnapshotCreateOutcome::InProgress)
     }
 
     async fn recover_snapshot_create(

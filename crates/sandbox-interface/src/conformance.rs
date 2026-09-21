@@ -7,9 +7,9 @@ use uuid::Uuid;
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInputRequest,
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
-    BackendReadFileRequest, BackendRunProcessRequest, BackendSnapshotCreateOutcome,
-    BackendTerminalCreateRequest, BackendWriteFileRequest, Error, OperationId, ResourceOwner,
-    Result, SandboxBackend, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
+    BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend, SandboxId,
+    SandboxNetworkPolicy, SnapshotId, TerminalId,
 };
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
@@ -56,12 +56,9 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
         correlation_name: correlation,
         before,
     };
-    let snapshot = backend.create_snapshot(snapshot_request.clone()).await?;
-    let BackendSnapshotCreateOutcome::Created(snapshot) = snapshot else {
-        return Err(Error::internal_message(
-            "backend conformance snapshot did not complete",
-        ));
-    };
+    let snapshot =
+        crate::conformance_image::create_or_recover_snapshot(backend, snapshot_request.clone())
+            .await?;
     let recovered_snapshot = backend
         .recover_snapshot_create(snapshot_request.clone())
         .await?;

@@ -54,7 +54,9 @@ redirects, and envd URLs are validated before call-local credentials are
 attached. Definitive rejection headers are mapped without waiting for an
 unused response body. DNS, connection, timeout, and response-stream failures
 remain typed as provider unavailability; failed mutating delivery remains
-ambiguous.
+ambiguous. A successful safe response with malformed JSON is also retryable
+provider unavailability, while malformed output after an accepted mutation
+keeps the delivery outcome ambiguous.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -65,7 +67,10 @@ stays in progress instead of replaying preparation or allocating another
 resource. Before measuring a prepared source, configured image processes must
 exit after bounded TERM/KILL escalation. Restored-sandbox cleanup and image
 preparation apply the same bounded escalation to inherited drive helpers and
-fail unless those helpers are confirmed gone.
+fail unless those helpers are confirmed gone. Terminal log-directory creation
+and restored cleanup traverse from directory descriptors with non-following
+opens; an intermediate symlink makes the operation fail without touching its
+target.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
@@ -121,6 +126,7 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
 - `src/runtime_conventions.rs` — validated deployment and cleanup names.
 - `src/backend/configured.rs` — backend construction and trait dispatch.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
+- `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.

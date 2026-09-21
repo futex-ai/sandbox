@@ -1,47 +1,18 @@
 //! E2B durable PTY creation, ingestion, input, and restored-helper cleanup.
 
-use std::time::Duration;
-
 use sandbox_interface::{
     BackendInputRequest, BackendTerminal, BackendTerminalCreateRequest, Error, ProviderRef,
     ResourceKind, Result, TerminalState,
 };
 
-use crate::process::{
-    ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessPtyRequest, ProcessSelector,
-};
+use crate::process::{ProcessConnection, ProcessPtyRequest, ProcessSelector};
 
 use super::{
     configured::E2bSandboxBackend,
     mapping,
     terminal_identity::{TerminalIdentity, tagged_terminal, terminal_tag},
+    terminal_storage::{TERMINAL_LOG_DIRECTORY, create_directory_command, restore_cleanup_command},
 };
-
-const TERMINAL_LOG_DIRECTORY: &str = "/tmp/sandbox/terminals";
-const RESTORE_CLEANUP: &str = r#"set -eu
-if mountpoint -q /drives/me; then
-    fusermount3 -u /drives/me || umount -l /drives/me
-fi
-stop_sandbox_drive_helpers() {
-    pkill -TERM -f -- '[s]andbox-drive-' || true
-    sandbox_drive_stop_attempt=0
-    while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
-        sleep 0.1
-        sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
-    done
-    if pgrep -f -- '[s]andbox-drive-' >/dev/null; then
-        pkill -KILL -f -- '[s]andbox-drive-' || true
-        sandbox_drive_stop_attempt=0
-        while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
-            sleep 0.1
-            sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
-        done
-    fi
-    ! pgrep -f -- '[s]andbox-drive-' >/dev/null
-}
-stop_sandbox_drive_helpers
-rm -rf /tmp/sandbox-drive /tmp/sandbox/terminals
-"#;
 
 pub(super) async fn clean_restored(
     backend: &E2bSandboxBackend,
@@ -64,17 +35,7 @@ pub(super) async fn clean_restored(
     }
     let cleanup = backend
         .processes
-        .run(
-            connection,
-            ProcessCommand {
-                command: "/bin/sh".to_owned(),
-                args: vec!["-lc".to_owned(), RESTORE_CLEANUP.to_owned()],
-                cwd: None,
-                output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
-                timeout: Duration::from_secs(300),
-                read_only: false,
-            },
-        )
+        .run(connection, restore_cleanup_command())
         .await?;
     if !cleanup.succeeded() {
         return Err(Error::internal_message(
@@ -98,17 +59,7 @@ pub(super) async fn create(
     );
     let directory = backend
         .processes
-        .run(
-            connection.clone(),
-            ProcessCommand {
-                command: "/bin/mkdir".to_owned(),
-                args: vec!["-p".to_owned(), TERMINAL_LOG_DIRECTORY.to_owned()],
-                cwd: None,
-                output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
-                timeout: Duration::from_secs(300),
-                read_only: false,
-            },
-        )
+        .run(connection.clone(), create_directory_command())
         .await?;
     if !directory.succeeded() {
         return Err(Error::internal_message(
