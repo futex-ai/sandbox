@@ -97,6 +97,9 @@ Each provider process-data event must contain exactly one of PTY, stdout, or
 stderr output; an event with no channel or multiple channels is malformed.
 Inherited credential or drive helpers must be stopped with bounded escalation,
 and maintenance or image preparation fails unless their exit is confirmed.
+Provider-owned image verification, scrub, and measurement must not load a
+user-controlled login profile before executing; such a profile could otherwise
+skip a safety command or forge its result.
 Provider terminal storage creation and restored cleanup must traverse absolute
 paths through non-following directory descriptors. An intermediate symlink
 must fail closed without creating or removing anything through its target.
@@ -106,7 +109,10 @@ atomically in the provider mutation. A separate list-then-mutate check is not a
 sufficient identity fence because a numeric process ID can be reused between
 the two calls. The same rule applies when killing terminals inherited by a
 restored sandbox. Provider-side transcripts enforce the requested byte count
-exactly, including limits that are smaller than or not aligned to 1 KiB.
+exactly, including limits that are smaller than or not aligned to 1 KiB. The
+provider must establish transcript capture before starting the one intended
+interactive login shell, so login-profile output and exits remain captured and
+cannot bypass terminal setup.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact
@@ -131,9 +137,12 @@ This includes the ordinary probe's recover-only verification after an
 immediately completed create, because recovery inventory may still be
 eventually consistent.
 After every in-progress recovery response, the harness waits one second before
-polling again, with no more than 60 waits. The harness cleans every image source
-it creates, including after preparation, prepared-result validation,
-inventory, snapshot, and intentional-failure errors. Preparation errors may
-omit a retained-source diagnostic; when one is present, the harness requires
-it to identify that source. Every provider adapter should run the harness in
-addition to its own edge-case and transport tests.
+polling again, with no more than 60 waits. If image-source creation returns an
+error after dispatch begins, the harness keeps the exact request and performs
+only the same bounded, paced recovery calls. It never replays creation. The
+harness cleans every immediate or recovered image source, including after
+preparation, prepared-result validation, inventory, snapshot, and
+intentional-failure errors. Preparation errors may omit a retained-source
+diagnostic; when one is present, the harness requires it to identify that
+source. Every provider adapter should run the harness in addition to its own
+edge-case and transport tests.

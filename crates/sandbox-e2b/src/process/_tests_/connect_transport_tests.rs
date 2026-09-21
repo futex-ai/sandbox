@@ -46,7 +46,7 @@ fn pty_start_caps_only_the_private_provider_log() {
     .expect("PTY JSON");
 
     assert_eq!(body["process"]["cmd"], "/bin/bash");
-    assert_eq!(body["process"]["args"][0], "-lc");
+    assert_eq!(body["process"]["args"][0], "-c");
     assert_eq!(
         body["process"]["envs"]["SANDBOX_TERMINAL_LOG_LIMIT"],
         (2 * 1024 * 1024).to_string()

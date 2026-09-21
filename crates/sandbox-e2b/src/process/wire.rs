@@ -39,7 +39,7 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
     StartRequestWire {
         process: ProcessConfigWire {
             cmd: "/bin/bash".to_owned(),
-            args: vec!["-lc".to_owned(), TERMINAL_WRAPPER.to_owned()],
+            args: vec!["-c".to_owned(), TERMINAL_WRAPPER.to_owned()],
             envs,
             cwd: request.cwd,
         },

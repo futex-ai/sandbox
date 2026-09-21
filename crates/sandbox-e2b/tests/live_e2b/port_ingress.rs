@@ -8,7 +8,8 @@ use sandbox_interface::{
 };
 
 use super::support::{
-    LiveResources, LiveResult, ingress_client, sandbox_request, terminal_request, wait_for_output,
+    LiveResources, LiveResult, create_tracked_sandbox, ingress_client, sandbox_request,
+    terminal_request, wait_for_output,
 };
 
 const PORT: u16 = 4173;
@@ -31,11 +32,9 @@ pub(super) async fn run(
     owner: ResourceOwner,
     resources: &mut LiveResources,
 ) -> LiveResult<()> {
-    let sandbox = backend
-        .create_sandbox(sandbox_request(owner, None))
+    let sandbox = create_tracked_sandbox(backend, sandbox_request(owner, None), resources)
         .await
         .stage("sandbox create")?;
-    resources.sandboxes.push(sandbox.provider_ref.clone());
     let terminal = backend
         .create_terminal(terminal_request(sandbox.provider_ref.clone()))
         .await

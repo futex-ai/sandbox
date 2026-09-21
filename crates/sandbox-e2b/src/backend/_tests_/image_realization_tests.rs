@@ -1,6 +1,12 @@
 //! E2B image-preparation behavior tests.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use sandbox_interface::{
     BackendPrepareImageRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef, RealizeImageFileInput,
@@ -185,6 +191,53 @@ async fn oversized_image_input_fails_before_connecting_or_writing_an_earlier_fil
             limit: FILE_TRANSFER_MAX_BYTES
         }
     ));
+}
+
+#[tokio::test]
+async fn image_commands_never_load_user_login_profiles() {
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("profile-source"))
+            .returns(Ok(access("profile-source"))),
+    );
+    let run_count = Arc::new(AtomicUsize::new(0));
+    let processes = Unimock::new(
+        ProcessTransportMock::run
+            .each_call(matching!(_, _))
+            .answers_arc({
+                let run_count = run_count.clone();
+                Arc::new(move |_, _, command| {
+                    assert_eq!(command.command, "/bin/sh");
+                    assert_eq!(command.args.first().map(String::as_str), Some("-c"));
+                    assert_eq!(command.args.len(), 2);
+                    run_count.fetch_add(1, Ordering::Relaxed);
+                    if command.args[1].contains("__SANDBOX_IMAGE_SIZE__=") {
+                        return Ok(ProcessRunOutput {
+                            bytes: b"__SANDBOX_IMAGE_SIZE__=4096\n".to_vec(),
+                            exit_code: Some(0),
+                            exited: true,
+                            output_truncated: false,
+                        });
+                    }
+                    Ok(success())
+                })
+            }),
+    );
+
+    let prepared = backend(control, processes)
+        .prepare_image(BackendPrepareImageRequest {
+            sandbox_id: SandboxId::new(),
+            source_provider_ref: ProviderRef::new("profile-source"),
+            owner: ResourceOwner::platform(Uuid::now_v7()),
+            input_files: Vec::new(),
+            setup_script: "true".to_owned(),
+            verify_commands: vec!["true".to_owned()],
+        })
+        .await
+        .expect("non-login image phases should prepare the source");
+
+    assert_eq!(prepared.size_bytes, 4096);
+    assert_eq!(run_count.load(Ordering::Relaxed), 4);
 }
 
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {

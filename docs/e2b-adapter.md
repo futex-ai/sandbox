@@ -120,6 +120,14 @@ process names, waits for bounded disappearance, escalates to KILL, and fails
 unless both names are gone before size measurement. Both image scrub and
 restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
 helpers with bounded TERM/KILL polling and fail unless their exit is confirmed.
+Setup, verification, scrub, and size measurement run through non-login shells,
+so staged files or setup commands cannot install a login profile that skips a
+later safety phase or fabricates the measured size.
+
+The terminal transcript FIFO and bounded writer are installed by a non-login
+outer shell. Only after capture is active does the one intended interactive
+login shell load the user's profile, which keeps profile output and early exits
+inside terminal bookkeeping and avoids running login side effects twice.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and
@@ -133,9 +141,14 @@ published by the separate template release project;
 The `live-e2b` feature only compiles credentialed tests. Every live test is also
 marked ignored, so `cargo test --workspace --all-features` remains offline.
 Running an ignored test requires an explicit API key, may incur provider cost,
-and executes cleanup for tracked terminals, sandboxes, and snapshots. The
-lifecycle test retains each snapshot request before dispatch, polls recovery
-after an in-progress or delivery-ambiguous response, and retries that recovery
-during cleanup when no provider snapshot handle was obtained. Live
+and executes cleanup for tracked terminals, sandboxes, and snapshots. Every
+sandbox request is retained before dispatch. A shared helper performs bounded,
+one-second recover-only polling after an uncertain create and registers a
+returned provider handle before any restored-terminal cleanup can fail. Final
+cleanup retries every still-pending sandbox request before destroying the
+recovered or already tracked resource. The lifecycle test applies the same
+ownership to snapshot requests, polls recovery after an in-progress or
+delivery-ambiguous response, and retries that recovery during cleanup when no
+provider snapshot handle was obtained. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.

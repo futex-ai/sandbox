@@ -9,7 +9,8 @@ use sandbox_interface::{
 };
 
 use super::support::{
-    LiveResources, LiveResult, recover_snapshot, sandbox_request, terminal_request, wait_for_output,
+    LiveResources, LiveResult, create_tracked_sandbox, recover_snapshot, sandbox_request,
+    terminal_request, wait_for_output,
 };
 
 trait LiveStage<T> {
@@ -31,11 +32,9 @@ pub(super) async fn run(
     owner: ResourceOwner,
     resources: &mut LiveResources,
 ) -> LiveResult<()> {
-    let source = backend
-        .create_sandbox(sandbox_request(owner, None))
+    let source = create_tracked_sandbox(backend, sandbox_request(owner, None), resources)
         .await
         .stage("source sandbox creation")?;
-    resources.sandboxes.push(source.provider_ref.clone());
     let terminal = backend
         .create_terminal(terminal_request(source.provider_ref.clone()))
         .await
@@ -88,14 +87,12 @@ pub(super) async fn run(
     .await
     .stage("post-snapshot source output")?;
 
-    let first = restore(backend, owner, snapshot.clone())
+    let first = restore(backend, owner, snapshot.clone(), resources)
         .await
         .stage("first snapshot restore")?;
-    resources.sandboxes.push(first.clone());
-    let second = restore(backend, owner, snapshot)
+    let second = restore(backend, owner, snapshot, resources)
         .await
         .stage("second snapshot restore")?;
-    resources.sandboxes.push(second.clone());
     if first == second {
         return Err(io::Error::other("independent restores reused one sandbox").into());
     }
@@ -165,10 +162,10 @@ async fn restore(
     backend: &E2bSandboxBackend,
     owner: ResourceOwner,
     snapshot: ProviderRef,
+    resources: &mut LiveResources,
 ) -> LiveResult<ProviderRef> {
-    let sandbox = backend
-        .create_sandbox(sandbox_request(owner, Some(snapshot)))
-        .await?;
+    let sandbox =
+        create_tracked_sandbox(backend, sandbox_request(owner, Some(snapshot)), resources).await?;
     backend
         .clean_restored_terminals(sandbox.provider_ref.clone())
         .await?;

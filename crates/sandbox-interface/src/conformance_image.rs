@@ -7,27 +7,27 @@ use uuid::Uuid;
 
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendPrepareImageRequest,
-    BackendSnapshot, BackendSnapshotCreateOutcome, BackendSnapshotRecovery, Error, OperationId,
-    ProviderRef, RealizeImageFileInput, ResourceOwner, Result, SandboxBackend, SandboxId,
-    SandboxNetworkPolicy, SnapshotId,
+    BackendSandbox, BackendSnapshot, BackendSnapshotCreateOutcome, BackendSnapshotRecovery, Error,
+    OperationId, ProviderRef, RealizeImageFileInput, ResourceOwner, Result, SandboxBackend,
+    SandboxId, SandboxNetworkPolicy, SnapshotId,
 };
 
-const SNAPSHOT_RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
-const SNAPSHOT_RECOVERY_WAITS: usize = 60;
+const RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
+const RECOVERY_WAITS: usize = 60;
 
 /// Delay boundary used to keep recovery tests deterministic.
-#[unimock::unimock(api = SnapshotRecoverySleeperMock)]
+#[unimock::unimock(api = RecoverySleeperMock)]
 #[async_trait]
-trait SnapshotRecoverySleeper: Send + Sync {
+trait RecoverySleeper: Send + Sync {
     /// Waits before the next provider recovery poll.
     async fn sleep(&self, duration: Duration);
 }
 
 /// Tokio-backed delay used by the public conformance flow.
-struct TokioSnapshotRecoverySleeper;
+struct TokioRecoverySleeper;
 
 #[async_trait]
-impl SnapshotRecoverySleeper for TokioSnapshotRecoverySleeper {
+impl RecoverySleeper for TokioRecoverySleeper {
     async fn sleep(&self, duration: Duration) {
         tokio::time::sleep(duration).await;
     }
@@ -39,9 +39,9 @@ pub(crate) async fn exercise(
     workspace_id: Uuid,
 ) -> Result<()> {
     let sandbox_id = SandboxId::new();
-    let source = backend
-        .create_sandbox(source_request(sandbox_id, profile, workspace_id))
-        .await?;
+    let source =
+        create_or_recover_sandbox(backend, source_request(sandbox_id, profile, workspace_id))
+            .await?;
     let image_result =
         prepare_and_snapshot(backend, sandbox_id, &source.provider_ref, workspace_id).await;
     let image = match image_result {
@@ -101,14 +101,14 @@ pub(crate) async fn create_or_recover_snapshot(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
 ) -> Result<BackendSnapshot> {
-    create_or_recover_snapshot_with_sleeper(backend, request, &TokioSnapshotRecoverySleeper).await
+    create_or_recover_snapshot_with_sleeper(backend, request, &TokioRecoverySleeper).await
 }
 
 /// Recovers one dispatched snapshot with bounded, paced polling.
 async fn create_or_recover_snapshot_with_sleeper(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
-    sleeper: &dyn SnapshotRecoverySleeper,
+    sleeper: &dyn RecoverySleeper,
 ) -> Result<BackendSnapshot> {
     match backend.create_snapshot(request.clone()).await? {
         BackendSnapshotCreateOutcome::Created(image) => return Ok(image),
@@ -122,15 +122,15 @@ pub(crate) async fn recover_snapshot(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
 ) -> Result<BackendSnapshot> {
-    recover_snapshot_with_sleeper(backend, request, &TokioSnapshotRecoverySleeper).await
+    recover_snapshot_with_sleeper(backend, request, &TokioRecoverySleeper).await
 }
 
 async fn recover_snapshot_with_sleeper(
     backend: &dyn SandboxBackend,
     request: BackendCreateSnapshotRequest,
-    sleeper: &dyn SnapshotRecoverySleeper,
+    sleeper: &dyn RecoverySleeper,
 ) -> Result<BackendSnapshot> {
-    let mut waits_remaining = SNAPSHOT_RECOVERY_WAITS;
+    let mut waits_remaining = RECOVERY_WAITS;
     loop {
         match backend.recover_snapshot_create(request.clone()).await? {
             BackendSnapshotRecovery::Recovered(image) => return Ok(image),
@@ -139,10 +139,39 @@ async fn recover_snapshot_with_sleeper(
             }
             BackendSnapshotRecovery::InProgress => {
                 waits_remaining -= 1;
-                sleeper.sleep(SNAPSHOT_RECOVERY_INTERVAL).await;
+                sleeper.sleep(RECOVERY_INTERVAL).await;
             }
             BackendSnapshotRecovery::ReconciliationRequired => {
                 return Err(snapshot_reconciliation_required());
+            }
+        }
+    }
+}
+
+async fn create_or_recover_sandbox(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSandboxRequest,
+) -> Result<BackendSandbox> {
+    create_or_recover_sandbox_with_sleeper(backend, request, &TokioRecoverySleeper).await
+}
+
+async fn create_or_recover_sandbox_with_sleeper(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSandboxRequest,
+    sleeper: &dyn RecoverySleeper,
+) -> Result<BackendSandbox> {
+    let create_error = match backend.create_sandbox(request.clone()).await {
+        Ok(sandbox) => return Ok(sandbox),
+        Err(error) => error,
+    };
+    let mut waits_remaining = RECOVERY_WAITS;
+    loop {
+        match backend.recover_sandbox_create(request.clone()).await? {
+            Some(sandbox) => return Ok(sandbox),
+            None if waits_remaining == 0 => return Err(create_error),
+            None => {
+                waits_remaining -= 1;
+                sleeper.sleep(RECOVERY_INTERVAL).await;
             }
         }
     }
@@ -211,3 +240,7 @@ fn source_request(
 #[cfg(test)]
 #[path = "_tests_/conformance_image_tests.rs"]
 mod conformance_image_tests;
+
+#[cfg(test)]
+#[path = "_tests_/conformance_sandbox_recovery_tests.rs"]
+mod conformance_sandbox_recovery_tests;

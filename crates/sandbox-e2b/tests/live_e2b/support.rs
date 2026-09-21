@@ -11,13 +11,15 @@ use std::{
 use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendOutputRequest,
-    BackendSnapshotRecovery, BackendTerminal, BackendTerminalCreateRequest, Error as SandboxError,
-    OperationId, ProviderRef, ResourceOwner, SandboxBackend, SandboxId, TerminalId,
+    BackendSandbox, BackendSnapshotRecovery, BackendTerminal, BackendTerminalCreateRequest,
+    Error as SandboxError, OperationId, ProviderRef, ResourceOwner, SandboxBackend, SandboxId,
+    TerminalId,
 };
 
 const LOG_LIMIT: usize = 2 * 1024 * 1024;
-const SNAPSHOT_RECOVERY_ATTEMPTS: usize = 60;
-const SNAPSHOT_RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
+const LIVE_BACKEND_ID: &str = "e2b-live";
+const RECOVERY_ATTEMPTS: usize = 60;
+const RECOVERY_INTERVAL: Duration = Duration::from_secs(1);
 
 pub(super) type LiveResult<T> = Result<T, Box<dyn Error>>;
 
@@ -31,6 +33,7 @@ pub(super) fn ingress_client() -> reqwest::Result<reqwest::Client> {
 #[derive(Default)]
 pub(super) struct LiveResources {
     pub(super) sandboxes: Vec<ProviderRef>,
+    pub(super) sandbox_requests: Vec<BackendCreateSandboxRequest>,
     pub(super) terminals: Vec<(ProviderRef, ProviderRef)>,
     pub(super) snapshot: Option<ProviderRef>,
     pub(super) snapshot_request: Option<BackendCreateSnapshotRequest>,
@@ -72,7 +75,19 @@ impl LiveResources {
         {
             first_error.get_or_insert(error);
         }
-        for sandbox in self.sandboxes.iter().rev() {
+        let mut sandboxes = self.sandboxes.clone();
+        for request in &self.sandbox_requests {
+            match recover_sandbox(backend, request.clone()).await {
+                Ok(sandbox) if !sandboxes.contains(&sandbox.provider_ref) => {
+                    sandboxes.push(sandbox.provider_ref);
+                }
+                Ok(_) => {}
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+        }
+        for sandbox in sandboxes.iter().rev() {
             if let Err(error) = backend.destroy_sandbox(sandbox.clone()).await
                 && !matches!(error, SandboxError::NotFound { .. })
             {
@@ -86,11 +101,50 @@ impl LiveResources {
     }
 }
 
+pub(super) async fn create_tracked_sandbox(
+    backend: &E2bSandboxBackend,
+    request: BackendCreateSandboxRequest,
+    resources: &mut LiveResources,
+) -> sandbox_interface::Result<BackendSandbox> {
+    resources.sandbox_requests.push(request.clone());
+    let sandbox = match backend.create_sandbox(request.clone()).await {
+        Ok(sandbox) => sandbox,
+        Err(_) => recover_sandbox(backend, request.clone()).await?,
+    };
+    resources
+        .sandbox_requests
+        .retain(|pending| pending != &request);
+    if !resources.sandboxes.contains(&sandbox.provider_ref) {
+        resources.sandboxes.push(sandbox.provider_ref.clone());
+    }
+    Ok(sandbox)
+}
+
+async fn recover_sandbox(
+    backend: &E2bSandboxBackend,
+    request: BackendCreateSandboxRequest,
+) -> sandbox_interface::Result<BackendSandbox> {
+    for attempt in 0..=RECOVERY_ATTEMPTS {
+        match backend.recover_sandbox_create(request.clone()).await? {
+            Some(sandbox) => return Ok(sandbox),
+            None if attempt == RECOVERY_ATTEMPTS => {
+                return Err(SandboxError::BackendUnavailable {
+                    backend_id: LIVE_BACKEND_ID.to_owned(),
+                });
+            }
+            None => tokio::time::sleep(RECOVERY_INTERVAL).await,
+        }
+    }
+    Err(SandboxError::BackendUnavailable {
+        backend_id: LIVE_BACKEND_ID.to_owned(),
+    })
+}
+
 pub(super) async fn recover_snapshot(
     backend: &E2bSandboxBackend,
     request: BackendCreateSnapshotRequest,
 ) -> sandbox_interface::Result<ProviderRef> {
-    for attempt in 0..=SNAPSHOT_RECOVERY_ATTEMPTS {
+    for attempt in 0..=RECOVERY_ATTEMPTS {
         match backend.recover_snapshot_create(request.clone()).await? {
             BackendSnapshotRecovery::Recovered(snapshot) => return Ok(snapshot.provider_ref),
             BackendSnapshotRecovery::ReconciliationRequired => {
@@ -98,13 +152,13 @@ pub(super) async fn recover_snapshot(
                     retained_sandbox: None,
                 });
             }
-            BackendSnapshotRecovery::InProgress if attempt == SNAPSHOT_RECOVERY_ATTEMPTS => {
+            BackendSnapshotRecovery::InProgress if attempt == RECOVERY_ATTEMPTS => {
                 return Err(SandboxError::SnapshotReconciliationRequired {
                     retained_sandbox: None,
                 });
             }
             BackendSnapshotRecovery::InProgress => {
-                tokio::time::sleep(SNAPSHOT_RECOVERY_INTERVAL).await;
+                tokio::time::sleep(RECOVERY_INTERVAL).await;
             }
         }
     }
@@ -115,7 +169,7 @@ pub(super) async fn recover_snapshot(
 
 pub(super) fn live_config(api_key: String, template: String) -> E2bAdapterConfig {
     E2bAdapterConfig::new(
-        "e2b-live",
+        LIVE_BACKEND_ID,
         "https://api.e2b.app",
         api_key,
         HashMap::from([(

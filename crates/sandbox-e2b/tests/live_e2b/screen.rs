@@ -8,7 +8,9 @@ use sandbox_interface::{
     ScreenStackOutcome,
 };
 
-use super::support::{LiveResources, LiveResult, ingress_client, sandbox_request};
+use super::support::{
+    LiveResources, LiveResult, create_tracked_sandbox, ingress_client, sandbox_request,
+};
 
 const SCREEN_PORTS: [u16; 2] = [6080, 6081];
 
@@ -17,8 +19,7 @@ pub(super) async fn run(
     owner: ResourceOwner,
     resources: &mut LiveResources,
 ) -> LiveResult<()> {
-    let sandbox = backend.create_sandbox(sandbox_request(owner, None)).await?;
-    resources.sandboxes.push(sandbox.provider_ref.clone());
+    let sandbox = create_tracked_sandbox(backend, sandbox_request(owner, None), resources).await?;
     let outcome = backend
         .ensure_screen_stack(BackendEnsureScreenStackRequest {
             sandbox_provider_ref: sandbox.provider_ref.clone(),

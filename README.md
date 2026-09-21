@@ -24,8 +24,9 @@ one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
 duplicate provider work. Both snapshot probes in the shared conformance
 harness accept immediate or asynchronous completion. Every image source the
-harness creates is cleaned after preparation, validation, inventory, or
-snapshot failure, even when a provider omits optional diagnostics.
+harness creates or recovers is cleaned after preparation, validation,
+inventory, or snapshot failure, even when the initial create result is
+uncertain or a provider omits optional diagnostics.
 
 ## Developer Setup
 
@@ -69,9 +70,10 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
 `E2B_TEMPLATE_ID` selects a lifecycle-test template; it defaults to E2B's
 `base` template. `E2B_SCREEN_TEMPLATE_ID` must identify a compatible template
 published by the separately owned template release project. The tests attempt
-cleanup even after an operation fails. The lifecycle test stores its snapshot
-request in cleanup state before dispatch and recovers uncertain or
-eventually-consistent creation instead of losing the provider cleanup handle.
+cleanup even after an operation fails. Every sandbox and snapshot request is
+stored in cleanup state before dispatch; uncertain or eventually consistent
+creation uses recover-only polling, and a returned sandbox is tracked before
+later initialization can fail.
 
 ## Review Workflow
 

@@ -76,9 +76,13 @@ or allocating another resource. Before measuring a prepared source, configured
 image processes must exit after bounded TERM/KILL escalation. Restored-sandbox
 cleanup and image preparation apply the same bounded escalation to inherited
 drive helpers and fail unless those helpers are confirmed gone. Terminal
-log-directory creation and restored cleanup traverse from directory descriptors with non-following
-opens; an intermediate symlink makes the operation fail without touching its
-target.
+log-directory creation and restored cleanup traverse from directory
+descriptors with non-following opens; an intermediate symlink makes the
+operation fail without touching its target. Image setup, verification, scrub,
+and size measurement use non-login shells, so a staged or setup-created profile
+cannot skip a later safety phase or forge its result. The terminal transcript
+wrapper also starts through a non-login outer shell; only the captured
+interactive shell loads the user's login profile.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
@@ -128,10 +132,13 @@ E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   live_e2b_private_screen_bridges -- --ignored
 ```
 
-The lifecycle test records its snapshot request before dispatch and uses
-recover-only polling after in-progress or delivery-ambiguous results. Cleanup
-retries recovery when the initial flow did not obtain a deletable snapshot
-handle.
+Every live sandbox create request is stored before dispatch. One shared helper
+uses bounded, one-second recover-only polling after an uncertain result and
+registers the provider handle before restored-terminal cleanup or other later
+work can fail. Final cleanup retries unresolved sandbox recovery before
+destroying tracked resources. The lifecycle test applies the same ownership to
+snapshot requests and retries recovery when the initial flow did not obtain a
+deletable snapshot handle.
 
 ### Key Code
 

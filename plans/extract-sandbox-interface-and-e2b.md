@@ -519,3 +519,34 @@ multi-channel process events fail closed.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 16: Trusted Shell And Cleanup Recovery
+
+Resolve every finding from the eighth clean post-push review. At the end of
+this milestone, user-controlled login profiles cannot bypass trusted image or
+terminal-wrapper setup, and every conformance or live-test sandbox creation
+retains enough identity to recover and destroy an uncertain or partially
+initialized provider resource.
+
+- [x] Add failing regressions first for login-profile isolation, transcript
+      wrapper ordering, conformance source-create recovery, live create-request
+      retention, and restored-sandbox tracking before terminal cleanup.
+- [x] Run trusted image commands and size measurement without loading
+      user-controlled login profiles.
+- [x] Start the trusted terminal transcript wrapper before the one intended
+      interactive login shell loads the user's profile.
+- [x] Recover uncertain conformance image-source creation with bounded,
+      one-second-paced recover-only polling and destroy any recovered source.
+- [x] Centralize live-test sandbox creation so its exact request is retained
+      before dispatch, uncertain creation is recovered, and every returned
+      provider sandbox is tracked before later work can fail.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the clarified trusted-shell and cleanup-ownership guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

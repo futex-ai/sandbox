@@ -132,6 +132,8 @@ pub trait SandboxBackend: Send + Sync {
     /// invokes this preparation phase at most once, persists its result, then
     /// uses the snapshot inventory, create, and recovery methods below. This
     /// method never allocates, snapshots, or destroys a provider resource.
+    /// Provider-owned safety phases must not load user-controlled shell startup
+    /// files before they run.
     async fn prepare_image(
         &self,
         request: BackendPrepareImageRequest,
@@ -212,6 +214,9 @@ pub trait SandboxBackend: Send + Sync {
     /// Replaces a bounded regular file without exposing provider credentials.
     async fn write_file(&self, request: BackendWriteFileRequest) -> Result<()>;
     /// Creates one persistent provider PTY.
+    ///
+    /// Durable transcript capture must be active before a user login profile
+    /// can run so startup output and exits cannot bypass terminal bookkeeping.
     async fn create_terminal(
         &self,
         request: BackendTerminalCreateRequest,

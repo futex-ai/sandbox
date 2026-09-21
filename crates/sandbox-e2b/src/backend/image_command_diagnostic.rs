@@ -33,7 +33,7 @@ pub(super) async fn run_phase(
             connection,
             ProcessCommand {
                 command: "/bin/sh".to_owned(),
-                args: vec!["-lc".to_owned(), command],
+                args: vec!["-c".to_owned(), command],
                 cwd: None,
                 output_capture: phase.output_capture(),
                 timeout: IMAGE_COMMAND_TIMEOUT,

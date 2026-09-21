@@ -17,7 +17,7 @@ fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
         let directory = tempdir().expect("temporary transcript directory");
         let transcript = directory.path().join("terminal.log");
         let mut child = Command::new("/usr/bin/timeout")
-            .args(["5s", "/bin/bash", "-lc", TERMINAL_WRAPPER])
+            .args(["5s", "/bin/bash", "-c", TERMINAL_WRAPPER])
             .env("SANDBOX_TERMINAL_LOG_LIMIT", limit.to_string())
             .env("SANDBOX_TERMINAL_LOG_PATH", &transcript)
             .stdin(Stdio::piped())
@@ -50,7 +50,7 @@ fn terminal_wrapper_exits_normally_below_the_limit_and_removes_its_pipe() {
     let transcript = directory.path().join("terminal.log");
     let transcript_pipe = directory.path().join("terminal.log.pipe");
     let mut child = Command::new("/usr/bin/timeout")
-        .args(["5s", "/bin/bash", "-lc", TERMINAL_WRAPPER])
+        .args(["5s", "/bin/bash", "-c", TERMINAL_WRAPPER])
         .env("SANDBOX_TERMINAL_LOG_LIMIT", "4096")
         .env("SANDBOX_TERMINAL_LOG_PATH", &transcript)
         .stdin(Stdio::piped())

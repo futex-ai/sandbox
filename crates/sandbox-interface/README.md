@@ -39,12 +39,19 @@ Both its ordinary and image snapshot probes recover in-progress and
 delivery-ambiguous outcomes with a bounded number of calls, including the
 ordinary probe's recover-only check after synchronous creation. Recovery waits
 one second after each in-progress result, for at most 60 waits, so asynchronous
-providers receive a real completion window without a burst of polling. Every
-source sandbox created by the image probes is cleaned after preparation,
-result validation, inventory, snapshot, or intentional-failure errors.
+providers receive a real completion window without a burst of polling. If an
+image-source create returns an uncertain error, the harness retains the exact
+request and performs the same paced recover-only polling instead of dispatching
+again. Every recovered source is then cleaned after preparation, result
+validation, inventory, snapshot, or intentional-failure errors.
 Retained-source diagnostics are optional, but are checked against the known
 source when present. Adapters should run the harness alongside
 provider-specific transport and failure tests.
+
+Trusted image safety phases must run without user-controlled login startup
+files. Durable terminal capture must likewise be installed before the one
+intended interactive login shell loads a user profile, so a profile cannot
+skip bookkeeping or place output outside the bounded transcript.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only
