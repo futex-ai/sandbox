@@ -281,14 +281,14 @@ user direction.
 - [x] Prepare a Juno follow-up note showing how its workspace dependencies can
       replace the two local paths with this repository's reviewed Git revision;
       do not modify Juno in this repository's PR.
-- [ ] Move this plan from Active to Completed in `plans/README.md` only after
+- [x] Move this plan from Active to Completed in `plans/README.md` only after
       all previous milestones pass.
 - [x] Review `git diff origin/main...` for missing copied files, generated
       artifacts, unintended behavior changes, secrets, stale Juno paths, and
       unrelated edits.
-- [ ] Run `git add -A`, commit the complete work with a Conventional Commit,
+- [x] Run `git add -A`, commit the complete work with a Conventional Commit,
       push the current branch, open a PR against `main`, and confirm CI passes.
-- [ ] After the push, run `cargo xtask review`; confirm its Git preflight and
+- [x] After the push, run `cargo xtask review`; confirm its Git preflight and
       worktree-integrity check pass, then report every finding with a number,
       severity, context, impact, lettered solution options, and recommendation,
       without changing the implementation.
