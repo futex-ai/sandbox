@@ -159,7 +159,7 @@ fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
         expected_size: b"replacement".len(),
         expected_digest: REPLACEMENT_DIGEST.to_owned(),
     });
-    let helper = command.args.get_mut(1).expect("embedded cleanup helper");
+    let helper = command.args.get_mut(3).expect("embedded cleanup helper");
     *helper = format!(
         "import os\noriginal_fsync = os.fsync\ndef observed_fsync(fd):\n open({:?}, 'wb').close()\n return original_fsync(fd)\nos.fsync = observed_fsync\n{}",
         marker.to_string_lossy(),

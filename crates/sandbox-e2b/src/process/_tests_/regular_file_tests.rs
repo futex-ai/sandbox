@@ -13,14 +13,14 @@ fn reader_uses_one_direct_descriptor_relative_operation() {
     let command = command(request("/workspace/repo", "src/lib.rs"));
 
     assert_eq!(command.command, "/usr/bin/python3");
-    assert_eq!(command.args[0], "-c");
-    assert_eq!(command.args[2], "/workspace/repo");
-    assert_eq!(command.args[3], "src/lib.rs");
-    assert!(command.args[1].contains("dir_fd=directory"));
-    assert!(command.args[1].contains("os.O_NOFOLLOW"));
-    assert!(command.args[1].contains("os.fstat(opened)"));
-    assert!(command.args[1].contains("os.pread(opened"));
-    assert!(!command.args[1].contains("realpath"));
+    assert_eq!(&command.args[..3], ["-I", "-S", "-c"]);
+    assert_eq!(command.args[4], "/workspace/repo");
+    assert_eq!(command.args[5], "src/lib.rs");
+    assert!(command.args[3].contains("dir_fd=directory"));
+    assert!(command.args[3].contains("os.O_NOFOLLOW"));
+    assert!(command.args[3].contains("os.fstat(opened)"));
+    assert!(command.args[3].contains("os.pread(opened"));
+    assert!(!command.args[3].contains("realpath"));
     assert_ne!(command.command, "/bin/sh");
 }
 

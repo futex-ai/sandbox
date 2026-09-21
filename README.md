@@ -31,7 +31,8 @@ sandbox and snapshot create request before dispatch, proves each returned
 identity through bounded one-second-paced recovery, and records resources
 before later work can fail. Cleanup always attempts every tracked terminal,
 snapshot, and sandbox; an operation error remains the reported error even if a
-cleanup step also fails.
+cleanup step also fails. Trusted adapter helpers isolate their interpreter
+startup from sandbox-owned modules and Python environment customization.
 
 ## Developer Setup
 

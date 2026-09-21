@@ -6,6 +6,8 @@ use sandbox_interface::{Error, FILE_TRANSFER_MAX_BYTES, Result};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use crate::trusted_python;
+
 use super::{
     connect::ConnectProcessTransport,
     mapping::map_file_result,
@@ -211,19 +213,20 @@ fn command(
     expected_digest: String,
 ) -> ProcessCommand {
     ProcessCommand {
-        command: "/usr/bin/python3".to_owned(),
-        args: vec![
-            "-c".to_owned(),
-            WRITER.to_owned(),
-            root,
-            path,
-            staging_path,
-            temporary_name,
-            state_path,
-            expected_size.to_string(),
-            expected_digest,
-            FILE_TRANSFER_MAX_BYTES.to_string(),
-        ],
+        command: trusted_python::EXECUTABLE.to_owned(),
+        args: trusted_python::command_args(
+            WRITER,
+            [
+                root,
+                path,
+                staging_path,
+                temporary_name,
+                state_path,
+                expected_size.to_string(),
+                expected_digest,
+                FILE_TRANSFER_MAX_BYTES.to_string(),
+            ],
+        ),
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: WRITE_TIMEOUT,

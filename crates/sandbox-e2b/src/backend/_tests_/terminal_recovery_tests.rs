@@ -135,6 +135,7 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 assert!(command.args[1].contains("pkill -KILL -f"));
                 assert!(command.args[1].contains("pgrep -f"));
                 assert!(command.args[1].contains("sandbox_drive_stop_attempt"));
+                assert!(command.args[1].contains("/usr/bin/python3 -I -S -c"));
                 assert!(
                     command
                         .args

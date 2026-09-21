@@ -9,6 +9,7 @@ mod error;
 mod process;
 mod response_body;
 mod runtime_conventions;
+mod trusted_python;
 
 pub use self::backend::configured::E2bSandboxBackend;
 pub use self::config::{E2bAdapterConfig, E2bProfile};

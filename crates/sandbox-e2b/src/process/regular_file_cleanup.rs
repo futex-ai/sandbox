@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use crate::trusted_python;
+
 use super::{
     connect::ConnectProcessTransport,
     types::{ProcessCommand, ProcessConnection, ProcessOutputCapture},
@@ -50,18 +52,19 @@ pub(super) async fn cleanup(
 
 fn command(request: CleanupRequest) -> ProcessCommand {
     ProcessCommand {
-        command: "/usr/bin/python3".to_owned(),
-        args: vec![
-            "-c".to_owned(),
-            CLEANER.to_owned(),
-            request.root,
-            request.path,
-            request.staging_path,
-            request.temporary_name,
-            request.state_path,
-            request.expected_size.to_string(),
-            request.expected_digest,
-        ],
+        command: trusted_python::EXECUTABLE.to_owned(),
+        args: trusted_python::command_args(
+            CLEANER,
+            [
+                request.root,
+                request.path,
+                request.staging_path,
+                request.temporary_name,
+                request.state_path,
+                request.expected_size.to_string(),
+                request.expected_digest,
+            ],
+        ),
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: CLEANUP_TIMEOUT,

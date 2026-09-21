@@ -2,7 +2,10 @@
 
 use std::time::Duration;
 
-use crate::process::{ProcessCommand, ProcessOutputCapture};
+use crate::{
+    process::{ProcessCommand, ProcessOutputCapture},
+    trusted_python,
+};
 
 pub(super) const TERMINAL_LOG_DIRECTORY: &str = "/tmp/sandbox/terminals";
 const SANDBOX_DRIVE_DIRECTORY: &str = "/tmp/sandbox-drive";
@@ -31,7 +34,7 @@ stop_sandbox_drive_helpers() {
     ! pgrep -f -- '[s]andbox-drive-' >/dev/null
 }
 stop_sandbox_drive_helpers
-exec /usr/bin/python3 -c "$1" "$2" "$3"
+exec /usr/bin/python3 -I -S -c "$1" "$2" "$3"
 "#;
 
 pub(super) fn create_directory_command() -> ProcessCommand {
@@ -69,11 +72,9 @@ fn python_command<'a>(
     script: &str,
     arguments: impl IntoIterator<Item = &'a str>,
 ) -> ProcessCommand {
-    let mut args = vec!["-c".to_owned(), script.to_owned()];
-    args.extend(arguments.into_iter().map(str::to_owned));
     ProcessCommand {
-        command: "/usr/bin/python3".to_owned(),
-        args,
+        command: trusted_python::EXECUTABLE.to_owned(),
+        args: trusted_python::command_args(script, arguments.into_iter().map(str::to_owned)),
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: HELPER_TIMEOUT,

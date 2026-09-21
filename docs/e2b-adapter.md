@@ -96,6 +96,12 @@ overflows, or fails decoding is killed with a bounded cleanup call once its PID
 has been observed; persistent terminal connections are left running
 intentionally.
 
+The adapter starts every trusted Python file and terminal helper with isolated
+module lookup and without Python site initialization. Sandbox files in the
+working directory, `PYTHONPATH`, user-site packages, and startup customization
+therefore cannot run before descriptor checks, digest verification, cleanup,
+or transcript setup.
+
 Before either read or write acquires sandbox access, the adapter rejects a root
 that is not an absolute normalized path and a target that is not a normalized
 relative path. Both fields are byte-bounded and reject empty components, dot

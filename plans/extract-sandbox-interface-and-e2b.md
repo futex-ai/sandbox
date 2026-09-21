@@ -584,3 +584,26 @@ provider access, and backend inventory preserves each sandbox consumer class.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 18: Trusted Python Helper Isolation
+
+Resolve the hostile-module import found while reviewing the storage and
+cleanup fixes. At the end of this milestone, sandbox-owned working directories
+and Python environment settings cannot run code before any trusted adapter
+helper.
+
+- [x] Record the review finding and add a regression that places hostile
+      standard-library module names in the helper working directory and
+      `PYTHONPATH`.
+- [x] Run every regular-file, terminal-storage, restored-cleanup, and terminal
+      transcript Python helper in isolated mode without site initialization.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the trusted Python startup guarantee.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fix, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

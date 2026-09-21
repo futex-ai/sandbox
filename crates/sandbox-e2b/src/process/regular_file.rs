@@ -4,6 +4,8 @@ use std::{array::TryFromSliceError, mem::size_of};
 
 use sandbox_interface::{Error, FILE_TRANSFER_MAX_BYTES, ResourceKind, Result};
 
+use crate::trusted_python;
+
 use super::{
     connect::ConnectProcessTransport,
     types::{
@@ -127,16 +129,17 @@ pub(super) async fn read(
 
 fn command(request: ProcessRegularFileRequest) -> ProcessCommand {
     ProcessCommand {
-        command: "/usr/bin/python3".to_owned(),
-        args: vec![
-            "-c".to_owned(),
-            READER.to_owned(),
-            request.root,
-            request.path,
-            request.offset.to_string(),
-            request.max_bytes.to_string(),
-            FILE_TRANSFER_MAX_BYTES.to_string(),
-        ],
+        command: trusted_python::EXECUTABLE.to_owned(),
+        args: trusted_python::command_args(
+            READER,
+            [
+                request.root,
+                request.path,
+                request.offset.to_string(),
+                request.max_bytes.to_string(),
+                FILE_TRANSFER_MAX_BYTES.to_string(),
+            ],
+        ),
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit {
             max_bytes: request.max_bytes.saturating_add(SIZE_HEADER_BYTES),

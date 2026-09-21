@@ -49,8 +49,11 @@ requested bytes before replacement. An unconfirmed revocation returns a
 fencing error instead of pretending the write safely failed.
 Malformed or oversized trusted roots and relative paths fail before a file
 operation acquires provider access. Oversized writes fail before sandbox
-connection. Terminal transcript writers enforce arbitrary byte limits exactly
-rather than rounding to filesystem blocks.
+connection. Every trusted Python helper uses isolated module lookup with site
+initialization disabled, so sandbox working-directory modules, `PYTHONPATH`,
+and user startup customization cannot run before file checks, cleanup, or
+terminal transcript setup. Terminal transcript writers enforce arbitrary byte
+limits exactly rather than rounding to filesystem blocks.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Direct process requests are validated before the

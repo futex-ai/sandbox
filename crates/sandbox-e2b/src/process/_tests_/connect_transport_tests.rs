@@ -46,10 +46,12 @@ fn pty_start_caps_only_the_private_provider_log() {
     .expect("PTY JSON");
 
     assert_eq!(body["process"]["cmd"], "/usr/bin/python3");
-    assert_eq!(body["process"]["args"][0], "-c");
-    assert_eq!(body["process"]["args"][2], "/tmp/sandbox.log");
-    assert_eq!(body["process"]["args"][3], (2 * 1024 * 1024).to_string());
-    let wrapper = body["process"]["args"][1]
+    assert_eq!(body["process"]["args"][0], "-I");
+    assert_eq!(body["process"]["args"][1], "-S");
+    assert_eq!(body["process"]["args"][2], "-c");
+    assert_eq!(body["process"]["args"][4], "/tmp/sandbox.log");
+    assert_eq!(body["process"]["args"][5], (2 * 1024 * 1024).to_string());
+    let wrapper = body["process"]["args"][3]
         .as_str()
         .expect("wrapper command");
     assert!(wrapper.contains("os.O_NOFOLLOW"));

@@ -5,7 +5,10 @@ use std::collections::BTreeMap;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    trusted_python,
+};
 
 use super::{
     selector::ProcessSelector,
@@ -22,13 +25,11 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
     ]);
     StartRequestWire {
         process: ProcessConfigWire {
-            cmd: "/usr/bin/python3".to_owned(),
-            args: vec![
-                "-c".to_owned(),
-                TERMINAL_WRAPPER.to_owned(),
-                request.log_path,
-                request.log_limit.to_string(),
-            ],
+            cmd: trusted_python::EXECUTABLE.to_owned(),
+            args: trusted_python::command_args(
+                TERMINAL_WRAPPER,
+                [request.log_path, request.log_limit.to_string()],
+            ),
             envs,
             cwd: request.cwd,
         },

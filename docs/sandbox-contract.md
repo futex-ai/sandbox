@@ -95,6 +95,9 @@ before acquiring provider sandbox access. In particular, an oversized
 replacement write must fail before connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
+Trusted interpreter helpers must ignore caller-controlled module search paths,
+startup customization, and working-directory modules. User files and inherited
+language environment settings must not run code before the helper's own logic.
 Each provider process-data event must contain exactly one of PTY, stdout, or
 stderr output; an event with no channel or multiple channels is malformed.
 Inherited credential or drive helpers must be stopped with bounded escalation,

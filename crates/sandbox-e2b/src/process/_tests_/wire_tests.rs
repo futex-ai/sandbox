@@ -102,7 +102,7 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
 
 fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
     Command::new("/usr/bin/timeout")
-        .args(["5s", "/usr/bin/python3", "-c", TERMINAL_WRAPPER])
+        .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", TERMINAL_WRAPPER])
         .arg(path)
         .arg(limit.to_string())
         .stdin(Stdio::piped())
