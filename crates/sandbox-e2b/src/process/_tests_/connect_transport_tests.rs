@@ -45,20 +45,18 @@ fn pty_start_caps_only_the_private_provider_log() {
     )
     .expect("PTY JSON");
 
-    assert_eq!(body["process"]["cmd"], "/bin/bash");
+    assert_eq!(body["process"]["cmd"], "/usr/bin/python3");
     assert_eq!(body["process"]["args"][0], "-c");
-    assert_eq!(
-        body["process"]["envs"]["SANDBOX_TERMINAL_LOG_LIMIT"],
-        (2 * 1024 * 1024).to_string()
-    );
+    assert_eq!(body["process"]["args"][2], "/tmp/sandbox.log");
+    assert_eq!(body["process"]["args"][3], (2 * 1024 * 1024).to_string());
     let wrapper = body["process"]["args"][1]
         .as_str()
         .expect("wrapper command");
-    assert!(wrapper.contains("/usr/bin/head -c \"$SANDBOX_TERMINAL_LOG_LIMIT\""));
-    assert!(wrapper.contains("/usr/bin/mkfifo -m 600"));
-    assert!(wrapper.contains("> \"$SANDBOX_TERMINAL_LOG_PATH\""));
+    assert!(wrapper.contains("os.O_NOFOLLOW"));
+    assert!(wrapper.contains("os.dup2"));
+    assert!(wrapper.contains("resource.RLIMIT_FSIZE"));
+    assert!(wrapper.contains("/proc/self/fd/2"));
     assert!(wrapper.contains("ulimit -S -f unlimited"));
-    assert!(!wrapper.contains("SANDBOX_TERMINAL_LOG_BLOCKS"));
     assert!(!wrapper.contains("--log-size"));
     assert!(!wrapper.contains("/dev/null"));
 }
@@ -130,32 +128,6 @@ async fn connect_decodes_output_exit_and_timeout() {
     assert!(output.exited);
     assert!(timeout.bytes.is_empty());
     assert!(!timeout.exited);
-}
-
-#[tokio::test]
-async fn provider_log_read_does_not_inherit_the_command_timeout() {
-    let transport = process_transport(Unimock::new(
-        stream_call
-            .next_call(matching!(_, "Start", _))
-            .answers(&|_, _, _, _| Ok(Box::pin(futures_util::stream::pending()))),
-    ));
-
-    let result = tokio::time::timeout(
-        Duration::from_millis(50),
-        transport.read_file(
-            connection(),
-            "/tmp/sandbox.log".to_owned(),
-            0,
-            32,
-            Duration::from_millis(10),
-        ),
-    )
-    .await;
-
-    assert!(
-        result.is_ok(),
-        "provider-log helper exceeded the terminal-read transport allowance"
-    );
 }
 
 #[tokio::test]

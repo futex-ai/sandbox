@@ -12,8 +12,10 @@ parsed outside an adapter. Every operation carries enough owner and resource
 identity for the trusted service to authorize the graph before provider work.
 
 `SandboxConsumer` separates ordinary runtime sandboxes from browser-session
-sandboxes. Backends preserve that class in creation and inventory. Operations
-that are not valid for a class fail with a typed error before dispatch.
+sandboxes. Backend creation requests preserve that class in provider metadata.
+Managed inventory returns it when recognized and uses `None` for older
+resources that lack the metadata; adapters must not guess. Operations that are
+not valid for a class fail with a typed error before dispatch.
 
 ## Backend Requirements
 
@@ -103,6 +105,8 @@ skip a safety command or forge its result.
 Provider terminal storage creation and restored cleanup must traverse absolute
 paths through non-following directory descriptors. An intermediate symlink
 must fail closed without creating or removing anything through its target.
+File roots and relative paths must pass lexical shape and byte-length checks
+before an adapter acquires provider access.
 
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
@@ -110,9 +114,11 @@ sufficient identity fence because a numeric process ID can be reused between
 the two calls. The same rule applies when killing terminals inherited by a
 restored sandbox. Provider-side transcripts enforce the requested byte count
 exactly, including limits that are smaller than or not aligned to 1 KiB. The
-provider must establish transcript capture before starting the one intended
+provider must create and retain the transcript through non-following directory
+descriptors, and reads must derive and verify the same terminal-owned path
+before provider access. Transcript capture starts before the one intended
 interactive login shell, so login-profile output and exits remain captured and
-cannot bypass terminal setup.
+cannot bypass terminal setup or redirect storage by replacing a path.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact
@@ -131,18 +137,19 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-Its ordinary and image snapshot probes accept immediate completion or recover
-in-progress and delivery-ambiguous outcomes with a bounded number of calls.
-This includes the ordinary probe's recover-only verification after an
-immediately completed create, because recovery inventory may still be
-eventually consistent.
-After every in-progress recovery response, the harness waits one second before
-polling again, with no more than 60 waits. If image-source creation returns an
-error after dispatch begins, the harness keeps the exact request and performs
-only the same bounded, paced recovery calls. It never replays creation. The
-harness cleans every immediate or recovered image source, including after
-preparation, prepared-result validation, inventory, snapshot, and
-intentional-failure errors. Preparation errors may omit a retained-source
-diagnostic; when one is present, the harness requires it to identify that
-source. Every provider adapter should run the harness in addition to its own
-edge-case and transport tests.
+It retains the exact request for every sandbox and snapshot create before
+dispatch. After every create result, including synchronous success, it proves
+the correlated provider identity through recover-only polling; it never
+redispatches creation. A pending recovery waits one second before the next
+poll, with no more than 60 waits.
+
+Each returned terminal, snapshot, or sandbox is recorded before later work can
+fail. Final cleanup attempts every tracked resource in dependency order and
+continues after individual cleanup errors. Requests still awaiting an identity
+receive one final recovery attempt so a newly visible resource can be tracked
+and removed. If the conformance operation already failed, that primary error
+is preserved; cleanup failures are returned only when the operation itself
+succeeded. Preparation errors may omit a retained-source diagnostic; when one
+is present, the harness requires it to identify the known source. Every
+provider adapter should run the harness in addition to its own edge-case and
+transport tests.

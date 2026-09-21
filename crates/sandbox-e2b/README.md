@@ -32,20 +32,25 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata to recover ambiguous delivery. Snapshot recovery
-uses bounded, cursor-safe inventory traversal. Terminal identities combine an
-E2B PID with the consumer terminal ID; reads verify both values, while input and
-close operations use envd's atomic tag selector so PID reuse cannot retarget
-them. File reads use one descriptor-relative, non-following helper; writes stage
+Creates use exact metadata, including the typed sandbox consumer class, to
+recover ambiguous delivery. Managed inventory maps recognized consumer
+metadata and leaves it absent for older resources. Create and recover validate
+the same profile and network-policy rules before any control request. Snapshot
+recovery uses bounded, cursor-safe inventory traversal. Terminal identities
+combine an E2B PID with the consumer terminal ID; reads verify both values,
+while input and close operations use envd's atomic tag selector so PID reuse
+cannot retarget them. File reads use one descriptor-relative, non-following
+helper; writes stage
 their payload, bind it to the caller-computed SHA-256 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
 without relying on a timing delay. Both the writer and cleanup path verify the
 requested bytes before replacement. An unconfirmed revocation returns a
 fencing error instead of pretending the write safely failed.
-Oversized writes fail before sandbox connection. Terminal transcript writers
-enforce arbitrary byte limits exactly rather than rounding to filesystem
-blocks.
+Malformed or oversized trusted roots and relative paths fail before a file
+operation acquires provider access. Oversized writes fail before sandbox
+connection. Terminal transcript writers enforce arbitrary byte limits exactly
+rather than rounding to filesystem blocks.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Direct process requests are validated before the
@@ -81,8 +86,12 @@ descriptors with non-following opens; an intermediate symlink makes the
 operation fail without touching its target. Image setup, verification, scrub,
 and size measurement use non-login shells, so a staged or setup-created profile
 cannot skip a later safety phase or forge its result. The terminal transcript
-wrapper also starts through a non-login outer shell; only the captured
-interactive shell loads the user's login profile.
+wrapper opens the expected log through non-following directory descriptors,
+passes only that open descriptor to the recorder, and starts before the
+captured interactive shell loads the user's login profile. Reads require the
+exact terminal-derived log name and use the same descriptor-relative
+regular-file helper, so replacing a path cannot redirect captured or returned
+bytes.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed

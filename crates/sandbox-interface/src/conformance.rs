@@ -8,28 +8,33 @@ use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInputRequest,
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
     BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
-    BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend, SandboxId,
-    SandboxNetworkPolicy, SnapshotId, TerminalId,
+    BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend,
+    SandboxConsumer, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let outcome = exercise_backend_with_resources(backend, &mut resources, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
+async fn exercise_backend_with_resources(
+    backend: &dyn SandboxBackend,
+    resources: &mut ConformanceResources<'_>,
+    profile: &str,
+) -> Result<()> {
     backend
         .list_managed_sandboxes("backend-conformance".to_owned())
         .await?;
     let workspace_id = Uuid::now_v7();
     let owner = ResourceOwner::agent(workspace_id, Uuid::now_v7());
-    let source_request = sandbox_request(owner, profile, None);
-    let source = backend.create_sandbox(source_request.clone()).await?;
-    let recovered = backend
-        .recover_sandbox_create(source_request)
-        .await?
-        .ok_or_else(|| Error::internal_message("backend did not recover a created sandbox"))?;
-    if recovered.provider_ref != source.provider_ref {
-        return Err(Error::internal_message(
-            "backend sandbox recovery changed provider identity",
-        ));
-    }
+    let source = resources
+        .create_sandbox(sandbox_request(owner, profile, None))
+        .await?;
     backend.inspect_sandbox(source.provider_ref.clone()).await?;
     let paused = backend.pause_sandbox(source.provider_ref.clone()).await?;
     backend.resume_sandbox(paused.provider_ref).await?;
@@ -56,16 +61,7 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
         correlation_name: correlation,
         before,
     };
-    let snapshot =
-        crate::conformance_image::create_or_recover_snapshot(backend, snapshot_request.clone())
-            .await?;
-    let recovered_snapshot =
-        crate::conformance_image::recover_snapshot(backend, snapshot_request.clone()).await?;
-    if recovered_snapshot.provider_ref != snapshot.provider_ref {
-        return Err(Error::internal_message(
-            "backend snapshot recovery changed provider identity",
-        ));
-    }
+    let snapshot = resources.create_snapshot(snapshot_request.clone()).await?;
     backend
         .inspect_snapshot(BackendInspectSnapshotRequest {
             provider_ref: snapshot.provider_ref.clone(),
@@ -117,7 +113,7 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
         ));
     }
 
-    let first = backend
+    let first = resources
         .create_sandbox(sandbox_request(
             owner,
             profile,
@@ -127,7 +123,7 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
     backend
         .clean_restored_terminals(first.provider_ref.clone())
         .await?;
-    let second = backend
+    let second = resources
         .create_sandbox(sandbox_request(
             owner,
             profile,
@@ -151,6 +147,7 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
         provider_log_limit: 2 * 1024 * 1024,
     };
     let terminal = backend.create_terminal(terminal_request.clone()).await?;
+    resources.track_terminal(&source.provider_ref, &terminal.provider_ref);
     let recovered_terminal = backend
         .recover_terminal_create(terminal_request)
         .await?
@@ -181,15 +178,8 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
             wait: Duration::ZERO,
         })
         .await?;
-    backend
-        .close_terminal(source.provider_ref.clone(), terminal.provider_ref)
-        .await?;
 
-    crate::conformance_image::exercise(backend, profile, workspace_id).await?;
-    backend.delete_snapshot(snapshot.provider_ref).await?;
-    backend.destroy_sandbox(first.provider_ref).await?;
-    backend.destroy_sandbox(second.provider_ref).await?;
-    backend.destroy_sandbox(source.provider_ref).await
+    crate::conformance_image::exercise(backend, profile, workspace_id).await
 }
 
 fn sandbox_request(
@@ -201,6 +191,7 @@ fn sandbox_request(
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
+        consumer: SandboxConsumer::Runtime,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

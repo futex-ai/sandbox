@@ -200,17 +200,6 @@ impl ProcessTransport for ConnectProcessTransport {
         }
     }
 
-    async fn read_file(
-        &self,
-        connection: ProcessConnection,
-        path: String,
-        offset: u64,
-        max_bytes: usize,
-        timeout: Duration,
-    ) -> DomainResult<ProcessFileChunk> {
-        super::file::read(self, connection, path, offset, max_bytes, timeout).await
-    }
-
     async fn read_regular_file(
         &self,
         connection: ProcessConnection,

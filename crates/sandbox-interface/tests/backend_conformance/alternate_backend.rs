@@ -18,7 +18,10 @@ use sandbox_interface::{
     ScreenViewportSize, SnapshotState, TerminalState,
 };
 
-use super::{alternate_image_realization, alternate_process};
+use super::{
+    alternate_backend_faults::AlternateBackendFaults, alternate_file, alternate_image_realization,
+    alternate_process,
+};
 
 #[derive(Default)]
 pub(super) struct AlternateBackend {
@@ -27,6 +30,7 @@ pub(super) struct AlternateBackend {
     sandboxes: Mutex<HashMap<OperationId, ProviderRef>>,
     snapshots: Mutex<Vec<ProviderRef>>,
     files: Mutex<HashMap<String, Vec<u8>>>,
+    pub(super) faults: AlternateBackendFaults,
 }
 
 #[async_trait]
@@ -52,6 +56,11 @@ impl SandboxBackend for AlternateBackend {
             .lock()
             .expect("sandbox lock")
             .insert(request.operation_id, provider_ref.clone());
+        if self.faults.record_sandbox_create(&provider_ref) {
+            return Err(sandbox_interface::Error::BackendUnavailable {
+                backend_id: "alternate".to_owned(),
+            });
+        }
         Ok(BackendSandbox {
             provider_ref,
             state: SandboxState::Ready,
@@ -62,6 +71,9 @@ impl SandboxBackend for AlternateBackend {
         &self,
         request: BackendCreateSandboxRequest,
     ) -> Result<Option<BackendSandbox>> {
+        if self.faults.miss_recovery() {
+            return Ok(None);
+        }
         Ok(self
             .sandboxes
             .lock()
@@ -119,7 +131,8 @@ impl SandboxBackend for AlternateBackend {
         })
     }
 
-    async fn destroy_sandbox(&self, _provider_ref: ProviderRef) -> Result<()> {
+    async fn destroy_sandbox(&self, provider_ref: ProviderRef) -> Result<()> {
+        self.faults.record_sandbox_destroy(&provider_ref);
         Ok(())
     }
 
@@ -138,10 +151,12 @@ impl SandboxBackend for AlternateBackend {
         _request: BackendCreateSnapshotRequest,
     ) -> Result<BackendSnapshotCreateOutcome> {
         let index = self.next_snapshot.fetch_add(1, Ordering::Relaxed);
+        let provider_ref = ProviderRef::new(format!("alternate-snapshot-{index}"));
+        self.faults.record_snapshot_create(&provider_ref);
         self.snapshots
             .lock()
             .expect("snapshot lock")
-            .push(ProviderRef::new(format!("alternate-snapshot-{index}")));
+            .push(provider_ref);
         Ok(BackendSnapshotCreateOutcome::InProgress)
     }
 
@@ -176,7 +191,12 @@ impl SandboxBackend for AlternateBackend {
         })
     }
 
-    async fn delete_snapshot(&self, _provider_ref: ProviderRef) -> Result<()> {
+    async fn delete_snapshot(&self, provider_ref: ProviderRef) -> Result<()> {
+        if self.faults.record_snapshot_delete(&provider_ref) {
+            return Err(sandbox_interface::Error::BackendUnavailable {
+                backend_id: "alternate".to_owned(),
+            });
+        }
         Ok(())
     }
 
@@ -189,23 +209,7 @@ impl SandboxBackend for AlternateBackend {
     }
 
     async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent> {
-        let bytes = self
-            .files
-            .lock()
-            .expect("file lock")
-            .get(&request.path)
-            .cloned()
-            .unwrap_or_default();
-        let total_size = u64::try_from(bytes.len()).expect("file size");
-        let offset = usize::try_from(request.offset).expect("file offset");
-        let bytes = bytes
-            .get(offset..)
-            .unwrap_or_default()
-            .iter()
-            .copied()
-            .take(request.max_bytes)
-            .collect();
-        Ok(BackendFileContent { bytes, total_size })
+        alternate_file::read(&self.files, request)
     }
 
     async fn read_only_exec(
@@ -219,22 +223,20 @@ impl SandboxBackend for AlternateBackend {
     }
 
     async fn write_file(&self, request: BackendWriteFileRequest) -> Result<()> {
-        self.files
-            .lock()
-            .expect("file lock")
-            .insert(request.path, request.bytes);
-        Ok(())
+        alternate_file::write(&self.files, request)
     }
 
     async fn create_terminal(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<BackendTerminal> {
-        Ok(BackendTerminal {
+        let terminal = BackendTerminal {
             provider_ref: ProviderRef::new(request.terminal_id.to_string()),
             provider_log_path: "/tmp/alternate.log".to_owned(),
             state: TerminalState::Ready,
-        })
+        };
+        self.faults.record_terminal_create(&terminal.provider_ref);
+        Ok(terminal)
     }
 
     async fn recover_terminal_create(
@@ -278,8 +280,13 @@ impl SandboxBackend for AlternateBackend {
     async fn close_terminal(
         &self,
         _sandbox_provider_ref: ProviderRef,
-        _terminal_provider_ref: ProviderRef,
+        terminal_provider_ref: ProviderRef,
     ) -> Result<()> {
+        if self.faults.record_terminal_close(&terminal_provider_ref) {
+            return Err(sandbox_interface::Error::BackendUnavailable {
+                backend_id: "alternate".to_owned(),
+            });
+        }
         Ok(())
     }
 }

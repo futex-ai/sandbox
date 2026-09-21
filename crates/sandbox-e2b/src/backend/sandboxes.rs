@@ -4,10 +4,11 @@ use std::collections::BTreeMap;
 
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendManagedSandbox, BackendSandbox, Error, ProviderRef,
-    ResourceKind, Result, SandboxNetworkPolicy,
+    ResourceKind, Result, SandboxConsumer, SandboxNetworkPolicy,
 };
 
 use crate::{
+    config::E2bProfile,
     control::{ControlCreateSandbox, ControlSandbox, SandboxMetadata},
     error::Error as AdapterError,
     runtime_conventions::E2bRuntimeConventions,
@@ -38,6 +39,10 @@ fn managed_sandbox(
         state: mapping::sandbox_state(sandbox.state),
         sandbox_id: metadata_id(&sandbox.metadata, &conventions.metadata_key("sandbox_id")),
         operation_id: metadata_id(&sandbox.metadata, &conventions.metadata_key("operation_id")),
+        consumer: sandbox
+            .metadata
+            .get(&conventions.metadata_key("consumer"))
+            .and_then(|value| SandboxConsumer::from_metadata(value)),
     }
 }
 
@@ -52,10 +57,7 @@ pub(super) async fn create(
     backend: &E2bSandboxBackend,
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
-    validate_network(request.network)?;
-    let Some(profile) = backend.config.profile(&request.profile) else {
-        return Err(Error::UnknownProfile);
-    };
+    let profile = validate_request(backend, &request)?;
     let metadata = metadata(backend, &request);
     let existing = control_result(
         backend,
@@ -100,7 +102,7 @@ pub(super) async fn recover(
     backend: &E2bSandboxBackend,
     request: BackendCreateSandboxRequest,
 ) -> Result<Option<BackendSandbox>> {
-    validate_network(request.network)?;
+    validate_request(backend, &request)?;
     let existing = control_result(
         backend,
         backend
@@ -109,6 +111,17 @@ pub(super) async fn recover(
             .await,
     )?;
     Ok(exactly_one(existing)?.map(map_sandbox))
+}
+
+fn validate_request<'a>(
+    backend: &'a E2bSandboxBackend,
+    request: &BackendCreateSandboxRequest,
+) -> Result<&'a E2bProfile> {
+    validate_network(request.network)?;
+    backend
+        .config
+        .profile(&request.profile)
+        .ok_or(Error::UnknownProfile)
 }
 
 /// `open` applies no additional per-session restriction; the deployment-owned
@@ -192,6 +205,10 @@ fn metadata(backend: &E2bSandboxBackend, request: &BackendCreateSandboxRequest) 
         (
             conventions.metadata_key("workspace_id"),
             request.owner.workspace_id.to_string(),
+        ),
+        (
+            conventions.metadata_key("consumer"),
+            request.consumer.as_str().to_owned(),
         ),
     ]);
     match request.owner.agent_id {

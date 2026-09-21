@@ -550,3 +550,37 @@ initialized provider resource.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 17: Storage, Cleanup, And Identity Remediation
+
+Resolve every finding from the ninth post-push review. At the end of this
+milestone, terminal transcripts remain bound to verified storage, conformance
+always recovers and cleans provider resources, invalid requests fail before
+provider access, and backend inventory preserves each sandbox consumer class.
+
+- [x] Add failing regressions first for descriptor-bound terminal transcript
+      access, every conformance create and cleanup path, recovery-profile
+      validation, transfer-path preflight, and consumer-class metadata.
+- [x] Bind terminal transcript creation, writing, and reading to non-following
+      descriptor-relative helpers so sandbox-controlled path replacement cannot
+      redirect transcript bytes.
+- [x] Route every conformance sandbox create through shared bounded,
+      one-second-paced recovery and track resources before later work can fail.
+- [x] Run unconditional best-effort conformance cleanup for every tracked
+      terminal, snapshot, and sandbox while preserving the primary failure.
+- [x] Share sandbox-create validation with recovery so unknown profiles and
+      unsupported network policies fail before provider dispatch.
+- [x] Validate trusted roots and relative transfer paths before reads or writes
+      acquire provider access.
+- [x] Carry `SandboxConsumer` through backend creation, provider metadata, and
+      managed inventory, including compatibility behavior for older resources.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the completed storage, cleanup, validation, and identity guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

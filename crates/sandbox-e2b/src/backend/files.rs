@@ -1,8 +1,10 @@
 //! E2B envd regular-file transfer operations.
 
+use std::time::Duration;
+
 use sandbox_interface::{
     BackendFileContent, BackendReadFileRequest, BackendWriteFileRequest, Error,
-    FILE_TRANSFER_MAX_BYTES, Result,
+    FILE_TRANSFER_MAX_BYTES, FILE_TRANSFER_PATH_MAX_BYTES, Result,
 };
 
 use crate::process::{
@@ -15,6 +17,7 @@ pub(super) async fn read(
     backend: &E2bSandboxBackend,
     request: BackendReadFileRequest,
 ) -> Result<BackendFileContent> {
+    validate_transfer_paths(&request.root, &request.path)?;
     let connection = mapping::read_only_connection(backend, &request.sandbox_provider_ref).await?;
     let content = backend
         .processes
@@ -25,6 +28,7 @@ pub(super) async fn read(
                 path: request.path,
                 offset: request.offset,
                 max_bytes: request.max_bytes,
+                timeout: Duration::from_secs(300),
             },
         )
         .await?;
@@ -47,6 +51,7 @@ pub(super) async fn write(
     request: BackendWriteFileRequest,
 ) -> Result<()> {
     validate_write_size(request.bytes.len())?;
+    validate_transfer_paths(&request.root, &request.path)?;
     let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
     write_to_connection(
         backend,
@@ -66,6 +71,7 @@ pub(super) async fn write_to_connection(
     bytes: Vec<u8>,
 ) -> Result<()> {
     validate_write_size(bytes.len())?;
+    validate_transfer_paths(&root, &path)?;
     backend
         .processes
         .write_regular_file(
@@ -73,6 +79,40 @@ pub(super) async fn write_to_connection(
             ProcessRegularFileWriteRequest { root, path, bytes },
         )
         .await
+}
+
+fn validate_transfer_paths(root: &str, path: &str) -> Result<()> {
+    validate_transfer_path_length(root, "root")?;
+    validate_transfer_path_length(path, "path")?;
+    if root != "/" && !valid_path_parts(root.strip_prefix('/'), false) {
+        return Err(Error::InvalidFilePath { field: "root" });
+    }
+    if !valid_path_parts(Some(path), true) {
+        return Err(Error::InvalidFilePath { field: "path" });
+    }
+    Ok(())
+}
+
+fn validate_transfer_path_length(value: &str, field: &'static str) -> Result<()> {
+    if value.len() > FILE_TRANSFER_PATH_MAX_BYTES {
+        return Err(Error::TextTooLarge {
+            field,
+            limit: FILE_TRANSFER_PATH_MAX_BYTES,
+        });
+    }
+    Ok(())
+}
+
+fn valid_path_parts(value: Option<&str>, relative: bool) -> bool {
+    let Some(value) = value else {
+        return false;
+    };
+    !value.is_empty()
+        && (!relative || !value.starts_with('/'))
+        && !value.contains('\0')
+        && value
+            .split('/')
+            .all(|part| !matches!(part, "" | "." | ".."))
 }
 
 pub(super) fn validate_write_size(byte_count: usize) -> Result<()> {

@@ -39,8 +39,8 @@ async fn terminal_create_and_durable_read_map_process_state() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 5, 16, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
                 bytes: b"output".to_vec(),
                 total_size: 64,
@@ -101,8 +101,8 @@ async fn terminal_read_waits_for_delayed_durable_output() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
                 bytes: Vec::new(),
                 total_size: 0,
@@ -110,8 +110,8 @@ async fn terminal_read_waits_for_delayed_durable_output() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
                 bytes: b"delayed".to_vec(),
                 total_size: 7,
@@ -124,7 +124,7 @@ async fn terminal_read_waits_for_delayed_durable_output() {
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: "/tmp/sandbox/terminals/test.log".to_owned(),
+            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,
@@ -149,8 +149,8 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
                 bytes: Vec::new(),
                 total_size: 7,
@@ -158,8 +158,8 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
                 bytes: b"appended".to_vec(),
                 total_size: 8,
@@ -172,7 +172,7 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: "/tmp/sandbox/terminals/test.log".to_owned(),
+            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,
@@ -203,8 +203,8 @@ async fn terminal_read_treats_a_missing_log_as_empty_while_the_process_is_alive(
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
-        ProcessTransportMock::read_file
-            .next_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
             .returns(Err(Error::NotFound {
                 resource: ResourceKind::Terminal,
             })),
@@ -216,7 +216,7 @@ async fn terminal_read_treats_a_missing_log_as_empty_while_the_process_is_alive(
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: "/tmp/sandbox/terminals/test.log".to_owned(),
+            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,

@@ -12,34 +12,23 @@ use super::{
     types::{ProcessCommand, ProcessPtyRequest},
 };
 
-const TERMINAL_WRAPPER: &str = concat!(
-    "set -eu; ",
-    "transcript_pipe=\"$SANDBOX_TERMINAL_LOG_PATH.pipe\"; ",
-    "/usr/bin/rm -f -- \"$transcript_pipe\"; ",
-    "/usr/bin/mkfifo -m 600 -- \"$transcript_pipe\"; ",
-    "( (set +e; /usr/bin/head -c \"$SANDBOX_TERMINAL_LOG_LIMIT\" ",
-    "< \"$transcript_pipe\" > \"$SANDBOX_TERMINAL_LOG_PATH\"; ",
-    "head_status=$?; /usr/bin/rm -f -- \"$transcript_pipe\"; ",
-    "exit \"$head_status\") & ); ",
-    "exec /usr/bin/script -q -f --log-out \"$transcript_pipe\" ",
-    "-c '/bin/bash -c \"ulimit -S -f unlimited; exec /bin/bash -il\"'"
-);
+const TERMINAL_WRAPPER: &str = include_str!("helpers/terminal_transcript.py");
 
 pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
     let envs = BTreeMap::from([
-        (
-            "SANDBOX_TERMINAL_LOG_LIMIT".to_owned(),
-            request.log_limit.to_string(),
-        ),
-        ("SANDBOX_TERMINAL_LOG_PATH".to_owned(), request.log_path),
         ("LANG".to_owned(), "C.UTF-8".to_owned()),
         ("LC_ALL".to_owned(), "C.UTF-8".to_owned()),
         ("TERM".to_owned(), "xterm-256color".to_owned()),
     ]);
     StartRequestWire {
         process: ProcessConfigWire {
-            cmd: "/bin/bash".to_owned(),
-            args: vec!["-c".to_owned(), TERMINAL_WRAPPER.to_owned()],
+            cmd: "/usr/bin/python3".to_owned(),
+            args: vec![
+                "-c".to_owned(),
+                TERMINAL_WRAPPER.to_owned(),
+                request.log_path,
+                request.log_limit.to_string(),
+            ],
             envs,
             cwd: request.cwd,
         },

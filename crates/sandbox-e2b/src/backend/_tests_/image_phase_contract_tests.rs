@@ -108,6 +108,7 @@ fn source_request() -> BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(Uuid::now_v7()),
+        consumer: sandbox_interface::SandboxConsumer::Runtime,
         deployment_id: "deployment".to_owned(),
         profile: "general".to_owned(),
         network: SandboxNetworkPolicy::Open,

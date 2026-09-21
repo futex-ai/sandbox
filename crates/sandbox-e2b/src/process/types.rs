@@ -205,6 +205,8 @@ pub struct ProcessRegularFileRequest {
     pub offset: u64,
     /// Maximum number of file bytes returned.
     pub max_bytes: usize,
+    /// Maximum provider-side helper duration.
+    pub timeout: Duration,
 }
 
 /// Swappable envd process transport used by the E2B adapter.
@@ -248,15 +250,6 @@ pub trait ProcessTransport: Send + Sync {
     ) -> Result<()>;
     /// Idempotently kills one provider process.
     async fn kill(&self, connection: ProcessConnection, selector: ProcessSelector) -> Result<()>;
-    /// Reads a bounded region of one private provider log within `timeout`.
-    async fn read_file(
-        &self,
-        connection: ProcessConnection,
-        path: String,
-        offset: u64,
-        max_bytes: usize,
-        timeout: Duration,
-    ) -> Result<ProcessFileChunk>;
     /// Opens and reads one regular file through the same non-following file
     /// descriptor, with every path component resolved below `root`.
     async fn read_regular_file(

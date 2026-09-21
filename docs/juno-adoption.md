@@ -11,7 +11,11 @@ sandbox-e2b = { git = "https://github.com/futex-ai/sandbox.git", rev = "<reviewe
 ```
 
 Then update Rust imports to `sandbox_interface` and `sandbox_e2b`, remove the
-old local crate members, and run Juno's full workspace checks.
+old local crate members, and run Juno's full workspace checks. Every
+`BackendCreateSandboxRequest` must set its typed `SandboxConsumer` value. Code
+that reads `BackendManagedSandbox` must treat a missing consumer as an older
+provider resource with unknown class rather than assuming `Runtime`; newly
+created resources preserve the value in provider metadata.
 
 Replace the old monolithic backend image call with durable orchestration. Store
 a source-create intent before calling `create_sandbox` once. If that call is

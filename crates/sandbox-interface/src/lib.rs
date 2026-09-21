@@ -8,6 +8,7 @@ mod backend_images;
 mod backend_terminal;
 pub mod conformance;
 mod conformance_image;
+mod conformance_resources;
 mod constants;
 mod consumer;
 mod domain;

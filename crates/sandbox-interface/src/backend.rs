@@ -13,8 +13,8 @@ use crate::{
     BackendPrepareImageRequest, BackendPreparedImage, BackendReadFileRequest,
     BackendReadOnlyExecRequest, BackendResizeScreenStackRequest, BackendRunProcessRequest,
     BackendWriteFileRequest, OperationId, PortIngress, ProviderRef, ReadOnlyExecOutput,
-    ResourceOwner, Result, SandboxId, SandboxNetworkPolicy, SandboxProcessOutput, SandboxState,
-    ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
+    ResourceOwner, Result, SandboxConsumer, SandboxId, SandboxNetworkPolicy, SandboxProcessOutput,
+    SandboxState, ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
 };
 
 /// Provider request to create a sandbox.
@@ -26,6 +26,8 @@ pub struct BackendCreateSandboxRequest {
     pub operation_id: OperationId,
     /// Opaque ownership metadata.
     pub owner: ResourceOwner,
+    /// Substrate consumer class preserved in provider metadata.
+    pub consumer: SandboxConsumer,
     /// Deployment identity used only as opaque metadata.
     pub deployment_id: String,
     /// Logical profile resolved by the adapter to provider configuration.
@@ -56,6 +58,8 @@ pub struct BackendManagedSandbox {
     pub sandbox_id: Option<SandboxId>,
     /// Durable operation handle recovered from opaque provider metadata.
     pub operation_id: Option<OperationId>,
+    /// Consumer class recovered from metadata, absent on legacy resources.
+    pub consumer: Option<SandboxConsumer>,
 }
 
 /// Provider snapshot state and opaque identity.

@@ -1,6 +1,6 @@
 //! Atomic descriptor-relative regular-file reads inside an E2B sandbox.
 
-use std::{array::TryFromSliceError, mem::size_of, time::Duration};
+use std::{array::TryFromSliceError, mem::size_of};
 
 use sandbox_interface::{Error, FILE_TRANSFER_MAX_BYTES, ResourceKind, Result};
 
@@ -12,7 +12,6 @@ use super::{
     },
 };
 
-const READ_TIMEOUT: Duration = Duration::from_secs(300);
 const SIZE_HEADER_BYTES: usize = size_of::<u64>();
 const READER: &str = r#"import errno
 import os
@@ -105,8 +104,9 @@ pub(super) async fn read(
     request: ProcessRegularFileRequest,
 ) -> Result<ProcessFileChunk> {
     let max_bytes = request.max_bytes;
+    let timeout = request.timeout;
     let output = transport
-        .run_helper(connection, command(request), READ_TIMEOUT)
+        .run_helper(connection, command(request), timeout)
         .await?;
     match output.exit_code {
         Some(0) => decode(&output.bytes, max_bytes),
@@ -141,7 +141,7 @@ fn command(request: ProcessRegularFileRequest) -> ProcessCommand {
         output_capture: ProcessOutputCapture::HardLimit {
             max_bytes: request.max_bytes.saturating_add(SIZE_HEADER_BYTES),
         },
-        timeout: READ_TIMEOUT,
+        timeout: request.timeout,
         read_only: true,
     }
 }

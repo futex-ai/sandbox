@@ -13,7 +13,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
-    ProcessInfo, ProcessTransportMock,
+    ProcessInfo, ProcessRegularFileRequest, ProcessTransportMock,
 };
 
 use super::{configured::E2bSandboxBackend, terminal_identity::TerminalIdentity};
@@ -31,15 +31,15 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
         ProcessTransportMock::list
             .each_call(matching!(_))
             .answers_arc(Arc::new(move |_, _| Ok(vec![process(terminal_id)]))),
-        ProcessTransportMock::read_file
-            .each_call(matching!(_, _, 0, 1024, _))
+        ProcessTransportMock::read_regular_file
+            .each_call(matching!(_, _))
             .answers_arc({
                 let observed = observed.clone();
-                Arc::new(move |_, _, _, _, _, timeout| {
+                Arc::new(move |_, _, request: ProcessRegularFileRequest| {
                     observed
                         .lock()
                         .expect("deadline observations")
-                        .push(timeout);
+                        .push(request.timeout);
                     Ok(ProcessFileChunk {
                         bytes: b"output".to_vec(),
                         total_size: 6,
@@ -74,7 +74,7 @@ fn request(terminal_id: TerminalId, wait: Duration) -> BackendOutputRequest {
     BackendOutputRequest {
         sandbox_provider_ref: ProviderRef::new("sandbox"),
         terminal_provider_ref: TerminalIdentity::new(41, terminal_id).provider_ref(),
-        provider_log_path: "/tmp/sandbox/terminals/test.log".to_owned(),
+        provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
         offset: 0,
         max_bytes: 1024,
         provider_log_limit: 1024,

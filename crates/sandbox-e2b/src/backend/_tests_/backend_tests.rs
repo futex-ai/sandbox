@@ -34,6 +34,7 @@ async fn ambiguous_sandbox_create_recovers_by_exact_metadata() {
             "sandbox_operation_id".to_owned(),
             request.operation_id.to_string(),
         ),
+        ("sandbox_consumer".to_owned(), "runtime".to_owned()),
         ("sandbox_owner_kind".to_owned(), "agent".to_owned()),
         (
             "sandbox_sandbox_id".to_owned(),
@@ -254,6 +255,7 @@ fn sandbox_request(snapshot_provider_ref: Option<ProviderRef>) -> BackendCreateS
             workspace_id: Uuid::now_v7(),
             agent_id: Some(Uuid::now_v7()),
         },
+        consumer: sandbox_interface::SandboxConsumer::Runtime,
         deployment_id: "deployment".to_owned(),
         profile: "general".to_owned(),
         snapshot_provider_ref,

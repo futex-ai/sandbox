@@ -12,8 +12,8 @@ use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendOutputRequest,
     BackendSandbox, BackendSnapshotRecovery, BackendTerminal, BackendTerminalCreateRequest,
-    Error as SandboxError, OperationId, ProviderRef, ResourceOwner, SandboxBackend, SandboxId,
-    TerminalId,
+    Error as SandboxError, OperationId, ProviderRef, ResourceOwner, SandboxBackend,
+    SandboxConsumer, SandboxId, TerminalId,
 };
 
 const LOG_LIMIT: usize = 2 * 1024 * 1024;
@@ -194,6 +194,7 @@ pub(super) fn sandbox_request(
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
+        consumer: SandboxConsumer::Runtime,
         deployment_id: "live-test".to_owned(),
         profile: "live".to_owned(),
         snapshot_provider_ref,

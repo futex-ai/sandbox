@@ -6,7 +6,12 @@ use sandbox_interface::{
     BackendOutputRequest, BackendTerminalOutput, Error, ResourceKind, Result, TerminalState,
 };
 
-use super::{configured::E2bSandboxBackend, mapping, terminal_identity::TerminalIdentity};
+use crate::process::ProcessRegularFileRequest;
+
+use super::{
+    configured::E2bSandboxBackend, mapping, terminal_identity::TerminalIdentity,
+    terminal_storage::TERMINAL_LOG_DIRECTORY,
+};
 
 const PROVIDER_READ_ALLOWANCE: Duration = Duration::from_secs(5);
 
@@ -24,6 +29,13 @@ pub(super) async fn read(
         }
     };
     let identity = TerminalIdentity::parse(&request.terminal_provider_ref)?;
+    let log_name = format!("{}.log", identity.terminal_id());
+    let expected_log_path = format!("{TERMINAL_LOG_DIRECTORY}/{log_name}");
+    if request.provider_log_path != expected_log_path {
+        return Err(Error::InvalidFilePath {
+            field: "provider_log_path",
+        });
+    }
     let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
     let started = tokio::time::Instant::now();
     let provider_deadline = started + request.wait + PROVIDER_READ_ALLOWANCE;
@@ -46,12 +58,15 @@ pub(super) async fn read(
             provider_deadline.saturating_duration_since(tokio::time::Instant::now());
         let chunk = match tokio::time::timeout_at(
             provider_deadline,
-            backend.processes.read_file(
+            backend.processes.read_regular_file(
                 connection.clone(),
-                request.provider_log_path.clone(),
-                request.offset,
-                request.max_bytes,
-                helper_timeout,
+                ProcessRegularFileRequest {
+                    root: TERMINAL_LOG_DIRECTORY.to_owned(),
+                    path: log_name.clone(),
+                    offset: request.offset,
+                    max_bytes: request.max_bytes,
+                    timeout: helper_timeout,
+                },
             ),
         )
         .await

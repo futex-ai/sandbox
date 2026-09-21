@@ -1,53 +1,14 @@
-//! Image conformance recovery and cleanup regressions.
+//! Image conformance source-recovery and cleanup regressions.
 
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 
 use crate::{
-    BackendCreateSnapshotRequest, BackendPreparedImage, BackendSandbox, BackendSnapshot,
-    BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery, Error,
-    OperationId, ProviderRef, RetainedSandboxRef, SandboxBackendMock, SandboxState, SnapshotId,
-    SnapshotState,
+    BackendPreparedImage, BackendSandbox, Error, ProviderRef, SandboxBackendMock, SandboxState,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
 
-use super::{RecoverySleeperMock, create_or_recover_snapshot_with_sleeper, exercise};
-
-#[tokio::test]
-async fn in_progress_snapshot_recovers_and_optional_diagnostics_cleanup() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::InProgress, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("in-progress image snapshot should recover");
-}
-
-#[tokio::test]
-async fn ambiguous_snapshot_recovers_without_replaying_preparation() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("ambiguous image snapshot should recover");
-}
-
-#[tokio::test]
-async fn omitted_retained_source_diagnostic_is_valid_and_cleanup_still_runs() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("the caller-known source should not require duplicate diagnostics");
-}
+use super::{exercise, exercise_failed_preparation};
 
 #[tokio::test]
 async fn preparation_transport_failure_cleans_the_created_source() {
@@ -55,6 +16,9 @@ async fn preparation_transport_failure_cleans_the_created_source() {
         SandboxBackendMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::recover_sandbox_create
+            .next_call(matching!(_))
+            .returns(Ok(Some(sandbox("prepared-source")))),
         SandboxBackendMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
@@ -76,6 +40,9 @@ async fn invalid_prepared_image_cleans_the_created_source() {
         SandboxBackendMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::recover_sandbox_create
+            .next_call(matching!(_))
+            .returns(Ok(Some(sandbox("prepared-source")))),
         SandboxBackendMock::prepare_image
             .next_call(matching!(_))
             .returns(Ok(BackendPreparedImage {
@@ -98,6 +65,9 @@ async fn snapshot_inventory_failure_cleans_the_created_source() {
         SandboxBackendMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
+        SandboxBackendMock::recover_sandbox_create
+            .next_call(matching!(_))
+            .returns(Ok(Some(sandbox("prepared-source")))),
         SandboxBackendMock::prepare_image
             .next_call(matching!(_))
             .returns(Ok(BackendPreparedImage {
@@ -165,102 +135,38 @@ async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
 }
 
 #[tokio::test]
-async fn in_progress_recovery_waits_one_second_before_each_retry() {
+async fn intentional_failure_source_creation_recovers_before_preparation() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_snapshot
-            .next_call(matching!(_))
-            .returns(Ok(BackendSnapshotCreateOutcome::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
-            .next_call(matching!(_))
-            .returns(Ok(BackendSnapshotRecovery::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
-            .next_call(matching!(_))
-            .returns(Ok(BackendSnapshotRecovery::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
-            .next_call(matching!(_))
-            .returns(Ok(BackendSnapshotRecovery::Recovered(snapshot()))),
-    ));
-    let sleeper = Unimock::new((
-        RecoverySleeperMock::sleep
-            .next_call(matching!(_))
-            .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
-        RecoverySleeperMock::sleep
-            .next_call(matching!(_))
-            .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
-    ));
-
-    let recovered = create_or_recover_snapshot_with_sleeper(&backend, snapshot_request(), &sleeper)
-        .await
-        .expect("snapshot should recover after paced retries");
-
-    assert_eq!(recovered, snapshot());
-}
-
-fn backend(
-    snapshot_outcome: BackendSnapshotCreateOutcome,
-    retained_sandbox: Option<RetainedSandboxRef>,
-) -> Unimock {
-    Unimock::new((
         SandboxBackendMock::create_sandbox
             .next_call(matching!(_))
-            .returns(Ok(sandbox("prepared-source"))),
-        SandboxBackendMock::prepare_image
-            .next_call(matching!(_))
-            .returns(Ok(BackendPreparedImage {
-                source_provider_ref: ProviderRef::new("prepared-source"),
-                size_bytes: 4096,
+            .returns(Err(Error::BackendUnavailable {
+                backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::snapshot_inventory
-            .next_call(matching!(_, _))
-            .returns(Ok(BackendSnapshotInventory::default())),
-        SandboxBackendMock::create_snapshot
+        SandboxBackendMock::recover_sandbox_create
             .next_call(matching!(_))
-            .returns(Ok(snapshot_outcome)),
-        SandboxBackendMock::recover_snapshot_create
-            .each_call(matching!(_))
-            .answers(&|_, _| Ok(BackendSnapshotRecovery::Recovered(snapshot())))
-            .at_least_times(0),
-        SandboxBackendMock::delete_snapshot
-            .next_call(matching!(_))
-            .returns(Ok(())),
-        SandboxBackendMock::destroy_sandbox
-            .next_call(matching!(_))
-            .returns(Ok(())),
-        SandboxBackendMock::create_sandbox
-            .next_call(matching!(_))
-            .returns(Ok(sandbox("failed-source"))),
+            .returns(Ok(Some(sandbox("failed-source")))),
         SandboxBackendMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::ImageSetupFailed {
                 command: None,
-                retained_sandbox,
+                retained_sandbox: None,
             })),
         SandboxBackendMock::destroy_sandbox
             .next_call(matching!(_))
-            .returns(Ok(())),
-    ))
+            .answers(&|_, provider_ref| {
+                assert_eq!(provider_ref, ProviderRef::new("failed-source"));
+                Ok(())
+            }),
+    ));
+
+    exercise_failed_preparation(&backend, "test", Uuid::now_v7())
+        .await
+        .expect("the recovered source should exercise and clean the expected failure");
 }
 
 fn sandbox(provider_ref: &str) -> BackendSandbox {
     BackendSandbox {
         provider_ref: ProviderRef::new(provider_ref),
         state: SandboxState::Ready,
-    }
-}
-
-fn snapshot() -> BackendSnapshot {
-    BackendSnapshot {
-        provider_ref: ProviderRef::new("prepared-image"),
-        state: SnapshotState::Ready,
-    }
-}
-
-fn snapshot_request() -> BackendCreateSnapshotRequest {
-    BackendCreateSnapshotRequest {
-        snapshot_id: SnapshotId::new(),
-        operation_id: OperationId::new(),
-        source_provider_ref: ProviderRef::new("prepared-source"),
-        correlation_name: "paced-recovery".to_owned(),
-        before: BackendSnapshotInventory::default(),
     }
 }

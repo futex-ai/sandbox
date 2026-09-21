@@ -1,8 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendReadFileRequest, BackendWriteFileRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef,
-    SandboxBackend as _,
+    BackendReadFileRequest, BackendWriteFileRequest, Error, FILE_TRANSFER_MAX_BYTES,
+    FILE_TRANSFER_PATH_MAX_BYTES, ProviderRef, SandboxBackend as _,
 };
 use unimock::{MockFn as _, Unimock, matching};
 
@@ -108,6 +108,77 @@ async fn oversized_write_fails_before_connecting_to_the_provider() {
         Error::FileTooLarge {
             limit: FILE_TRANSFER_MAX_BYTES
         }
+    ));
+}
+
+#[tokio::test]
+async fn oversized_transfer_paths_fail_before_provider_access() {
+    let backend = backend(Unimock::new(()), Unimock::new(()));
+    let oversized = "x".repeat(FILE_TRANSFER_PATH_MAX_BYTES + 1);
+
+    let read = backend
+        .read_file(BackendReadFileRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            root: format!("/{oversized}"),
+            path: "file.txt".to_owned(),
+            offset: 0,
+            max_bytes: 1,
+        })
+        .await;
+    let write = backend
+        .write_file(BackendWriteFileRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            root: "/workspace".to_owned(),
+            path: oversized,
+            bytes: Vec::new(),
+        })
+        .await;
+
+    assert!(matches!(
+        read,
+        Err(Error::TextTooLarge {
+            field: "root",
+            limit: FILE_TRANSFER_PATH_MAX_BYTES
+        })
+    ));
+    assert!(matches!(
+        write,
+        Err(Error::TextTooLarge {
+            field: "path",
+            limit: FILE_TRANSFER_PATH_MAX_BYTES
+        })
+    ));
+}
+
+#[tokio::test]
+async fn malformed_transfer_paths_fail_before_provider_access() {
+    let backend = backend(Unimock::new(()), Unimock::new(()));
+
+    let read = backend
+        .read_file(BackendReadFileRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            root: "workspace".to_owned(),
+            path: "file.txt".to_owned(),
+            offset: 0,
+            max_bytes: 1,
+        })
+        .await;
+    let write = backend
+        .write_file(BackendWriteFileRequest {
+            sandbox_provider_ref: ProviderRef::new("sandbox"),
+            root: "/workspace".to_owned(),
+            path: "../outside.txt".to_owned(),
+            bytes: Vec::new(),
+        })
+        .await;
+
+    assert!(matches!(
+        read,
+        Err(Error::InvalidFilePath { field: "root" })
+    ));
+    assert!(matches!(
+        write,
+        Err(Error::InvalidFilePath { field: "path" })
     ));
 }
 

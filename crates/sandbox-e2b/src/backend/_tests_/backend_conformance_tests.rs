@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
     },
 };
 
@@ -15,7 +15,7 @@ use crate::{
     ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
     ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
     ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
-    ProcessSelector, ProcessSplitOutput, ProcessTransportMock,
+    ProcessSelector, ProcessSplitOutput, ProcessTransportMock, SandboxMetadata,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -23,37 +23,45 @@ use super::configured::E2bSandboxBackend;
 #[tokio::test]
 async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
     let create_index = Arc::new(AtomicUsize::new(0));
-    let sandbox_list_index = Arc::new(AtomicUsize::new(0));
-    let snapshot_created = Arc::new(AtomicBool::new(false));
-    let snapshot_recovery_index = Arc::new(AtomicUsize::new(0));
+    let created_sandboxes = Arc::new(Mutex::new(Vec::<(SandboxMetadata, String)>::new()));
+    let created_snapshots = Arc::new(Mutex::new(HashMap::<(String, String), String>::new()));
     let control = Unimock::new((
         E2bControlApiMock::list_sandboxes
             .each_call(matching!(_))
             .answers_arc({
-                let sandbox_list_index = sandbox_list_index.clone();
-                Arc::new(move |_, _| {
-                    if sandbox_list_index.fetch_add(1, Ordering::Relaxed) == 2 {
-                        Ok(vec![ControlSandbox {
-                            sandbox_id: "source".to_owned(),
+                let created_sandboxes = created_sandboxes.clone();
+                Arc::new(move |_, metadata| {
+                    let sandboxes = created_sandboxes
+                        .lock()
+                        .expect("created sandbox lock")
+                        .iter()
+                        .filter(|(created_metadata, _)| created_metadata == &metadata)
+                        .map(|(created_metadata, sandbox_id)| ControlSandbox {
+                            sandbox_id: sandbox_id.clone(),
                             state: ControlSandboxState::Running,
-                            metadata: Default::default(),
-                        }])
-                    } else {
-                        Ok(Vec::new())
-                    }
+                            metadata: created_metadata.clone(),
+                        })
+                        .collect();
+                    Ok(sandboxes)
                 })
             }),
         E2bControlApiMock::create_sandbox
             .each_call(matching!(_))
             .answers_arc({
                 let create_index = create_index.clone();
-                Arc::new(move |_, _| {
+                let created_sandboxes = created_sandboxes.clone();
+                Arc::new(move |_, request| {
                     let sandbox_id = match create_index.fetch_add(1, Ordering::Relaxed) {
                         0 => "source",
                         1 => "restore-one",
                         2 => "restore-two",
-                        _ => "realize-source",
+                        3 => "image-source",
+                        _ => "failed-image-source",
                     };
+                    created_sandboxes
+                        .lock()
+                        .expect("created sandbox lock")
+                        .push((request.metadata, sandbox_id.to_owned()));
                     Ok(access(sandbox_id))
                 })
             }),
@@ -82,32 +90,37 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
         E2bControlApiMock::list_snapshots
             .each_call(matching!(_, _))
             .answers_arc({
-                let snapshot_created = snapshot_created.clone();
-                let snapshot_recovery_index = snapshot_recovery_index.clone();
-                Arc::new(move |_, sandbox_id, _| {
-                    if sandbox_id == "source"
-                        && snapshot_created.load(Ordering::Relaxed)
-                        && snapshot_recovery_index.fetch_add(1, Ordering::Relaxed) > 0
-                    {
-                        Ok(vec![ControlSnapshot {
-                            snapshot_id: "snapshot".to_owned(),
-                        }])
-                    } else {
-                        Ok(Vec::new())
-                    }
+                let created_snapshots = created_snapshots.clone();
+                Arc::new(move |_, sandbox_id, correlation_name| {
+                    Ok(created_snapshots
+                        .lock()
+                        .expect("created snapshot lock")
+                        .get(&(sandbox_id.to_owned(), correlation_name.to_owned()))
+                        .map(|snapshot_id| {
+                            vec![ControlSnapshot {
+                                snapshot_id: snapshot_id.clone(),
+                            }]
+                        })
+                        .unwrap_or_default())
                 })
             }),
         E2bControlApiMock::create_snapshot
             .each_call(matching!(_, _))
             .answers_arc({
-                let snapshot_created = snapshot_created.clone();
-                Arc::new(move |_, sandbox_id, _| {
+                let created_snapshots = created_snapshots.clone();
+                Arc::new(move |_, sandbox_id, correlation_name| {
                     let snapshot_id = if sandbox_id == "source" {
-                        snapshot_created.store(true, Ordering::Relaxed);
                         "snapshot"
                     } else {
                         "realized-image"
                     };
+                    created_snapshots
+                        .lock()
+                        .expect("created snapshot lock")
+                        .insert(
+                            (sandbox_id.to_owned(), correlation_name.to_owned()),
+                            snapshot_id.to_owned(),
+                        );
                     Ok(ControlSnapshot {
                         snapshot_id: snapshot_id.to_owned(),
                     })
@@ -184,13 +197,25 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 assert!(matches!(selector, ProcessSelector::Tag(_)));
                 Ok(())
             }),
-        ProcessTransportMock::read_file
-            .each_call(matching!(_, _, 0, 4096, _))
-            .answers(&|_, _, _, _, _, _| {
-                Ok(ProcessFileChunk {
-                    bytes: b"conformance".to_vec(),
-                    total_size: 11,
-                })
+        ProcessTransportMock::read_regular_file
+            .each_call(matching!(_, _))
+            .answers(&|_, _, request: ProcessRegularFileRequest| {
+                if request.root == "/workspace" {
+                    assert_eq!(request.path, "conformance.txt");
+                    Ok(ProcessFileChunk {
+                        bytes: b"file-transfer".to_vec(),
+                        total_size: 13,
+                    })
+                } else {
+                    assert_eq!(request.root, "/tmp/sandbox/terminals");
+                    assert!(request.path.ends_with(".log"));
+                    assert_eq!(request.offset, 0);
+                    assert_eq!(request.max_bytes, 4096);
+                    Ok(ProcessFileChunk {
+                        bytes: b"conformance".to_vec(),
+                        total_size: 11,
+                    })
+                }
             }),
         ProcessTransportMock::write_regular_file
             .each_call(matching!(_, _))
@@ -202,18 +227,6 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                     assert_eq!(request.bytes, b"input");
                 }
                 Ok(())
-            }),
-        ProcessTransportMock::read_regular_file
-            .next_call(matching!(_, _))
-            .answers(&|_, _, request: ProcessRegularFileRequest| {
-                assert_eq!(request.root, "/workspace");
-                assert_eq!(request.path, "conformance.txt");
-                assert_eq!(request.offset, 0);
-                assert_eq!(request.max_bytes, 4096);
-                Ok(ProcessFileChunk {
-                    bytes: b"file-transfer".to_vec(),
-                    total_size: 13,
-                })
             }),
         ProcessTransportMock::run_split
             .next_call(matching!(_, _))

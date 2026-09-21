@@ -79,3 +79,7 @@ mod terminal_wait_tests;
 #[cfg(test)]
 #[path = "_tests_/terminal_deadline_tests.rs"]
 mod terminal_deadline_tests;
+
+#[cfg(test)]
+#[path = "_tests_/terminal_storage_race_tests.rs"]
+mod terminal_storage_race_tests;

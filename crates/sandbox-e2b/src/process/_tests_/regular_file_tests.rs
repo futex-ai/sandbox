@@ -1,6 +1,6 @@
 //! Atomic regular-file helper coverage.
 
-use std::{fs, process::Command};
+use std::{fs, process::Command, time::Duration};
 
 use tempfile::tempdir;
 
@@ -65,6 +65,7 @@ fn request(root: impl Into<String>, path: impl Into<String>) -> ProcessRegularFi
         path: path.into(),
         offset: 0,
         max_bytes: 4,
+        timeout: Duration::from_secs(300),
     }
 }
 

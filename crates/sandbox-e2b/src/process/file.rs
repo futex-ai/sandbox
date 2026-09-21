@@ -1,4 +1,4 @@
-//! Durable provider-log reading through a bounded helper command.
+//! Canonical transfer-path validation through a bounded helper command.
 
 use std::time::Duration;
 
@@ -7,75 +7,10 @@ use sandbox_interface::{Error, ResourceKind, Result};
 
 use super::{
     connect::ConnectProcessTransport,
-    types::{
-        ProcessCommand, ProcessConnection, ProcessFileChunk, ProcessFileValidation,
-        ProcessOutputCapture,
-    },
+    types::{ProcessCommand, ProcessConnection, ProcessFileValidation, ProcessOutputCapture},
 };
 
 const VALIDATION_TIMEOUT: Duration = Duration::from_secs(10);
-
-pub(super) async fn read(
-    transport: &ConnectProcessTransport,
-    connection: ProcessConnection,
-    path: String,
-    offset: u64,
-    max_bytes: usize,
-    timeout: Duration,
-) -> Result<ProcessFileChunk> {
-    let output = transport
-        .run_helper(connection, read_command(path, offset, max_bytes), timeout)
-        .await?;
-    if output.exit_code != Some(0) {
-        return Err(Error::NotFound {
-            resource: ResourceKind::Terminal,
-        });
-    }
-    let text = match std::str::from_utf8(&output.bytes) {
-        Ok(text) => text,
-        Err(source) => {
-            return Err(Error::internal_with(
-                source,
-                "decode provider file response",
-            ));
-        }
-    };
-    let Some((size, encoded)) = text.split_once('\n') else {
-        return Err(Error::internal_message(
-            "provider file response omitted size marker",
-        ));
-    };
-    let total_size = match size.trim().parse::<u64>() {
-        Ok(size) => size,
-        Err(source) => return Err(Error::internal_with(source, "parse provider file size")),
-    };
-    let bytes = match STANDARD.decode(encoded.trim()) {
-        Ok(bytes) => bytes,
-        Err(source) => return Err(Error::internal_with(source, "decode provider file bytes")),
-    };
-    Ok(ProcessFileChunk { bytes, total_size })
-}
-
-fn read_command(path: String, offset: u64, max_bytes: usize) -> ProcessCommand {
-    let encoded_path = STANDARD.encode(path);
-    let script = format!(
-        "p=$(printf %s '{encoded_path}' | base64 -d); \
-         test -f \"$p\" || exit 44; \
-         b=$(dd if=\"$p\" bs=1 skip={offset} count={max_bytes} status=none 2>/dev/null | base64 -w0); \
-         s=$(wc -c < \"$p\" 2>/dev/null || printf 0); \
-         printf '%s\\n%s' \"$s\" \"$b\""
-    );
-    ProcessCommand {
-        command: "/bin/sh".to_owned(),
-        args: vec!["-c".to_owned(), script],
-        cwd: None,
-        output_capture: ProcessOutputCapture::HardLimit {
-            max_bytes: max_bytes.saturating_mul(2).saturating_add(128),
-        },
-        timeout: Duration::from_secs(300),
-        read_only: false,
-    }
-}
 
 pub(super) async fn validate(
     transport: &ConnectProcessTransport,

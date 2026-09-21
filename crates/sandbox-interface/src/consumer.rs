@@ -22,3 +22,24 @@ pub enum SandboxConsumer {
     /// Browser session consumer.
     Browser,
 }
+
+impl SandboxConsumer {
+    /// Returns the stable metadata representation used by provider adapters.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Runtime => "runtime",
+            Self::Browser => "browser",
+        }
+    }
+
+    /// Parses the stable provider-metadata representation.
+    #[must_use]
+    pub fn from_metadata(value: &str) -> Option<Self> {
+        match value {
+            "runtime" => Some(Self::Runtime),
+            "browser" => Some(Self::Browser),
+            _ => None,
+        }
+    }
+}

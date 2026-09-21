@@ -47,8 +47,11 @@ safe operation's response type. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
 operation-specific recovery fence resolves the outcome.
 
-Sandbox creation filters on exact configured metadata. Snapshot recovery walks
-bounded cursor pagination and adopts exactly one new correlated snapshot.
+Sandbox creation filters on exact configured metadata, including the stable
+runtime-or-browser consumer value. Managed inventory returns a recognized
+consumer class and leaves it absent for resources created before that metadata
+was added. Snapshot recovery walks bounded cursor pagination and adopts exactly
+one new correlated snapshot.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
 fail closed. If an accepted create response cannot be decoded or omits the
 identity or credentials needed to identify the created resource, the result
@@ -62,8 +65,9 @@ Failed setup and verification diagnostics also redact the active opaque
 sandbox ID and envd access token before the final 4 KiB tail is selected. A
 known value split by the streaming tail boundary has its visible suffix
 redacted as well.
-An unconfigured logical profile returns the handled provider-neutral
-`UnknownProfile` error before any provider request.
+Creation and recovery share validation. An unconfigured logical profile or
+unsupported network policy returns a handled provider-neutral error before any
+provider request.
 
 ## Files, Processes, Terminals, And Screens
 
@@ -92,6 +96,11 @@ overflows, or fails decoding is killed with a bounded cleanup call once its PID
 has been observed; persistent terminal connections are left running
 intentionally.
 
+Before either read or write acquires sandbox access, the adapter rejects a root
+that is not an absolute normalized path and a target that is not a normalized
+relative path. Both fields are byte-bounded and reject empty components, dot
+components, parent traversal, and NUL bytes.
+
 Terminal recovery lists processes by the configured stable tag and never
 starts a replacement when recovery finds no match. Inspection and output reads
 bind the stored PID to that exact tag. Input and close requests select the tag
@@ -100,11 +109,15 @@ cannot receive input or be killed. Restored-terminal cleanup also kills by tag,
 then requires its maintenance command to exit normally. Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the
-operation without creating or deleting content through its target. Durable log
-reads share one absolute provider deadline and coherent cursor/size reporting.
-Transcript writers use the request's exact byte limit rather than a rounded
-filesystem block limit. Oversized replacement writes fail before acquiring
-mutating sandbox access.
+operation without creating or deleting content through its target. The
+transcript wrapper traverses the absolute log parent through non-following
+directory descriptors, creates a new regular leaf exclusively, and gives the
+recorder only the already-open descriptor. Reads first require the exact
+terminal-derived log path, then open and read the leaf through one
+descriptor-relative helper. Durable reads share one absolute provider deadline
+and coherent cursor/size reporting. Transcript writers use the request's exact
+byte limit rather than a rounded filesystem block limit. Oversized replacement
+writes fail before acquiring mutating sandbox access.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
@@ -124,10 +137,11 @@ Setup, verification, scrub, and size measurement run through non-login shells,
 so staged files or setup commands cannot install a login profile that skips a
 later safety phase or fabricates the measured size.
 
-The terminal transcript FIFO and bounded writer are installed by a non-login
-outer shell. Only after capture is active does the one intended interactive
-login shell load the user's profile, which keeps profile output and early exits
-inside terminal bookkeeping and avoids running login side effects twice.
+The terminal transcript descriptor and byte limit are installed by the trusted
+non-login wrapper. Only after capture is active does the one intended
+interactive login shell load the user's profile, which keeps profile output
+and early exits inside terminal bookkeeping and avoids running login side
+effects twice.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and

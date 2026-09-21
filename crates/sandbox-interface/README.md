@@ -26,6 +26,10 @@ Consumer IDs are UUIDv7 values. Provider references remain opaque, so callers
 cannot infer E2B or any future provider's identifier format. Bounded request
 types and backend adapters reject unsafe paths, oversized commands and files,
 invalid ports, and unsupported viewport dimensions before provider dispatch.
+Backend sandbox creation also carries the typed `SandboxConsumer` class.
+Managed inventory returns `Some(class)` when provider metadata contains a
+recognized value and `None` for older or malformed metadata instead of
+guessing a class.
 Direct process requests require a non-empty command, at most 128 KiB across
 the command and arguments, at most 64 MiB for each captured stream, and a
 deadline no longer than 300 seconds.
@@ -35,15 +39,14 @@ split by a bounded-output cutoff.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
-Both its ordinary and image snapshot probes recover in-progress and
-delivery-ambiguous outcomes with a bounded number of calls, including the
-ordinary probe's recover-only check after synchronous creation. Recovery waits
-one second after each in-progress result, for at most 60 waits, so asynchronous
-providers receive a real completion window without a burst of polling. If an
-image-source create returns an uncertain error, the harness retains the exact
-request and performs the same paced recover-only polling instead of dispatching
-again. Every recovered source is then cleaned after preparation, result
-validation, inventory, snapshot, or intentional-failure errors.
+Every sandbox create and both snapshot probes retain the exact request and use
+bounded recover-only polling, including after an immediate create result.
+Recovery waits one second after each pending result, for at most 60 waits, so
+asynchronous providers receive a real completion window without a burst of
+polling. Every returned resource is tracked before later work begins. Cleanup
+attempts every tracked terminal, snapshot, and sandbox even when an earlier
+cleanup action fails, while preserving the original operation error when one
+already exists.
 Retained-source diagnostics are optional, but are checked against the known
 source when present. Adapters should run the harness alongside
 provider-specific transport and failure tests.

@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use sandbox_interface::{OperationId, SandboxBackend, SandboxId, SandboxState};
+use sandbox_interface::{OperationId, SandboxBackend, SandboxConsumer, SandboxId, SandboxState};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -19,6 +19,7 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
     let metadata = std::collections::BTreeMap::from([
         ("tenant_sandbox_id".to_owned(), sandbox_id.to_string()),
         ("tenant_operation_id".to_owned(), operation_id.to_string()),
+        ("tenant_consumer".to_owned(), "browser".to_owned()),
     ]);
     let control = Unimock::new(
         E2bControlApiMock::list_sandboxes
@@ -28,11 +29,18 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
                     query.get("tenant_deployment_id").map(String::as_str),
                     Some("deployment")
                 );
-                Ok(vec![ControlSandbox {
-                    sandbox_id: "provider-sandbox".to_owned(),
-                    state: ControlSandboxState::Paused,
-                    metadata: metadata.clone(),
-                }])
+                Ok(vec![
+                    ControlSandbox {
+                        sandbox_id: "provider-sandbox".to_owned(),
+                        state: ControlSandboxState::Paused,
+                        metadata: metadata.clone(),
+                    },
+                    ControlSandbox {
+                        sandbox_id: "legacy-sandbox".to_owned(),
+                        state: ControlSandboxState::Running,
+                        metadata: Default::default(),
+                    },
+                ])
             })),
     );
     let backend =
@@ -43,10 +51,12 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
         .await
         .expect("managed sandbox list should map metadata");
 
-    assert_eq!(managed.len(), 1);
+    assert_eq!(managed.len(), 2);
     assert_eq!(managed[0].state, SandboxState::Paused);
     assert_eq!(managed[0].sandbox_id, Some(sandbox_id));
     assert_eq!(managed[0].operation_id, Some(operation_id));
+    assert_eq!(managed[0].consumer, Some(SandboxConsumer::Browser));
+    assert_eq!(managed[1].consumer, None);
 }
 
 fn config() -> E2bAdapterConfig {
