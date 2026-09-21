@@ -26,6 +26,7 @@ pub(super) struct CleanupRequest {
     pub(super) temporary_name: String,
     pub(super) state_path: String,
     pub(super) expected_size: usize,
+    pub(super) expected_digest: String,
 }
 
 pub(super) async fn cleanup(
@@ -59,6 +60,7 @@ fn command(request: CleanupRequest) -> ProcessCommand {
             request.temporary_name,
             request.state_path,
             request.expected_size.to_string(),
+            request.expected_digest,
         ],
         cwd: None,
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },

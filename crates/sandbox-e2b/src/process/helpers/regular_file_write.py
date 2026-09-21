@@ -10,6 +10,7 @@ TOO_LARGE = 47
 INVALID_PATH = 48
 FAILED = 49
 REVOKED = 50
+STAGING_MISMATCH = 51
 
 
 def stop(code):
@@ -38,7 +39,12 @@ try:
     temporary = sys.argv[4]
     state = sys.argv[5]
     expected = int(sys.argv[6])
-    transfer_limit = int(sys.argv[7])
+    expected_digest = sys.argv[7]
+    transfer_limit = int(sys.argv[8])
+    if len(expected_digest) != 64 or any(
+        character not in '0123456789abcdef' for character in expected_digest
+    ):
+        stop(INVALID_PATH)
     root_parts = [part for part in root.split('/') if part]
     path_parts = path.split('/')
     if root != '/' + '/'.join(root_parts):
@@ -94,10 +100,13 @@ try:
         remaining -= len(chunk)
     if os.read(source, 1):
         stop(FAILED)
+    observed_digest = digest.hexdigest()
+    if observed_digest != expected_digest:
+        stop(STAGING_MISMATCH)
     os.fsync(destination)
     os.close(destination)
     destination = None
-    commit_state = 'commit:' + digest.hexdigest()
+    commit_state = 'commit:' + expected_digest
     try:
         os.symlink(commit_state, state)
     except FileExistsError:

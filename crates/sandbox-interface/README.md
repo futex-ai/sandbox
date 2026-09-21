@@ -29,7 +29,12 @@ unsupported viewport dimensions before an adapter dispatches work.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
-Adapters should run it alongside provider-specific transport and failure tests.
+Its image flow recovers both in-progress and delivery-ambiguous snapshot
+outcomes with a bounded number of calls. It also cleans the source sandbox from
+its snapshot and intentional preparation-failure probes; retained-source
+diagnostics are optional, but are checked against that known source when
+present. Adapters should run the harness alongside provider-specific transport
+and failure tests.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only

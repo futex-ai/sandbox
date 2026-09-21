@@ -8,7 +8,7 @@ use sandbox_interface::{
 };
 
 use super::support::{
-    LiveResources, LiveResult, sandbox_request, terminal_request, wait_for_output,
+    LiveResources, LiveResult, ingress_client, sandbox_request, terminal_request, wait_for_output,
 };
 
 const PORT: u16 = 4173;
@@ -72,9 +72,7 @@ pub(super) async fn run(
     let credential = ingress
         .credential()
         .ok_or_else(|| io::Error::other("E2B omitted the private traffic credential"))?;
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
+    let client = ingress_client()?;
 
     let mut authenticated_status = reqwest::StatusCode::BAD_GATEWAY;
     let mut body = String::new();

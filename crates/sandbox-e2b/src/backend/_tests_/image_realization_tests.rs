@@ -46,6 +46,9 @@ async fn image_preparation_precedes_separate_source_cleanup() {
             .answers(&|_, _, command| {
                 assert!(command.args[1].contains("fusermount3 -u /drives/me"));
                 assert!(command.args[1].contains("[s]andbox-drive-"));
+                assert!(command.args[1].contains("pkill -KILL -f"));
+                assert!(command.args[1].contains("pgrep -f"));
+                assert!(command.args[1].contains("sandbox_drive_stop_attempt"));
                 assert!(command.args[1].contains("rm -rf /tmp/sandbox-drive"));
                 Ok(success())
             }),

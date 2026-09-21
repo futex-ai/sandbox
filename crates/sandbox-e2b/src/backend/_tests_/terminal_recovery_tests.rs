@@ -132,6 +132,9 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 assert_eq!(command.command, "/bin/sh");
                 assert!(command.args[1].contains("fusermount3 -u /drives/me"));
                 assert!(command.args[1].contains("[s]andbox-drive-"));
+                assert!(command.args[1].contains("pkill -KILL -f"));
+                assert!(command.args[1].contains("pgrep -f"));
+                assert!(command.args[1].contains("sandbox_drive_stop_attempt"));
                 assert!(command.args[1].contains("/tmp/sandbox-drive"));
                 Ok(crate::ProcessRunOutput {
                     bytes: Vec::new(),

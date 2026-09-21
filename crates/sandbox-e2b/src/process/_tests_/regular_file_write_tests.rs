@@ -21,6 +21,8 @@ use crate::process::{
     http::{ByteStream, stream as stream_call, upload as upload_call},
 };
 
+const REPLACEMENT_DIGEST: &str = "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47";
+
 #[test]
 fn writer_replaces_a_regular_file_through_directory_descriptors() {
     let root = tempdir().expect("temporary write root");
@@ -235,6 +237,7 @@ fn run_with_state(
         ".sandbox-write-test".to_owned(),
         state.to_string_lossy().into_owned(),
         expected_size,
+        REPLACEMENT_DIGEST.to_owned(),
     );
     Command::new(command.command)
         .args(command.args)

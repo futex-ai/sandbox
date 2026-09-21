@@ -22,7 +22,9 @@ credentials, payloads, access tokens, and errors out of higher-level services.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
-duplicate provider work.
+duplicate provider work. The shared conformance harness exercises both
+immediate and asynchronous image-snapshot completion; its image failure probe
+cleans the source it created even when a provider omits optional diagnostics.
 
 ## Developer Setup
 

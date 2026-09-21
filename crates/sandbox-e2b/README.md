@@ -37,21 +37,24 @@ uses bounded, cursor-safe inventory traversal. Terminal identities combine an
 E2B PID with the consumer terminal ID; reads verify both values, while input and
 close operations use envd's atomic tag selector so PID reuse cannot retarget
 them. File reads use one descriptor-relative, non-following helper; writes stage
-their payload, perform one descriptor-relative atomic replacement below the
-trusted root, and use an atomic commit-or-revoke marker to reconcile an
-uncertain writer without relying on a timing delay. An unconfirmed revocation
-returns a fencing error instead of pretending the write safely failed.
+their payload, bind it to the caller-computed SHA-256 digest, perform one
+descriptor-relative atomic replacement below the trusted root, and use an
+atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
+without relying on a timing delay. Both the writer and cleanup path verify the
+requested bytes before replacement. An unconfirmed revocation returns a
+fencing error instead of pretending the write safely failed.
 Oversized writes fail before sandbox connection. Terminal transcript writers
 enforce arbitrary byte limits exactly rather than rounding to filesystem
 blocks.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming.
-Credentialed clients do not follow redirects, and envd URLs are validated
-before call-local credentials are attached. Definitive rejection headers are
-mapped without waiting for an unused response body. DNS, connection, timeout,
-and response-stream failures remain typed as provider unavailability; failed
-mutating delivery remains ambiguous.
+Credentialed clients, including opt-in live ingress probes, do not follow
+redirects, and envd URLs are validated before call-local credentials are
+attached. Definitive rejection headers are mapped without waiting for an
+unused response body. DNS, connection, timeout, and response-stream failures
+remain typed as provider unavailability; failed mutating delivery remains
+ambiguous.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -60,7 +63,9 @@ once, use only their recovery methods after each dispatch starts, and persist
 preparation's measured size before snapshot dispatch. Empty recovery inventory
 stays in progress instead of replaying preparation or allocating another
 resource. Before measuring a prepared source, configured image processes must
-exit after bounded TERM/KILL escalation.
+exit after bounded TERM/KILL escalation. Restored-sandbox cleanup and image
+preparation apply the same bounded escalation to inherited drive helpers and
+fail unless those helpers are confirmed gone.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed

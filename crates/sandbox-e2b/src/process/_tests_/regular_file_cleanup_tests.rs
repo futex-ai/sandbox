@@ -6,6 +6,8 @@ use tempfile::tempdir;
 
 use super::{CleanupRequest, command};
 
+const REPLACEMENT_DIGEST: &str = "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47";
+
 #[test]
 fn cleanup_revokes_the_writer_and_removes_temporary_files() {
     let root = tempdir().expect("temporary write root");
@@ -102,6 +104,36 @@ fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
 }
 
 #[test]
+fn cleanup_rejects_a_commit_claim_for_different_same_size_bytes() {
+    let root = tempdir().expect("temporary write root");
+    let stage = tempdir().expect("temporary staging root");
+    fs::create_dir(root.path().join("src")).expect("nested directory");
+    let state = stage.path().join("state");
+    let target = root.path().join("src/lib.rs");
+    let temporary = root.path().join("src/.sandbox-write-test");
+    fs::write(&target, b"old").expect("old target");
+    fs::write(&temporary, b"corruptions").expect("altered temporary file");
+    symlink(
+        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
+        &state,
+    )
+    .expect("valid commit claim");
+
+    let output = run(
+        root.path(),
+        "src/lib.rs",
+        &stage.path().join("missing-upload"),
+        ".sandbox-write-test",
+        &state,
+        b"replacement".len(),
+    );
+
+    assert_ne!(output.status.code(), Some(51));
+    assert_eq!(fs::read(target).expect("unchanged target"), b"old");
+    assert!(!temporary.exists());
+}
+
+#[test]
 fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
     let root = tempdir().expect("temporary write root");
     let stage = tempdir().expect("temporary staging root");
@@ -125,6 +157,7 @@ fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
         temporary_name: ".missing-temporary".to_owned(),
         state_path: state.to_string_lossy().into_owned(),
         expected_size: b"replacement".len(),
+        expected_digest: REPLACEMENT_DIGEST.to_owned(),
     });
     let helper = command.args.get_mut(1).expect("embedded cleanup helper");
     *helper = format!(
@@ -157,6 +190,7 @@ fn run(
         temporary_name: temporary_name.to_owned(),
         state_path: state.to_string_lossy().into_owned(),
         expected_size,
+        expected_digest: REPLACEMENT_DIGEST.to_owned(),
     });
     Command::new(command.command)
         .args(command.args)

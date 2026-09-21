@@ -4,9 +4,12 @@ use uuid::Uuid;
 
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendPrepareImageRequest,
-    BackendSnapshotCreateOutcome, Error, OperationId, RealizeImageFileInput, ResourceOwner, Result,
-    SandboxBackend, SandboxId, SandboxNetworkPolicy, SnapshotId,
+    BackendSnapshot, BackendSnapshotCreateOutcome, BackendSnapshotRecovery, Error, OperationId,
+    RealizeImageFileInput, ResourceOwner, Result, SandboxBackend, SandboxId, SandboxNetworkPolicy,
+    SnapshotId,
 };
+
+const SNAPSHOT_RECOVERY_ATTEMPTS: usize = 60;
 
 pub(crate) async fn exercise(
     backend: &dyn SandboxBackend,
@@ -47,16 +50,43 @@ pub(crate) async fn exercise(
         correlation_name,
         before,
     };
-    let BackendSnapshotCreateOutcome::Created(image) =
-        backend.create_snapshot(snapshot_request).await?
-    else {
-        return Err(Error::internal_message(
-            "backend conformance image snapshot did not complete",
-        ));
+    let image = match create_or_recover_snapshot(backend, snapshot_request).await {
+        Ok(image) => image,
+        Err(error) => {
+            backend.destroy_sandbox(source.provider_ref).await?;
+            return Err(error);
+        }
     };
-    backend.delete_snapshot(image.provider_ref).await?;
-    backend.destroy_sandbox(source.provider_ref).await?;
+    let delete_result = backend.delete_snapshot(image.provider_ref).await;
+    let destroy_result = backend.destroy_sandbox(source.provider_ref).await;
+    delete_result?;
+    destroy_result?;
     exercise_failed_preparation(backend, profile, workspace_id).await
+}
+
+async fn create_or_recover_snapshot(
+    backend: &dyn SandboxBackend,
+    request: BackendCreateSnapshotRequest,
+) -> Result<BackendSnapshot> {
+    match backend.create_snapshot(request.clone()).await? {
+        BackendSnapshotCreateOutcome::Created(image) => return Ok(image),
+        BackendSnapshotCreateOutcome::InProgress
+        | BackendSnapshotCreateOutcome::DeliveryAmbiguous => {}
+    }
+    for _attempt in 0..SNAPSHOT_RECOVERY_ATTEMPTS {
+        match backend.recover_snapshot_create(request.clone()).await? {
+            BackendSnapshotRecovery::Recovered(image) => return Ok(image),
+            BackendSnapshotRecovery::InProgress => {}
+            BackendSnapshotRecovery::ReconciliationRequired => {
+                return Err(Error::SnapshotReconciliationRequired {
+                    retained_sandbox: None,
+                });
+            }
+        }
+    }
+    Err(Error::SnapshotReconciliationRequired {
+        retained_sandbox: None,
+    })
 }
 
 async fn exercise_failed_preparation(
@@ -79,19 +109,23 @@ async fn exercise_failed_preparation(
         })
         .await
         .expect_err("backend setup failure should be typed");
-    match failure {
+    let valid_failure = match failure {
         Error::ImageSetupFailed {
             command: _,
-            retained_sandbox: Some(retained_sandbox),
-        } if retained_sandbox.sandbox_id == sandbox_id
-            && retained_sandbox.provider_ref == source.provider_ref => {}
-        _ => {
-            return Err(Error::internal_message(
-                "backend setup failure did not retain its caller-owned source",
-            ));
-        }
+            retained_sandbox,
+        } => retained_sandbox.is_none_or(|retained_sandbox| {
+            retained_sandbox.sandbox_id == sandbox_id
+                && retained_sandbox.provider_ref == source.provider_ref
+        }),
+        _ => false,
+    };
+    backend.destroy_sandbox(source.provider_ref).await?;
+    if !valid_failure {
+        return Err(Error::internal_message(
+            "backend setup failure returned a mismatched retained source",
+        ));
     }
-    backend.destroy_sandbox(source.provider_ref).await
+    Ok(())
 }
 
 fn source_request(
@@ -109,3 +143,7 @@ fn source_request(
         snapshot_provider_ref: None,
     }
 }
+
+#[cfg(test)]
+#[path = "_tests_/conformance_image_tests.rs"]
+mod conformance_image_tests;

@@ -118,7 +118,7 @@ pub enum BackendSnapshotRecovery {
     Recovered(BackendSnapshot),
     /// The matching provider operation is still in progress.
     InProgress,
-    /// Zero or multiple candidates prevent safe adoption.
+    /// Multiple candidates or another terminal conflict prevent safe adoption.
     ReconciliationRequired,
 }
 

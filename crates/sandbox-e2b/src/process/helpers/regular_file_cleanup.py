@@ -48,6 +48,11 @@ try:
     temporary = sys.argv[4]
     state = sys.argv[5]
     expected = int(sys.argv[6])
+    expected_digest = sys.argv[7]
+    if len(expected_digest) != 64 or any(
+        character not in '0123456789abcdef' for character in expected_digest
+    ):
+        raise ValueError()
     try:
         os.symlink('revoked', state)
         state_value = 'revoked'
@@ -76,16 +81,19 @@ try:
         except FileNotFoundError:
             pass
         outcome = REVOKED
-    elif state_value.startswith('commit:'):
-        digest = state_value.removeprefix('commit:')
-        if len(digest) != 64 or any(character not in '0123456789abcdef' for character in digest):
-            raise ValueError()
-        try:
-            os.replace(temporary, target, src_dir_fd=directory, dst_dir_fd=directory)
-        except FileNotFoundError:
-            pass
+    elif state_value == 'commit:' + expected_digest:
+        if target_matches(directory, temporary, expected, expected_digest):
+            try:
+                os.replace(temporary, target, src_dir_fd=directory, dst_dir_fd=directory)
+            except FileNotFoundError:
+                pass
+        else:
+            try:
+                os.unlink(temporary, dir_fd=directory)
+            except FileNotFoundError:
+                pass
         os.fsync(directory)
-        if target_matches(directory, target, expected, digest):
+        if target_matches(directory, target, expected, expected_digest):
             outcome = COMMITTED
     else:
         raise ValueError()

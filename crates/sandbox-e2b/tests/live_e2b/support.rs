@@ -1,6 +1,12 @@
 //! Shared live-test configuration, polling, resource tracking, and cleanup.
 
-use std::{collections::HashMap, error::Error, io, time::Duration};
+use std::{
+    collections::HashMap,
+    error::Error,
+    io::{self, Read, Write},
+    net::TcpListener,
+    time::Duration,
+};
 
 use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 use sandbox_interface::{
@@ -12,6 +18,13 @@ use sandbox_interface::{
 const LOG_LIMIT: usize = 2 * 1024 * 1024;
 
 pub(super) type LiveResult<T> = Result<T, Box<dyn Error>>;
+
+pub(super) fn ingress_client() -> reqwest::Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+}
 
 #[derive(Default)]
 pub(super) struct LiveResources {
@@ -130,4 +143,35 @@ pub(super) async fn wait_for_output(
         tokio::time::sleep(Duration::from_millis(250)).await;
     }
     Err(io::Error::other("terminal marker was not observed").into())
+}
+
+#[tokio::test]
+async fn ingress_client_does_not_follow_redirects() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind redirect endpoint");
+    let address = listener.local_addr().expect("redirect endpoint address");
+    let server = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept ingress probe");
+        let mut request = Vec::new();
+        while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+            let mut chunk = [0_u8; 1024];
+            let read = stream.read(&mut chunk).expect("read ingress probe");
+            assert_ne!(read, 0, "client closed before request headers");
+            request.extend_from_slice(&chunk[..read]);
+        }
+        stream
+            .write_all(
+                b"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:9/redirected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+            )
+            .expect("write redirect response");
+    });
+
+    let response = ingress_client()
+        .expect("ingress client")
+        .get(format!("http://{address}/initial"))
+        .send()
+        .await
+        .expect("redirect response must be returned without following it");
+    server.join().expect("redirect server should finish");
+
+    assert_eq!(response.status(), reqwest::StatusCode::FOUND);
 }

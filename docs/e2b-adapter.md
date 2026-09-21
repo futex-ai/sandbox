@@ -64,12 +64,14 @@ An unconfigured logical profile returns the handled provider-neutral
 
 Regular-file reads use a descriptor-relative helper with non-following opens
 and `fstat` on the opened leaf. Replacement writes stage the bounded payload,
-then traverse the trusted root through non-following directory descriptors and
-atomically replace the leaf. The writer and bounded cleanup helper race for one
-atomic commit-or-revoke marker. A revocation winner prevents every later
-rename; a commit winner lets cleanup finish or verify the exact replacement by
-size and digest, then sync the containing directory before success. Writer
-exits that could follow a commit claim use this same reconciliation path;
+record its caller-computed SHA-256 digest, then traverse the trusted root
+through non-following directory descriptors and atomically replace the leaf.
+The writer and bounded cleanup helper race for one atomic digest-bearing
+commit-or-revoke marker. A revocation winner prevents every later rename; a
+commit winner lets cleanup finish only after the temporary bytes match the
+requested size and digest, or verify an already visible exact replacement,
+then sync the containing directory before success. Writer exits that could
+follow a commit claim use this same reconciliation path;
 definitive pre-commit rejections retain their typed errors. If neither outcome
 can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. Process
@@ -100,7 +102,9 @@ after dispatch starts. Empty recovery inventory remains `InProgress`, so an
 eventual-consistency gap cannot replay build commands, allocate a second paid
 sandbox, or create a second image. Image scrub sends TERM to both configured
 process names, waits for bounded disappearance, escalates to KILL, and fails
-unless both names are gone before size measurement.
+unless both names are gone before size measurement. Both image scrub and
+restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
+helpers with bounded TERM/KILL polling and fail unless their exit is confirmed.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and
@@ -114,4 +118,6 @@ published by the separate template release project;
 The `live-e2b` feature only compiles credentialed tests. Every live test is also
 marked ignored, so `cargo test --workspace --all-features` remains offline.
 Running an ignored test requires an explicit API key, may incur provider cost,
-and executes cleanup for tracked terminals, sandboxes, and snapshots.
+and executes cleanup for tracked terminals, sandboxes, and snapshots. Live
+ingress probes use the same no-redirect rule as production credentialed
+clients, so a redirect cannot forward a private-traffic token to another host.

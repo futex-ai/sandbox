@@ -40,7 +40,24 @@ stop_named_process() {
 }
 for sandbox_process_name in "$@"; do stop_named_process "$sandbox_process_name"; done
 if mountpoint -q /drives/me; then fusermount3 -u /drives/me || umount -l /drives/me; fi
-pkill -TERM -f '[s]andbox-drive-' || true
+stop_sandbox_drive_helpers() {
+    pkill -TERM -f -- '[s]andbox-drive-' || true
+    sandbox_drive_stop_attempt=0
+    while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
+        sleep 0.1
+        sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
+    done
+    if pgrep -f -- '[s]andbox-drive-' >/dev/null; then
+        pkill -KILL -f -- '[s]andbox-drive-' || true
+        sandbox_drive_stop_attempt=0
+        while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
+            sleep 0.1
+            sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
+        done
+    fi
+    ! pgrep -f -- '[s]andbox-drive-' >/dev/null
+}
+stop_sandbox_drive_helpers
 rm -rf /tmp/sandbox-drive
 sandbox_uid="$(id -u)"
 sandbox_home="${HOME:?runtime home is required}"

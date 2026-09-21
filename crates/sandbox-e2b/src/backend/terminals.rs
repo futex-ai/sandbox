@@ -18,7 +18,30 @@ use super::{
 };
 
 const TERMINAL_LOG_DIRECTORY: &str = "/tmp/sandbox/terminals";
-const RESTORE_CLEANUP: &str = "set -eu; if mountpoint -q /drives/me; then fusermount3 -u /drives/me || umount -l /drives/me; fi; pkill -TERM -f '[s]andbox-drive-' || true; rm -rf /tmp/sandbox-drive /tmp/sandbox/terminals";
+const RESTORE_CLEANUP: &str = r#"set -eu
+if mountpoint -q /drives/me; then
+    fusermount3 -u /drives/me || umount -l /drives/me
+fi
+stop_sandbox_drive_helpers() {
+    pkill -TERM -f -- '[s]andbox-drive-' || true
+    sandbox_drive_stop_attempt=0
+    while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
+        sleep 0.1
+        sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
+    done
+    if pgrep -f -- '[s]andbox-drive-' >/dev/null; then
+        pkill -KILL -f -- '[s]andbox-drive-' || true
+        sandbox_drive_stop_attempt=0
+        while pgrep -f -- '[s]andbox-drive-' >/dev/null && [ "$sandbox_drive_stop_attempt" -lt 20 ]; do
+            sleep 0.1
+            sandbox_drive_stop_attempt=$((sandbox_drive_stop_attempt + 1))
+        done
+    fi
+    ! pgrep -f -- '[s]andbox-drive-' >/dev/null
+}
+stop_sandbox_drive_helpers
+rm -rf /tmp/sandbox-drive /tmp/sandbox/terminals
+"#;
 
 pub(super) async fn clean_restored(
     backend: &E2bSandboxBackend,

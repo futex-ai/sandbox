@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use sandbox_interface::{Error, FILE_TRANSFER_MAX_BYTES, Result};
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::{
@@ -41,6 +42,7 @@ pub(super) async fn write(
     let temporary_name = format!(".sandbox-e2b-write-{nonce}");
     let state_path = format!("/tmp/sandbox-e2b-write-state-{nonce}");
     let expected_size = request.bytes.len();
+    let expected_digest = payload_digest(&request.bytes);
     let upload = map_file_result(
         transport
             .http
@@ -59,6 +61,7 @@ pub(super) async fn write(
                 temporary_name,
                 state_path,
                 expected_size,
+                expected_digest,
             ),
         )
         .await;
@@ -74,6 +77,7 @@ pub(super) async fn write(
                 temporary_name.clone(),
                 state_path.clone(),
                 expected_size,
+                expected_digest.clone(),
             ),
             WRITE_TIMEOUT,
         )
@@ -92,6 +96,7 @@ pub(super) async fn write(
                         temporary_name,
                         state_path,
                         expected_size,
+                        expected_digest,
                     ),
                 )
                 .await;
@@ -108,6 +113,7 @@ pub(super) async fn write(
                         temporary_name,
                         state_path,
                         expected_size,
+                        expected_digest,
                     ),
                     error,
                 )
@@ -125,6 +131,7 @@ pub(super) async fn write(
                     temporary_name,
                     state_path,
                     expected_size,
+                    expected_digest,
                 ),
                 error,
             )
@@ -153,6 +160,7 @@ fn cleanup_request(
     temporary_name: String,
     state_path: String,
     expected_size: usize,
+    expected_digest: String,
 ) -> CleanupRequest {
     CleanupRequest {
         root,
@@ -161,6 +169,7 @@ fn cleanup_request(
         temporary_name,
         state_path,
         expected_size,
+        expected_digest,
     }
 }
 
@@ -175,6 +184,9 @@ fn writer_outcome(transport: &ConnectProcessTransport, exit_code: Option<i32>) -
         }),
         Some(48) => WriterOutcome::Rejected(Error::InvalidFilePath { field: "path" }),
         Some(50) => WriterOutcome::Rejected(Error::BackendUnavailable {
+            backend_id: transport.backend_id.clone(),
+        }),
+        Some(51) => WriterOutcome::Rejected(Error::BackendUnavailable {
             backend_id: transport.backend_id.clone(),
         }),
         _ => WriterOutcome::Uncertain(Error::BackendUnavailable {
@@ -196,6 +208,7 @@ fn command(
     temporary_name: String,
     state_path: String,
     expected_size: usize,
+    expected_digest: String,
 ) -> ProcessCommand {
     ProcessCommand {
         command: "/usr/bin/python3".to_owned(),
@@ -208,6 +221,7 @@ fn command(
             temporary_name,
             state_path,
             expected_size.to_string(),
+            expected_digest,
             FILE_TRANSFER_MAX_BYTES.to_string(),
         ],
         cwd: None,
@@ -217,6 +231,17 @@ fn command(
     }
 }
 
+fn payload_digest(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let digest = Sha256::digest(bytes);
+    let mut encoded = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+        encoded.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    encoded
+}
+
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_tests.rs"]
 mod regular_file_write_tests;
@@ -224,3 +249,7 @@ mod regular_file_write_tests;
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_outcome_tests.rs"]
 mod regular_file_write_outcome_tests;
+
+#[cfg(test)]
+#[path = "_tests_/regular_file_integrity_tests.rs"]
+mod regular_file_integrity_tests;

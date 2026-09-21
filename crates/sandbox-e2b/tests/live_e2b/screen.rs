@@ -8,7 +8,7 @@ use sandbox_interface::{
     ScreenStackOutcome,
 };
 
-use super::support::{LiveResources, LiveResult, sandbox_request};
+use super::support::{LiveResources, LiveResult, ingress_client, sandbox_request};
 
 const SCREEN_PORTS: [u16; 2] = [6080, 6081];
 
@@ -27,9 +27,7 @@ pub(super) async fn run(
     if !matches!(outcome, ScreenStackOutcome::Ready { .. }) {
         return Err(io::Error::other("screen template did not report a ready stack").into());
     }
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()?;
+    let client = ingress_client()?;
     for port in SCREEN_PORTS {
         assert_private_bridge(backend, &client, sandbox.provider_ref.clone(), port).await?;
     }

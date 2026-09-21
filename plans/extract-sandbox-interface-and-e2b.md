@@ -400,5 +400,33 @@ reconciliation report only outcomes that are proven durable.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
       unrelated edits.
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      `cargo xtask review` without changing the worktree.
+
+## Milestone 12: Final Integrity And Conformance Remediation
+
+Resolve every finding from the fourth clean post-push review. At the end of
+this milestone, file replacement proves the staged payload identity, inherited
+credential helpers are confirmed stopped, credentialed live probes never
+follow redirects, and the public conformance harness accepts every outcome
+allowed by its own interface without leaking resources.
+
+- [x] Bind writer and cleanup reconciliation to the requested payload digest,
+      with a failing same-size staging-tamper regression added first.
+- [x] Stop inherited drive helpers with bounded TERM/KILL escalation and fail
+      cleanup unless their exit is confirmed, with regression coverage added
+      first for both restored cleanup and image preparation.
+- [x] Disable redirects for every opt-in live client that attaches an E2B
+      traffic credential.
+- [x] Recover valid asynchronous image snapshot outcomes in the conformance
+      harness while preserving bounded execution and source cleanup.
+- [x] Accept omitted retained-source diagnostics in the conformance harness,
+      validate them when present, and always clean up the caller-known source.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the tightened integrity, cleanup, and conformance guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts, and
+      unrelated edits.
 - [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       `cargo xtask review` without changing the worktree.

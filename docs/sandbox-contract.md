@@ -65,14 +65,17 @@ failures never implicitly destroy the caller-owned source.
 Paths must remain under their trusted absolute root and must identify regular
 files without following a symlink escape. Replacement writes must bind parent
 directories and replace the leaf atomically so concurrent path changes cannot
-redirect a write. Failed replacement attempts must make a bounded cleanup
-attempt for all provider-side staging and destination-temporary files. An
-uncertain writer must be fenced by an atomic revocation or reconciled as an
-already committed exact replacement. A commit is reported only after syncing
-the destination directory, including when cleanup finds the exact replacement
-already visible. Any writer exit that could follow a commit claim uses the same
-reconciliation; definitive pre-commit validation failures preserve their typed
-errors. If no outcome can be proven, the backend returns
+redirect a write. The caller must calculate the requested payload digest before
+upload; both the remote writer and cleanup reconciliation must validate that
+identity, not size alone, before replacing the destination. Failed replacement
+attempts must make a bounded cleanup attempt for all provider-side staging and
+destination-temporary files. An uncertain writer must be fenced by an atomic
+revocation or reconciled as an already committed exact replacement. A commit is
+reported only after syncing the destination directory, including when cleanup
+finds the exact replacement already visible. Any writer exit that could follow
+a commit claim uses the same reconciliation; definitive pre-commit validation
+failures preserve their typed errors. If no outcome can be proven, the backend
+returns
 `FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
 reconciled or destroyed. File
 transfers are capped at 256 MiB. Provider response and process output limits
@@ -85,6 +88,8 @@ before provider dispatch. In particular, an oversized replacement write must
 fail before connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
+Inherited credential or drive helpers must be stopped with bounded escalation,
+and maintenance or image preparation fails unless their exit is confirmed.
 
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
@@ -107,5 +112,10 @@ untrusted profile name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-Every provider adapter should run it in addition to its own edge-case and
-transport tests.
+For image snapshots it accepts immediate completion or recovers in-progress
+and delivery-ambiguous outcomes with a bounded number of calls. The harness
+cleans the sources from its image snapshot and intentional preparation-failure
+probes. Preparation errors may omit a retained-source diagnostic; when one is
+present, the harness requires it to identify that source. Every provider
+adapter should run the harness in addition to its own edge-case and transport
+tests.
