@@ -104,7 +104,18 @@ remediation-review finding.
 
 - [x] Update `exercise_backend` rustdoc to require both `/bin/sh` and `curl`.
 - [x] Validate formatting, generated rustdoc, and the documentation-only diff.
-- [ ] Stage every change, commit with a Conventional Commit, and push the
+- [x] Stage every change, commit with a Conventional Commit, and push the
       current branch.
-- [ ] Run `cargo xtask review` after the push and report every finding without
+- [x] Run `cargo xtask review` after the push and report every finding without
       automatically changing it.
+- [ ] Decide whether E2B should reject domain allowlist destinations until a
+      proxy can jointly enforce hostname and destination-IP policy.
+
+### Documentation Review Outcome
+
+The documentation review confirmed the `curl` prerequisite correction and
+identified one new high-severity security finding for maintainer choice: E2B
+domain allow rules can take precedence over denied IP ranges when a connection
+to a denied IP supplies an allowed HTTP Host or TLS SNI name. The reviewer
+recommends rejecting E2B domain destinations until a proxy can enforce both
+hostname and destination IP. No review finding was changed automatically.
