@@ -119,9 +119,26 @@ cleanup can extend its deadline.
       `cargo xtask check`; fix every failure until all checks pass.
 - [x] Audit the complete diff for secrets, artifacts, whitespace errors,
       unrelated edits, and consistency with the original streaming scope.
-- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+- [x] Run `git add -A`, commit all completed work with a Conventional Commit,
       and push the current branch with every new file tracked.
-- [ ] Run `cargo xtask review` after the push against `origin/main`; record and
+- [x] Run `cargo xtask review` after the push against `origin/main`; record and
       report every new finding without automatically fixing it.
+- [ ] Resolve the terminal-outcome backpressure finding below after the
+      maintainer chooses a solution.
 - [ ] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md` after the review workflow finishes.
+
+### Follow-up Review Finding
+
+1. **Severity: high — decouple cleanup from terminal-event backpressure.** In
+   `crates/sandbox-e2b/src/process/stream_state.rs:102`, the terminal outcome is
+   sent through the same bounded queue as stdout and stderr. If all 16 slots are
+   full and the consumer retains the stream without polling it, that send waits
+   indefinitely and cleanup never starts. Doing nothing can leave a timed-out,
+   overflowing, or failed provider process running and can delay its terminal
+   outcome arbitrarily beyond the public deadline. Option A: store or deliver
+   the terminal outcome independently from the bounded data queue and start
+   cleanup without waiting for queue capacity. Option B: discard queued data
+   through an explicit consumer-lag outcome before cleanup. **Recommendation:
+   A**, because it preserves already-emitted data ordering for consumers that
+   resume polling while ensuring cleanup is never blocked by their backpressure.
