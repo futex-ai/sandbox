@@ -63,17 +63,3 @@ async fn mapped_ipv6_allow_entries_overlap_ipv4_denies() {
         Err(Error::EgressDestinationDenied)
     ));
 }
-
-#[tokio::test]
-async fn domain_policy_rejects_a_denied_implicit_dns_resolver() {
-    let backend = backend(config(vec!["8.8.8.0/24"]), Unimock::new(()));
-    let policy = SandboxNetworkPolicy::allowlist(vec![
-        EgressDestination::domain("example.com").expect("valid domain"),
-    ])
-    .expect("valid policy");
-
-    assert!(matches!(
-        backend.create_sandbox(request(policy)).await,
-        Err(Error::EgressDestinationDenied)
-    ));
-}

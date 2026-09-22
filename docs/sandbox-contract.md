@@ -65,6 +65,13 @@ private or deployment deny range before mutation. Cross-family checks treat
 IPv4 as its mapped IPv6 range so broader IPv6 CIDRs cannot bypass an IPv4 deny.
 An implicitly allowed DNS resolver must pass the same check.
 
+Destination kinds describe the provider-neutral policy vocabulary, not a
+promise that every adapter can enforce every kind. If a provider cannot apply
+the complete policy without weakening private or deployment deny rules, its
+adapter must return `UnsupportedNetworkPolicy` before any provider request.
+The adapter must not silently omit the unsupported destination or partially
+apply the policy.
+
 Create recovery receives the exact original policy. A backend must correlate
 the policy applied by create, revalidate the recovery value, and return
 `SandboxNetworkPolicyMismatch` when the correlated sandbox used a different
@@ -255,18 +262,20 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 ## Conformance
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
-shared lifecycle, recovery, process, ingress, image, terminal, and network
-guarantees. Its allowlist probe creates a sandbox that permits only
-`example.com`, uses `/bin/sh -c` and `curl` to require an application response
-from that host, and requires a fetch from a different host to exit
-unsuccessfully. It also proves that recovery rejects a different policy. The
-split-output probe uses a self-contained shell script; conforming images need a
-standard shell and `curl`, but no harness-only executable.
-It retains the exact request for every sandbox and snapshot create before
-dispatch. After every create result, including synchronous success, it proves
-the correlated provider identity through recover-only polling; it never
-redispatches creation. A pending recovery waits one second before the next
-poll, with no more than 60 waits.
+shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
+Its split-output probe uses a self-contained `/bin/sh` script, so conforming
+images need a standard shell but no harness-only executable.
+
+The separate `exercise_network_allowlist` capability probe applies only to
+adapters that support domain destinations. It creates a sandbox that permits
+only `example.com`, uses `/bin/sh -c` and `curl` to require an application
+response from that host, and requires a fetch from a different host to exit
+unsuccessfully. It also proves that recovery rejects a different policy.
+The main harness retains the exact request for every sandbox and snapshot
+create before dispatch. After every create result, including synchronous
+success, it proves the correlated provider identity through recover-only
+polling; it never redispatches creation. A pending recovery waits one second
+before the next poll, with no more than 60 waits.
 
 Each returned terminal, snapshot, or sandbox is recorded before later work can
 fail. Final cleanup attempts every tracked resource in dependency order and

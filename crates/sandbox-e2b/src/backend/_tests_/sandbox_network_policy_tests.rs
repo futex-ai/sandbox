@@ -55,11 +55,7 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
                 assert!(!request.allow_public_egress);
                 assert_eq!(
                     request.allowed_destinations,
-                    Some(vec![
-                        "192.0.2.10".to_owned(),
-                        "198.51.100.0/24".to_owned(),
-                        "api.example.com".to_owned(),
-                    ])
+                    Some(vec!["192.0.2.10".to_owned(), "198.51.100.0/24".to_owned(),])
                 );
                 assert_eq!(request.denied_destinations, ["203.0.113.10/32".to_owned()]);
                 assert!(
@@ -74,7 +70,6 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
     let backend = backend(config(vec!["203.0.113.10/32"]), control);
     let policy = SandboxNetworkPolicy::allowlist(vec![
         EgressDestination::Ip("::ffff:192.0.2.10".parse().expect("mapped public IP")),
-        EgressDestination::domain("api.example.com").expect("valid domain"),
         EgressDestination::Cidr {
             address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 42)),
             prefix: 24,
@@ -86,6 +81,38 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
         .create_sandbox(request(policy))
         .await
         .expect("allowlist should reach the control boundary");
+}
+
+#[tokio::test]
+async fn domain_allowlist_create_is_rejected_before_provider_dispatch() {
+    let backend = backend(config(vec!["203.0.113.10/32"]), Unimock::new(()));
+    let policy = domain_policy("allowed.example.com");
+
+    let error = backend
+        .create_sandbox(request(policy.clone()))
+        .await
+        .expect_err("E2B must reject domain destinations");
+
+    assert!(matches!(
+        error,
+        Error::UnsupportedNetworkPolicy { policy: rejected } if rejected == policy
+    ));
+}
+
+#[tokio::test]
+async fn domain_allowlist_recovery_is_rejected_before_provider_dispatch() {
+    let backend = backend(config(vec!["203.0.113.10/32"]), Unimock::new(()));
+    let policy = domain_policy("allowed.example.com");
+
+    let error = backend
+        .recover_sandbox_create(request(policy.clone()))
+        .await
+        .expect_err("E2B recovery must reject domain destinations");
+
+    assert!(matches!(
+        error,
+        Error::UnsupportedNetworkPolicy { policy: rejected } if rejected == policy
+    ));
 }
 
 #[tokio::test]
@@ -139,7 +166,7 @@ async fn recovery_rejects_a_policy_that_differs_from_the_created_policy() {
     let backend = backend(config(vec!["203.0.113.10/32"]), control);
     let mut request = request(
         SandboxNetworkPolicy::allowlist(vec![
-            EgressDestination::domain("allowed.example.com").expect("valid domain"),
+            EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))),
             EgressDestination::Cidr {
                 address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 42)),
                 prefix: 24,
@@ -154,7 +181,7 @@ async fn recovery_rejects_a_policy_that_differs_from_the_created_policy() {
         .expect("initial create");
     request.network = SandboxNetworkPolicy::Allowlist {
         destinations: vec![
-            EgressDestination::Domain("allowed.example.com".to_owned()),
+            EgressDestination::Ip("::ffff:192.0.2.10".parse().expect("mapped public IP")),
             EgressDestination::Cidr {
                 address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 99)),
                 prefix: 24,
@@ -166,7 +193,10 @@ async fn recovery_rejects_a_policy_that_differs_from_the_created_policy() {
         .await
         .expect("canonical equivalent recovery policy")
         .expect("created sandbox should recover");
-    request.network = domain_policy("different.example.com");
+    request.network = SandboxNetworkPolicy::allowlist(vec![EgressDestination::Ip(IpAddr::V4(
+        Ipv4Addr::new(192, 0, 2, 11),
+    ))])
+    .expect("valid different policy");
     let error = backend
         .recover_sandbox_create(request)
         .await
@@ -212,6 +242,7 @@ pub(super) fn request(network: SandboxNetworkPolicy) -> BackendCreateSandboxRequ
 
 fn domain_policy(domain: &str) -> SandboxNetworkPolicy {
     SandboxNetworkPolicy::allowlist(vec![
+        EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))),
         EgressDestination::domain(domain).expect("valid test domain"),
     ])
     .expect("valid policy")

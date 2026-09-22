@@ -1,8 +1,8 @@
 # Egress Allowlist Policy
 
-Add a provider-neutral outbound allowlist policy and implement its E2B wire,
-recovery, conformance, and live-proof behavior without weakening deployment
-deny rules.
+Add a provider-neutral outbound allowlist policy and implement the subset E2B
+can enforce without weakening deployment deny rules. E2B supports IP and CIDR
+destinations and rejects domain destinations before provider access.
 
 ## Milestone 1: Provider-Neutral Policy Contract (Completed)
 
@@ -25,10 +25,13 @@ and deployment-owned deny rules.
 - [x] Correlate allowlist policy identity and return a typed recovery mismatch.
 - [x] Add byte-exact body, deny-overlap, and create/recovery regression tests.
 
-## Milestone 3: Conformance And Live Proof (Completed)
+## Milestone 3: Conformance And Live Proof (Completed, Superseded)
 
 Exercise deny-by-default behavior in the shared credential-free harness and in
 an explicitly credentialed E2B smoke test.
+
+The original live E2B proof was removed by Milestone 8 after review showed
+that E2B domain rules cannot preserve deployment IP denies.
 
 - [x] Add a shared allowlist sandbox and allowed/disallowed fetch probe.
 - [x] Extend fake backends and transports without adding network access to the
@@ -97,10 +100,13 @@ public `exercise_backend` rustdoc still names only `/bin/sh`, while the
 mandatory network probe also invokes `curl`. No review finding was changed
 automatically.
 
-## Milestone 7: Conformance Prerequisite Documentation
+## Milestone 7: Conformance Prerequisite Documentation (Superseded)
 
 Correct the public harness contract after explicit maintainer approval of the
 remediation-review finding.
+
+Milestone 8 separated the domain capability probe from the mandatory harness,
+so only the opt-in probe still requires `curl`.
 
 - [x] Update `exercise_backend` rustdoc to require both `/bin/sh` and `curl`.
 - [x] Validate formatting, generated rustdoc, and the documentation-only diff.
@@ -108,7 +114,7 @@ remediation-review finding.
       current branch.
 - [x] Run `cargo xtask review` after the push and report every finding without
       automatically changing it.
-- [ ] Decide whether E2B should reject domain allowlist destinations until a
+- [x] Decide whether E2B should reject domain allowlist destinations until a
       proxy can jointly enforce hostname and destination-IP policy.
 
 ### Documentation Review Outcome
@@ -119,3 +125,26 @@ domain allow rules can take precedence over denied IP ranges when a connection
 to a denied IP supplies an allowed HTTP Host or TLS SNI name. The reviewer
 recommends rejecting E2B domain destinations until a proxy can enforce both
 hostname and destination IP. No review finding was changed automatically.
+
+## Milestone 8: E2B Domain Allowlist Safety (Completed)
+
+Resolve the high-severity domain-rule finding after explicit maintainer
+approval of option A. Keep domains in the provider-neutral contract, but fail
+closed when an E2B request contains one because E2B cannot jointly enforce the
+hostname allow rule and deployment-owned denied IP ranges.
+
+- [x] Add failing regressions proving E2B rejects valid domain destinations on
+      both create and recovery before any provider request.
+- [x] Return the typed unsupported-policy error for E2B domain destinations
+      while preserving E2B IP and CIDR allowlists.
+- [x] Keep the shared domain allowlist probe opt-in, run it against the
+      credential-free alternate backend, and remove the unsafe E2B live proof.
+- [x] Update byte-exact E2B allowlist encoding coverage to use only supported
+      IP and CIDR destinations.
+- [x] Align the adapter, contract, crate, workspace, and plan documentation.
+- [x] Run focused tests, formatting, Clippy, smoke coverage, and
+      `cargo xtask check` with a 100% passing result.
+- [x] Stage every change, commit with a Conventional Commit, and push the
+      current branch.
+- [x] Run `cargo xtask review` after the push and report every finding without
+      automatically changing it.

@@ -110,10 +110,6 @@ Run them only when external calls are intended:
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
 
-E2B_API_KEY=... cargo test -p sandbox-e2b \
-  --features live-e2b --test live_e2b \
-  live_e2b_egress_allowlist -- --ignored
-
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
   live_e2b_private_screen_bridges -- --ignored

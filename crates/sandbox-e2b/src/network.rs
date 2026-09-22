@@ -1,4 +1,6 @@
 //! E2B network-policy validation, encoding, and recovery identity.
+//!
+//! IP and CIDR allowlists are supported; domain destinations fail closed.
 
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -27,6 +29,14 @@ pub(crate) fn validate(
     match &policy {
         SandboxNetworkPolicy::Open => Ok(policy),
         SandboxNetworkPolicy::Allowlist { destinations } => {
+            if destinations
+                .iter()
+                .any(|destination| matches!(destination, EgressDestination::Domain(_)))
+            {
+                return Err(Error::UnsupportedNetworkPolicy {
+                    policy: policy.clone(),
+                });
+            }
             validate_deny_overlap(destinations, deployment_denies)?;
             Ok(policy)
         }
@@ -94,15 +104,6 @@ fn validate_deny_overlap(
             return Err(Error::EgressDestinationDenied);
         }
     }
-    if destinations
-        .iter()
-        .any(|destination| matches!(destination, EgressDestination::Domain(_)))
-        && denies
-            .iter()
-            .any(|denied| denied.contains(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8))))
-    {
-        return Err(Error::EgressDestinationDenied);
-    }
     Ok(())
 }
 
@@ -113,14 +114,6 @@ struct IpRange {
 }
 
 impl IpRange {
-    fn contains(self, address: IpAddr) -> bool {
-        let prefix = match address {
-            IpAddr::V4(_) => 32,
-            IpAddr::V6(_) => 128,
-        };
-        Self::new(address, prefix).is_some_and(|other| self.overlaps(other))
-    }
-
     fn overlaps(self, other: Self) -> bool {
         match (self.address, other.address) {
             (IpAddr::V4(left), IpAddr::V4(right)) => {

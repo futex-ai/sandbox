@@ -124,16 +124,6 @@ fn split_output(command: &str, args: &[String]) -> Result<ProcessSplitOutput> {
                 ..ProcessSplitOutput::default()
             })
         }
-        Some(script) if script.ends_with("https://example.com/") => Ok(success(0)),
-        Some(script) if script.ends_with("https://www.google.com/") => Ok(success(28)),
         script => panic!("unexpected conformance process script: {script:?}"),
-    }
-}
-
-fn success(exit_code: i32) -> ProcessSplitOutput {
-    ProcessSplitOutput {
-        exit_code: Some(exit_code),
-        exited: true,
-        ..ProcessSplitOutput::default()
     }
 }

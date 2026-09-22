@@ -13,8 +13,8 @@ using the provider-neutral interface.
   inside the adapter boundary.
 - Reconcile ambiguous creation and snapshot delivery without allocating
   duplicate resources.
-- Encode deny-by-default per-session allowlists without weakening deployment
-  deny ranges.
+- Encode deny-by-default IP/CIDR allowlists and reject unsafe destination kinds
+  without weakening deployment deny ranges.
 - Enforce bounded IO, exact provider identity checks, and private port ingress.
 - Keep all credentialed provider tests feature-gated and ignored by default.
 
@@ -43,16 +43,20 @@ cleanup process names are validated before use.
 
 An Open sandbox keeps the profile's existing public-egress setting and omits
 `allowOut`. An allowlisted sandbox always disables ordinary internet access
-and sends canonical destinations through E2B's `network.allowOut`, while the
-same built-in private and profile deny ranges remain in `denyOut`. Because E2B
-gives allow rules precedence, overlapping allowed IP/CIDR ranges are rejected
-before control dispatch, including overlap through IPv4-mapped IPv6 forms.
-Representable mapped values canonicalize to IPv4. Domain rules cover HTTP/80
-and TLS/443 only and cause E2B to permit its `8.8.8.8` resolver; a profile that
-denies that resolver cannot use domain rules. Allowlist policy identity is
-hashed into provider metadata so recovery returns a typed mismatch instead of
-adopting a sandbox created with different egress access. Open bodies remain
-unchanged.
+and sends canonical IP/CIDR destinations through E2B's `network.allowOut`,
+while the same built-in private and profile deny ranges remain in `denyOut`.
+Because E2B gives allow rules precedence, overlapping allowed IP/CIDR ranges
+are rejected before control dispatch, including overlap through IPv4-mapped
+IPv6 forms. Representable mapped values canonicalize to IPv4.
+
+E2B domain rules trust the sandbox-controlled HTTP `Host` header or TLS SNI,
+and E2B allow rules outrank IP denies. The adapter therefore rejects the
+complete policy with `UnsupportedNetworkPolicy` whenever it contains a domain,
+before any E2B request. Use an IP/CIDR rule, another adapter that jointly
+verifies hostnames and destination IPs, or a trusted enforcing proxy. Allowlist
+policy identity is hashed into provider metadata so recovery returns a typed
+mismatch instead of adopting a sandbox created with different egress access.
+Open bodies remain unchanged.
 
 Creates use exact stable correlation metadata, including the typed sandbox
 consumer class, to recover ambiguous delivery. Allowlist policy identity is
@@ -227,10 +231,6 @@ Live tests are opt-in, ignored, and billable:
 ```bash
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
-
-E2B_API_KEY=... cargo test -p sandbox-e2b \
-  --features live-e2b --test live_e2b \
-  live_e2b_egress_allowlist -- --ignored
 
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \

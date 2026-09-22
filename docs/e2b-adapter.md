@@ -43,34 +43,34 @@ omitted, and `denyOut` remains the sorted, deduplicated merge of built-in
 private ranges and profile `denied_destinations`.
 
 For `Allowlist`, `allow_internet_access` is always `false`, the same merged
-`denyOut` is retained, and canonical IP, CIDR, and domain values are sent in
-`network.allowOut`. E2B treats disabled internet access as a deny-all rule and
-lets explicit allow rules take precedence. The adapter therefore rejects an
-allowed IP or CIDR that overlaps any built-in private or profile deny range
-instead of letting provider precedence weaken the deployment policy.
-Representable IPv4-mapped IPv6 values canonicalize to IPv4, and broader IPv6
-ranges are compared against mapped IPv4 denies. E2B automatically permits
-`8.8.8.8` when a domain rule is present, so a domain allowlist is also rejected
-when a profile deny range covers that resolver.
+`denyOut` is retained, and canonical IP and CIDR values are sent in
+`network.allowOut`. E2B lets explicit allow rules take precedence over deny
+rules. The adapter therefore rejects an allowed IP or CIDR that overlaps any
+built-in private or profile deny range instead of letting provider precedence
+weaken deployment policy. Representable IPv4-mapped IPv6 values canonicalize
+to IPv4, and broader IPv6 ranges are compared against mapped IPv4 denies.
 
-E2B domain rules inspect HTTP `Host` on port 80 and TLS SNI on port 443. Other
-ports and UDP protocols such as QUIC use only IP/CIDR filtering. Hostname
-filtering is a routing control rather than a strict isolation boundary for
-multi-tenant endpoints, so callers should scope credentials and prefer a
-controlled proxy when they need a stronger boundary. Exact and leading `*.`
-names follow the shared lowercase DNS validation contract; a wildcard matches
-subdomains at any depth but not the apex. Canonical and legacy URL-style IP
-literals cannot be encoded as domains. See E2B's current [internet-access
-documentation](https://docs.e2b.dev/network/internet-access) for provider
-semantics.
+The E2B adapter rejects every otherwise valid allowlist containing a `Domain`
+destination with `UnsupportedNetworkPolicy` before any control request. E2B
+matches domains from the sandbox-controlled HTTP `Host` header or TLS SNI,
+while allow rules outrank denied IP ranges. A sandbox could therefore connect
+to a denied address while presenting an allowed hostname. Rejecting the whole
+policy prevents domain rules from bypassing the adapter's private and
+deployment deny guarantees. Callers that require named destinations must use
+an adapter that can jointly verify the hostname and destination IP, or route
+through a trusted enforcing proxy represented by an allowed IP/CIDR. See
+E2B's current
+[internet-access documentation](https://docs.e2b.dev/network/internet-access)
+for the underlying provider semantics.
 
 Allowlist creates add a versioned hash of the canonical policy to provider
 metadata. Recovery queries by the unchanged stable operation identity, then
 compares that hash before adopting the sandbox. A missing or different hash
 returns `SandboxNetworkPolicyMismatch`. Open creates add no policy metadata,
 which preserves their prior request body and lets existing Open resources
-recover unchanged. Create and recovery both rerun shape, bound, canonical, and
-deny-overlap validation before any mutating provider call.
+recover unchanged. Create and recovery both rerun shape, bound,
+supported-destination, canonical, and deny-overlap validation before any
+provider call.
 
 ## Transport And Reconciliation
 
@@ -310,6 +310,6 @@ delivery-ambiguous response, and retries that recovery during cleanup when no
 provider snapshot handle was obtained. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.
-The ignored allowlist test invokes the shared shell-level probe against a real
-E2B sandbox. Default and all-feature test runs compile it but never read
-credentials or contact E2B unless ignored tests are explicitly selected.
+Default and all-feature test runs never read credentials or contact E2B unless
+ignored tests are explicitly selected. There is no live E2B domain-allowlist
+probe because the adapter rejects domain destinations before provider access.

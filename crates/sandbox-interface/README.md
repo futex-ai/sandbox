@@ -37,9 +37,12 @@ result. IPv4-mapped IPv6 values canonicalize to IPv4 when representable, and
 URL-style legacy IP literals cannot masquerade as domains. Domains may use one
 leading `*.` label, which matches subdomains at any depth but not the apex, and
 are limited to HTTP/80 and TLS/443 hostname matching; other traffic requires an
-IP or CIDR rule. Raw or deserialized values are revalidated by adapters.
-Recovery must reject a policy that differs from the one used to create the
-correlated sandbox.
+IP or CIDR rule. A provider-neutral destination kind does not imply that every
+adapter can enforce it safely. An adapter rejects the complete policy with
+`UnsupportedNetworkPolicy` before provider mutation when the provider cannot
+preserve deployment deny rules for one of its destinations. Raw or deserialized
+values are revalidated by adapters. Recovery must reject a policy that differs
+from the one used to create the correlated sandbox.
 Direct process and stateless read-only execution requests require a non-empty
 command, at most 128 KiB across the command and arguments, and a deadline no
 longer than 300 seconds. Each direct-process stream and the combined stateless
@@ -57,14 +60,14 @@ empty mutation acknowledgment before reporting delivery success. After a
 process end is observed, an adapter must also validate the provider stream's
 final status instead of accepting an absent or unsuccessful completion marker.
 
-The public `conformance` module exercises creation, recovery, image
-preparation, split-stream execution, private ingress, terminal identity, and
-deny-by-default egress. Its network probe requires `/bin/sh` and `curl`, allows
-one exact domain, and verifies that another domain cannot return an
-application response.
-Its process probe invokes `/bin/sh` with a self-contained script that emits
-exact stdout and stderr bytes, so a normal backend image needs no test-only
-executable.
+The public `conformance` module's `exercise_backend` helper exercises creation,
+recovery, image preparation, split-stream execution, private ingress, and
+terminal identity. Its process probe invokes `/bin/sh` with a self-contained
+script that emits exact stdout and stderr bytes, so a normal backend image
+needs no test-only executable. The separate `exercise_network_allowlist`
+capability probe is for adapters that support domain destinations. It requires
+`/bin/sh` and `curl`, allows one exact domain, and verifies that another domain
+cannot return an application response.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so
@@ -74,8 +77,9 @@ attempts every tracked terminal, snapshot, and sandbox even when an earlier
 cleanup action fails, while preserving the original operation error when one
 already exists.
 Retained-source diagnostics are optional, but are checked against the known
-source when present. Adapters should run the harness alongside
-provider-specific transport and failure tests.
+source when present. Every adapter should run the main harness alongside
+provider-specific transport and failure tests; domain-capable adapters should
+also run the network capability probe.
 
 Trusted image safety phases must run without user-controlled login startup
 files. Durable terminal capture must likewise be installed before the one

@@ -73,7 +73,7 @@ pub enum Error {
     /// A concurrent transcript reader advanced the durable provider cursor.
     #[error("[sandbox_interface/error] terminal transcript cursor changed concurrently")]
     TranscriptCursorConflict,
-    /// The requested per-session network policy is not supported.
+    /// The requested network policy or one of its destination kinds is not supported.
     #[error("[sandbox_interface/error] network policy {policy:?} is not supported")]
     UnsupportedNetworkPolicy {
         /// Rejected typed per-session network policy.

@@ -17,7 +17,7 @@ use super::ReqwestE2bControlApi;
 type RecordedRequests = Arc<Mutex<Vec<HttpRequest>>>;
 
 const OPEN_BODY: &[u8] = br#"{"templateID":"template","metadata":{"sandbox_agent_id":"agent"},"secure":true,"allow_internet_access":false,"network":{"allowPublicTraffic":false,"denyOut":["10.0.0.0/8","100.64.0.0/10","127.0.0.0/8","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","203.0.113.0/24","224.0.0.0/4","::1/128","fc00::/7","fe80::/10"]},"autoPause":true,"autoPauseMemory":true,"autoResume":{"enabled":false},"timeout":600}"#;
-const ALLOWLIST_BODY: &[u8] = br#"{"templateID":"template","metadata":{},"secure":true,"allow_internet_access":false,"network":{"allowPublicTraffic":false,"denyOut":["10.0.0.0/8","100.64.0.0/10","127.0.0.0/8","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","203.0.113.0/24","224.0.0.0/4","::1/128","fc00::/7","fe80::/10"],"allowOut":["192.0.2.10","198.51.100.0/24","*.example.com"]},"autoPause":true,"autoPauseMemory":true,"autoResume":{"enabled":false},"timeout":600}"#;
+const ALLOWLIST_BODY: &[u8] = br#"{"templateID":"template","metadata":{},"secure":true,"allow_internet_access":false,"network":{"allowPublicTraffic":false,"denyOut":["10.0.0.0/8","100.64.0.0/10","127.0.0.0/8","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","203.0.113.0/24","224.0.0.0/4","::1/128","fc00::/7","fe80::/10"],"allowOut":["192.0.2.10","198.51.100.0/24"]},"autoPause":true,"autoPauseMemory":true,"autoResume":{"enabled":false},"timeout":600}"#;
 
 #[tokio::test]
 async fn open_create_body_is_encoded_byte_for_byte() {
@@ -53,11 +53,7 @@ async fn allowlist_create_body_is_encoded_byte_for_byte() {
             metadata: SandboxMetadata::new(),
             allow_public_egress: false,
             denied_destinations: vec!["203.0.113.0/24".to_owned()],
-            allowed_destinations: Some(vec![
-                "192.0.2.10".to_owned(),
-                "198.51.100.0/24".to_owned(),
-                "*.example.com".to_owned(),
-            ]),
+            allowed_destinations: Some(vec!["192.0.2.10".to_owned(), "198.51.100.0/24".to_owned()]),
             idle_timeout_seconds: 600,
         })
         .await

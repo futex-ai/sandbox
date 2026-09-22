@@ -17,9 +17,8 @@ const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-s
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
-/// The target image must provide `/bin/sh` and `curl`. The split-output probe
-/// supplies its own shell script, and the network probe uses `curl` to verify
-/// allowed and denied application responses.
+/// The target image must provide `/bin/sh`; the split-output probe supplies its
+/// own shell script.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
@@ -133,8 +132,6 @@ async fn exercise_backend_with_resources(
             "backend process run changed bounded split output",
         ));
     }
-
-    crate::conformance_network::exercise(backend, resources, owner, profile).await?;
 
     let first = resources
         .create_sandbox(sandbox_request(
