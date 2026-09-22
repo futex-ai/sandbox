@@ -246,8 +246,45 @@ absolute execution budget includes E2B sandbox connection time.
 - [x] Update the shared contract, adapter guide, and affected READMEs.
 - [x] Run focused regressions, formatting, Clippy, workspace tests, file-length
       validation, smoke coverage, and `cargo xtask check`; audit the diff.
-- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
-- [ ] Run `cargo xtask review` after the push against `origin/main`; report
+- [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [x] Run `cargo xtask review` after the push against `origin/main`; report
       every finding without automatically fixing it.
-- [ ] Mark this milestone complete and move the plan to Completed when the
-      review workflow finishes.
+- [x] Complete this review cycle; keep the plan Active for the new finding
+      awaiting a maintainer decision in Milestone 7.
+
+### Milestone 6 Review Outcome
+
+The three requested fixes were committed and pushed in `c3c981a`.
+`cargo xtask check` passed with 307 tests passing and three opt-in live tests
+ignored. The post-push review completed without changing the worktree. Its own
+test rerun encountered sandbox restrictions on opening local sockets; those
+tests passed in the full workspace check.
+
+1. **Severity: high — anchor idle resets to provider arrival.** At
+   `crates/sandbox-e2b/src/process/stream_run.rs:212`, the streaming adapter
+   resets the idle timer when it processes output. One HTTP chunk can contain
+   more frames than the 16-slot output queue holds, so earlier events may wait
+   for the consumer before later, already-arrived frames reset the timer.
+   Doing nothing lets a slow consumer make old bytes count as fresh activity,
+   postponing termination and cleanup until the absolute deadline. Option A:
+   record output arrival time before waiting for queue capacity and use it for
+   idle resets. Option B: add a consumer-lag outcome that ends a stream when
+   its queue fills, changing the public contract and slow-consumer behavior.
+   **Recommendation: A**, preserving queued output while keeping the idle
+   budget independent of consumer speed. This finding remains unfixed pending
+   the maintainer's decision.
+
+## Milestone 7: Resolve Buffered-Output Idle Timing
+
+Pending maintainer decision. At completion, delayed consumption of output that
+has already arrived cannot refresh the process idle deadline.
+
+- [ ] Confirm the chosen follow-up for the new review finding.
+- [ ] Add a regression with a coalesced output batch, a full queue, and a slow
+      consumer; verify that old output cannot postpone idle expiry or cleanup.
+- [ ] Implement the chosen idle-timing correction and align affected docs.
+- [ ] Run focused tests and `cargo xtask check`, then audit the diff.
+- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [ ] Run `cargo xtask review` after the push and report new findings without
+      automatically fixing them.
+- [ ] Complete the milestone and update the plan index after the review cycle.
