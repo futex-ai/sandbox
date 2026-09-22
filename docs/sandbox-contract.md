@@ -158,9 +158,12 @@ If streaming ends before a process end is observed, the backend makes a bounded
 best-effort kill after it has learned the PID. This includes overflow, idle or
 absolute timeout, transport failure, and a consumer dropping the returned
 stream. For an owned stream, the backend sends its terminal outcome and closes
-the stream before awaiting cleanup, so the cleanup allowance cannot extend the
-observable absolute deadline. A consumer drop cannot receive an outcome because
-it no longer owns the stream, but it still triggers provider cleanup.
+the producer side before awaiting cleanup, so bounded-queue backpressure cannot
+delay that cleanup. The returned stream drains already queued data first, then
+yields the independently stored outcome and ends. A slow consumer can delay its
+own observation but cannot extend process execution or cleanup. A consumer drop
+cannot receive an outcome because it no longer owns the stream, but it still
+triggers provider cleanup.
 Port zero, empty required
 text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A

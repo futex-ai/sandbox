@@ -7,14 +7,18 @@ use sandbox_interface::{
     Error as DomainError, ProcessEventStream, ProcessStreamEvent, ProcessStreamOutcome,
     Result as DomainResult,
 };
-use tokio::sync::mpsc::{self, Sender};
+use tokio::sync::{
+    mpsc::{self, Sender},
+    oneshot,
+};
 
 use super::{
     connect::ConnectProcessTransport,
     framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event},
     mapping::map_result,
     stream_state::{
-        Completion, Delivery, EventResult, StreamSettings, StreamState, deliver, finish_stream,
+        Completion, Delivery, EventReceiver, EventResult, StreamSettings, StreamState, deliver,
+        finish_stream,
     },
     types::{ProcessConnection, StreamProcessCommand},
     wire::{argv_start, encode},
@@ -55,14 +59,15 @@ impl ConnectProcessTransport {
             request_timeout: deadline.saturating_add(STREAM_TRANSPORT_ALLOWANCE),
         };
         let (sender, receiver) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
+        let (outcome_sender, outcome_receiver) = oneshot::channel();
         let transport = self.clone();
         let _worker = tokio::spawn(async move {
             transport
-                .produce_events(connection, settings, sender, idle_deadline)
+                .produce_events(connection, settings, sender, outcome_sender, idle_deadline)
                 .await;
         });
-        let events = stream::unfold(receiver, |mut receiver| async move {
-            receiver.recv().await.map(|event| (event, receiver))
+        let events = stream::unfold(EventReceiver::new(receiver, outcome_receiver), |receiver| {
+            receiver.next_event()
         });
         Ok(Box::pin(events))
     }
@@ -72,13 +77,14 @@ impl ConnectProcessTransport {
         connection: ProcessConnection,
         settings: StreamSettings,
         sender: Sender<ProcessStreamEvent>,
+        outcome_sender: oneshot::Sender<ProcessStreamOutcome>,
         idle_deadline: tokio::time::Instant,
     ) {
         let mut state = StreamState::new(idle_deadline);
         let completion = self
             .drive_stream(connection.clone(), &settings, &sender, &mut state)
             .await;
-        finish_stream(sender, completion).await;
+        finish_stream(sender, outcome_sender, completion);
         if !state.ended {
             self.kill_best_effort(connection, state.pid).await;
         }

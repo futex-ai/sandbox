@@ -3,7 +3,10 @@
 use std::time::Duration;
 
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    oneshot,
+};
 
 use super::framing::ProcessDataChannel;
 
@@ -23,6 +26,37 @@ pub(super) struct StreamState {
     stdout_bytes: usize,
     stderr_bytes: usize,
     pub(super) idle_deadline: tokio::time::Instant,
+}
+
+/// Drains ordered data events before yielding one separately published outcome.
+pub(super) struct EventReceiver {
+    events: Receiver<ProcessStreamEvent>,
+    outcome: Option<oneshot::Receiver<ProcessStreamOutcome>>,
+}
+
+impl EventReceiver {
+    pub(super) fn new(
+        events: Receiver<ProcessStreamEvent>,
+        outcome: oneshot::Receiver<ProcessStreamOutcome>,
+    ) -> Self {
+        Self {
+            events,
+            outcome: Some(outcome),
+        }
+    }
+
+    /// Returns the next queued event or the terminal outcome after data closes.
+    pub(super) async fn next_event(mut self) -> Option<(ProcessStreamEvent, EventReceiver)> {
+        if let Some(event) = self.events.recv().await {
+            return Some((event, self));
+        }
+        let receiver = self.outcome.take()?;
+        let outcome = match receiver.await {
+            Ok(outcome) => outcome,
+            Err(_) => ProcessStreamOutcome::TransportFailure,
+        };
+        Some((ProcessStreamEvent::Outcome(outcome), self))
+    }
 }
 
 impl StreamState {
@@ -96,10 +130,14 @@ pub(super) async fn deliver(
     }
 }
 
-/// Sends the terminal outcome and consumes the last worker-side sender.
-pub(super) async fn finish_stream(sender: Sender<ProcessStreamEvent>, completion: Completion) {
+/// Publishes the terminal outcome without waiting for event-queue capacity.
+pub(super) fn finish_stream(
+    _sender: Sender<ProcessStreamEvent>,
+    outcome_sender: oneshot::Sender<ProcessStreamOutcome>,
+    completion: Completion,
+) {
     if let Completion::Outcome(outcome) = completion {
-        let _result = sender.send(ProcessStreamEvent::Outcome(outcome)).await;
+        let _result = outcome_sender.send(outcome);
     }
 }
 

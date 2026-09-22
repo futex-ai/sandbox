@@ -107,9 +107,10 @@ missing or null error field is a clean close. Incremental execution emits
 ordered start, stdout, stderr, exit, and final outcome events. Exit events retain
 envd's normal-exit flag, and a successful trailer is required for `Completed`;
 that outcome does not by itself mean the command succeeded. Only stdout or
-stderr bytes reset the idle timer. The terminal outcome and EOF are delivered
-before best-effort kill cleanup is awaited, so cleanup cannot extend the public
-deadline. Direct process, streaming, and stateless read-only requests are
+stderr bytes reset the idle timer. The terminal outcome is published through a
+slot independent from the bounded data queue: queued data drains in order before
+the outcome and EOF, while cleanup starts without waiting for consumer capacity.
+Direct process, streaming, and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
 combined stateless output cap is at most 64 MiB. Existing process, read-only,

@@ -123,8 +123,13 @@ cleanup can extend its deadline.
       and push the current branch with every new file tracked.
 - [x] Run `cargo xtask review` after the push against `origin/main`; record and
       report every new finding without automatically fixing it.
-- [ ] Resolve the terminal-outcome backpressure finding below after the
+- [x] Add a regression that fills the event queue, pauses the consumer, and
+      proves cleanup starts before queued data and the outcome are drained.
+- [x] Resolve the terminal-outcome backpressure finding below after the
       maintainer chooses a solution.
+- [x] Re-run focused and full checks, then audit the backpressure fix diff.
+- [ ] Commit and push the backpressure fix, then run `cargo xtask review` on the
+      clean branch and record every new finding without automatically fixing it.
 - [ ] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md` after the review workflow finishes.
 
@@ -142,3 +147,7 @@ cleanup can extend its deadline.
    through an explicit consumer-lag outcome before cleanup. **Recommendation:
    A**, because it preserves already-emitted data ordering for consumers that
    resume polling while ensuring cleanup is never blocked by their backpressure.
+
+   **Resolution:** Option A now uses an independent one-shot terminal slot. A
+   regression fills the bounded queue, pauses the consumer, proves cleanup
+   starts, then verifies queued output still precedes the outcome.

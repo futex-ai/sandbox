@@ -6,13 +6,18 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
 use tokio::sync::Notify;
+use unimock::{MockFn, Unimock, matching};
 
 use crate::error::Result;
 use crate::{ConnectProcessTransport, ProcessConnection, ProcessTransport};
 
-use crate::process::http::{ByteStream, ConnectHttpTransport};
+use crate::process::http::{
+    ByteStream, ConnectHttpTransport, stream_with_timeout as stream_call, unary as unary_call,
+};
 
-use super::{command, connection, start_then_pending};
+use super::{
+    byte_stream, command, connection, data_frame, event_frame, start_then_pending, transport,
+};
 
 struct StalledKillHttp {
     kill_started: Arc<Notify>,
@@ -123,4 +128,57 @@ async fn deadline_outcome_and_eof_precede_stalled_kill_cleanup() {
     tokio::time::timeout(Duration::from_millis(50), kill_finished.notified())
         .await
         .expect("best-effort cleanup should finish after release");
+}
+
+#[tokio::test]
+async fn full_event_queue_does_not_block_cleanup_or_terminal_outcome() {
+    let kill_started = Arc::new(Notify::new());
+    let mut fragments = vec![event_frame(r#"{"event":{"start":{"pid":47}}}"#)];
+    fragments.extend((0..32).map(|_| data_frame("stdout", "x")));
+    let transport = transport(Unimock::new((
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers_arc(Arc::new(move |_, _, _, _, _| {
+                Ok(byte_stream(fragments.clone()))
+            })),
+        unary_call
+            .next_call(matching!(_, "SendSignal", _, false))
+            .answers_arc({
+                let kill_started = kill_started.clone();
+                Arc::new(move |_, _, _, _, _| {
+                    kill_started.notify_one();
+                    Ok(Vec::new())
+                })
+            }),
+    )));
+    let stream = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_millis(30), Duration::from_millis(30)),
+        )
+        .await
+        .expect("stream should start");
+
+    tokio::time::timeout(Duration::from_millis(250), kill_started.notified())
+        .await
+        .expect("a full event queue must not block cleanup");
+    let events = tokio::time::timeout(Duration::from_millis(250), stream.collect::<Vec<_>>())
+        .await
+        .expect("queued data and terminal outcome should remain drainable");
+
+    assert_eq!(
+        events.first(),
+        Some(&ProcessStreamEvent::Started { pid: 47 })
+    );
+    assert!(
+        events[1..events.len() - 1]
+            .iter()
+            .all(|event| matches!(event, ProcessStreamEvent::Stdout(bytes) if bytes == b"x"))
+    );
+    assert_eq!(
+        events.last(),
+        Some(&ProcessStreamEvent::Outcome(
+            ProcessStreamOutcome::DeadlineExpired
+        ))
+    );
 }

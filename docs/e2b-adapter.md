@@ -183,9 +183,12 @@ successful zero exit. A process end does not become `Completed` until the
 success trailer follows; that outcome confirms stream completion, not command
 success. Overflow, idle or absolute timeout, malformed or failed transport, and
 consumer drop stop the worker. Streams that remain owned receive their one
-typed `Outcome` and close before cleanup is awaited. When no process end was
-observed, the detached worker then makes the same bounded PID-scoped kill
-attempt; a dropped consumer wakes that worker even while envd is silent. Envd's
+typed `Outcome` through a terminal slot independent of the bounded data queue.
+The producer closes and cleanup starts without waiting for consumer capacity;
+the returned stream preserves ordering by draining queued data before that
+outcome and EOF. When no process end was observed, the detached worker makes the
+same bounded PID-scoped kill attempt; a dropped consumer wakes that worker even
+while envd is silent. Envd's
 HTTP client keeps its fixed 310-second timeout for existing paths. The new path
 alone applies a per-request timeout equal to the requested deadline plus a
 10-second transport allowance, so the client cannot truncate a valid one-hour
