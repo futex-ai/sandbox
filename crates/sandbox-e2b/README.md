@@ -46,11 +46,13 @@ An Open sandbox keeps the profile's existing public-egress setting and omits
 and sends canonical destinations through E2B's `network.allowOut`, while the
 same built-in private and profile deny ranges remain in `denyOut`. Because E2B
 gives allow rules precedence, overlapping allowed IP/CIDR ranges are rejected
-before control dispatch. Domain rules cover HTTP/80 and TLS/443 only and cause
-E2B to permit its `8.8.8.8` resolver; a profile that denies that resolver
-cannot use domain rules. Allowlist policy identity is hashed into provider
-metadata so recovery returns a typed mismatch instead of adopting a sandbox
-created with different egress access. Open bodies remain unchanged.
+before control dispatch, including overlap through IPv4-mapped IPv6 forms.
+Representable mapped values canonicalize to IPv4. Domain rules cover HTTP/80
+and TLS/443 only and cause E2B to permit its `8.8.8.8` resolver; a profile that
+denies that resolver cannot use domain rules. Allowlist policy identity is
+hashed into provider metadata so recovery returns a typed mismatch instead of
+adopting a sandbox created with different egress access. Open bodies remain
+unchanged.
 
 Creates use exact stable correlation metadata, including the typed sandbox
 consumer class, to recover ambiguous delivery. Allowlist policy identity is

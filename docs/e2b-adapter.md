@@ -47,9 +47,11 @@ For `Allowlist`, `allow_internet_access` is always `false`, the same merged
 `network.allowOut`. E2B treats disabled internet access as a deny-all rule and
 lets explicit allow rules take precedence. The adapter therefore rejects an
 allowed IP or CIDR that overlaps any built-in private or profile deny range
-instead of letting provider precedence weaken the deployment policy. E2B
-automatically permits `8.8.8.8` when a domain rule is present, so a domain
-allowlist is also rejected when a profile deny range covers that resolver.
+instead of letting provider precedence weaken the deployment policy.
+Representable IPv4-mapped IPv6 values canonicalize to IPv4, and broader IPv6
+ranges are compared against mapped IPv4 denies. E2B automatically permits
+`8.8.8.8` when a domain rule is present, so a domain allowlist is also rejected
+when a profile deny range covers that resolver.
 
 E2B domain rules inspect HTTP `Host` on port 80 and TLS SNI on port 443. Other
 ports and UDP protocols such as QUIC use only IP/CIDR filtering. Hostname
@@ -57,7 +59,8 @@ filtering is a routing control rather than a strict isolation boundary for
 multi-tenant endpoints, so callers should scope credentials and prefer a
 controlled proxy when they need a stronger boundary. Exact and leading `*.`
 names follow the shared lowercase DNS validation contract; a wildcard matches
-subdomains at any depth but not the apex. See E2B's current [internet-access
+subdomains at any depth but not the apex. Canonical and legacy URL-style IP
+literals cannot be encoded as domains. See E2B's current [internet-access
 documentation](https://docs.e2b.dev/network/internet-access) for provider
 semantics.
 

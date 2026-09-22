@@ -9,7 +9,7 @@ use crate::{
 };
 
 const ALLOWED_FETCH: &str = "curl --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://example.com/";
-const DISALLOWED_FETCH: &str = "curl --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://www.google.com/";
+const DISALLOWED_FETCH: &str = "curl --noproxy '*' --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://www.google.com/";
 
 pub(crate) async fn exercise(
     backend: &dyn SandboxBackend,
@@ -84,3 +84,7 @@ async fn fetch(
         })
         .await
 }
+
+#[cfg(test)]
+#[path = "_tests_/conformance_network_tests.rs"]
+mod conformance_network_tests;

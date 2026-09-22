@@ -31,6 +31,10 @@ mod sandbox_create_tests;
 mod sandbox_network_policy_tests;
 
 #[cfg(test)]
+#[path = "_tests_/sandbox_network_address_tests.rs"]
+mod sandbox_network_address_tests;
+
+#[cfg(test)]
 #[path = "_tests_/backend_conformance_tests.rs"]
 mod backend_conformance_tests;
 

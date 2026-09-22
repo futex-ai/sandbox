@@ -33,11 +33,13 @@ recognized value and `None` for older or malformed metadata instead of
 guessing a class.
 `SandboxNetworkPolicy::allowlist` accepts at most 64 typed IP, CIDR, or
 lowercase DNS destinations, canonicalizes CIDRs, and sorts and deduplicates the
-result. Domains may use one leading `*.` label, which matches subdomains at any
-depth but not the apex, and are limited to HTTP/80 and TLS/443 hostname
-matching; other traffic requires an IP or CIDR rule. Raw or deserialized values
-are revalidated by adapters. Recovery must reject a policy that differs from
-the one used to create the correlated sandbox.
+result. IPv4-mapped IPv6 values canonicalize to IPv4 when representable, and
+URL-style legacy IP literals cannot masquerade as domains. Domains may use one
+leading `*.` label, which matches subdomains at any depth but not the apex, and
+are limited to HTTP/80 and TLS/443 hostname matching; other traffic requires an
+IP or CIDR rule. Raw or deserialized values are revalidated by adapters.
+Recovery must reject a policy that differs from the one used to create the
+correlated sandbox.
 Direct process and stateless read-only execution requests require a non-empty
 command, at most 128 KiB across the command and arguments, and a deadline no
 longer than 300 seconds. Each direct-process stream and the combined stateless

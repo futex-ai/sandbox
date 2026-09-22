@@ -44,13 +44,15 @@ default and permits only its typed `EgressDestination` values.
 
 An allowlist accepts no more than 64 caller-supplied entries. Exact IP values
 use `IpAddr`; CIDRs carry an address and a family-appropriate prefix and are
-canonicalized to their network address. Domain values are lowercase ASCII DNS
-names no longer than 253 bytes. Each label is `1..=63` bytes, begins and ends
-with an ASCII letter or digit, and otherwise contains only letters, digits, or
-hyphens. A domain may have one leading `*.` label, which matches subdomains at
-any depth but not the apex. Bare wildcards, embedded wildcards, IP literals
-represented as domains, schemes, ports, paths, leading or trailing dots, and
-empty labels are invalid. Construction sorts and
+canonicalized to their network address. IPv4-mapped IPv6 addresses and CIDRs
+contained by the mapped prefix canonicalize to IPv4 before policy identity and
+overlap checks. Domain values are lowercase ASCII DNS names no longer than 253
+bytes. Each label is `1..=63` bytes, begins and ends with an ASCII letter or
+digit, and otherwise contains only letters, digits, or hyphens. A domain may
+have one leading `*.` label, which matches subdomains at any depth but not the
+apex. Bare wildcards, embedded wildcards, canonical or legacy URL-style IP
+literals represented as domains, schemes, ports, paths, leading or trailing
+dots, and empty labels are invalid. Construction sorts and
 deduplicates canonical entries, but the original list must meet the 64-entry
 bound before deduplication. Adapters revalidate values from every construction
 or deserialization path before provider dispatch.
@@ -59,8 +61,9 @@ Domain matching covers HTTP on port 80 through the `Host` header and TLS on
 port 443 through SNI. It does not cover QUIC/HTTP3 or arbitrary ports; those
 flows are controlled only by allowed IP and CIDR values. A provider whose
 allow rules outrank deny rules must reject any allowed IP or CIDR overlapping a
-private or deployment deny range before mutation. An implicitly allowed DNS
-resolver must pass the same check.
+private or deployment deny range before mutation. Cross-family checks treat
+IPv4 as its mapped IPv6 range so broader IPv6 CIDRs cannot bypass an IPv4 deny.
+An implicitly allowed DNS resolver must pass the same check.
 
 Create recovery receives the exact original policy. A backend must correlate
 the policy applied by create, revalidate the recovery value, and return

@@ -56,6 +56,7 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
                 assert_eq!(
                     request.allowed_destinations,
                     Some(vec![
+                        "192.0.2.10".to_owned(),
                         "198.51.100.0/24".to_owned(),
                         "api.example.com".to_owned(),
                     ])
@@ -72,6 +73,7 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
     ));
     let backend = backend(config(vec!["203.0.113.10/32"]), control);
     let policy = SandboxNetworkPolicy::allowlist(vec![
+        EgressDestination::Ip("::ffff:192.0.2.10".parse().expect("mapped public IP")),
         EgressDestination::domain("api.example.com").expect("valid domain"),
         EgressDestination::Cidr {
             address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 42)),
@@ -84,51 +86,6 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
         .create_sandbox(request(policy))
         .await
         .expect("allowlist should reach the control boundary");
-}
-
-#[tokio::test]
-async fn private_and_deployment_deny_overlaps_fail_before_provider_dispatch() {
-    let backend = backend(config(vec!["203.0.113.10/32"]), Unimock::new(()));
-    let private_v4 = SandboxNetworkPolicy::allowlist(vec![EgressDestination::Ip(IpAddr::V4(
-        Ipv4Addr::new(127, 0, 0, 1),
-    ))])
-    .expect("typed private IP");
-    let private_v6 = SandboxNetworkPolicy::allowlist(vec![EgressDestination::Ip(
-        "fc00::1".parse().expect("private IPv6 address"),
-    )])
-    .expect("typed private IPv6");
-    let deployment = SandboxNetworkPolicy::allowlist(vec![EgressDestination::Cidr {
-        address: IpAddr::V4(Ipv4Addr::new(203, 0, 113, 128)),
-        prefix: 24,
-    }])
-    .expect("typed deployment range");
-
-    assert!(matches!(
-        backend.create_sandbox(request(private_v4)).await,
-        Err(Error::EgressDestinationDenied)
-    ));
-    assert!(matches!(
-        backend.create_sandbox(request(private_v6)).await,
-        Err(Error::EgressDestinationDenied)
-    ));
-    assert!(matches!(
-        backend.recover_sandbox_create(request(deployment)).await,
-        Err(Error::EgressDestinationDenied)
-    ));
-}
-
-#[tokio::test]
-async fn domain_policy_rejects_a_denied_implicit_dns_resolver() {
-    let backend = backend(config(vec!["8.8.8.0/24"]), Unimock::new(()));
-    let policy = SandboxNetworkPolicy::allowlist(vec![
-        EgressDestination::domain("example.com").expect("valid domain"),
-    ])
-    .expect("valid policy");
-
-    assert!(matches!(
-        backend.create_sandbox(request(policy)).await,
-        Err(Error::EgressDestinationDenied)
-    ));
 }
 
 #[tokio::test]
@@ -218,11 +175,11 @@ async fn recovery_rejects_a_policy_that_differs_from_the_created_policy() {
     assert!(matches!(error, Error::SandboxNetworkPolicyMismatch));
 }
 
-fn backend(config: E2bAdapterConfig, control: Unimock) -> E2bSandboxBackend {
+pub(super) fn backend(config: E2bAdapterConfig, control: Unimock) -> E2bSandboxBackend {
     E2bSandboxBackend::with_transports(config, Arc::new(control), Arc::new(Unimock::new(())))
 }
 
-fn config(denied_destinations: Vec<&str>) -> E2bAdapterConfig {
+pub(super) fn config(denied_destinations: Vec<&str>) -> E2bAdapterConfig {
     E2bAdapterConfig::new(
         "configured-e2b",
         "https://api.e2b.app",
@@ -240,7 +197,7 @@ fn config(denied_destinations: Vec<&str>) -> E2bAdapterConfig {
     .expect("valid adapter config")
 }
 
-fn request(network: SandboxNetworkPolicy) -> BackendCreateSandboxRequest {
+pub(super) fn request(network: SandboxNetworkPolicy) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),

@@ -6,6 +6,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use url::Host;
 
 use crate::{Error, Result};
 
@@ -19,9 +20,12 @@ pub const EGRESS_DOMAIN_MAX_BYTES: usize = 253;
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EgressDestination {
-    /// One exact IPv4 or IPv6 address.
+    /// One exact IPv4 or IPv6 address; mapped IPv6 canonicalizes to IPv4.
     Ip(IpAddr),
     /// One IPv4 or IPv6 network, canonicalized to its network address.
+    ///
+    /// IPv4-mapped IPv6 CIDRs contained by the mapped prefix canonicalize to
+    /// their equivalent IPv4 network.
     Cidr {
         /// Address whose network portion identifies the destination range.
         address: IpAddr,
@@ -41,6 +45,8 @@ impl EgressDestination {
     }
 
     /// Builds a validated lowercase exact or leading-wildcard DNS destination.
+    ///
+    /// Canonical and legacy URL-style IP literals are rejected.
     pub fn domain(domain: impl Into<String>) -> Result<Self> {
         Self::Domain(domain.into()).validated()
     }
@@ -48,11 +54,11 @@ impl EgressDestination {
     /// Revalidates and canonicalizes a destination from any construction path.
     pub fn validated(&self) -> Result<Self> {
         match self {
-            Self::Ip(address) => Ok(Self::Ip(*address)),
-            Self::Cidr { address, prefix } => Ok(Self::Cidr {
-                address: canonical_network(*address, *prefix)?,
-                prefix: *prefix,
-            }),
+            Self::Ip(address) => Ok(Self::Ip(canonical_ip(*address))),
+            Self::Cidr { address, prefix } => {
+                let (address, prefix) = canonical_cidr(*address, *prefix)?;
+                Ok(Self::Cidr { address, prefix })
+            }
             Self::Domain(domain) => {
                 validate_domain(domain)?;
                 Ok(Self::Domain(domain.clone()))
@@ -128,15 +134,35 @@ impl SandboxNetworkPolicy {
     }
 }
 
-fn canonical_network(address: IpAddr, prefix: u8) -> Result<IpAddr> {
+fn canonical_ip(address: IpAddr) -> IpAddr {
+    match address {
+        IpAddr::V4(address) => IpAddr::V4(address),
+        IpAddr::V6(address) => address
+            .to_ipv4_mapped()
+            .map_or(IpAddr::V6(address), IpAddr::V4),
+    }
+}
+
+fn canonical_cidr(address: IpAddr, prefix: u8) -> Result<(IpAddr, u8)> {
     match address {
         IpAddr::V4(address) if prefix <= 32 => {
             let mask = prefix_mask_v4(prefix);
-            Ok(IpAddr::V4(Ipv4Addr::from(u32::from(address) & mask)))
+            Ok((
+                IpAddr::V4(Ipv4Addr::from(u32::from(address) & mask)),
+                prefix,
+            ))
         }
         IpAddr::V6(address) if prefix <= 128 => {
+            if let Some(address) = address.to_ipv4_mapped()
+                && prefix >= 96
+            {
+                return canonical_cidr(IpAddr::V4(address), prefix - 96);
+            }
             let mask = prefix_mask_v6(prefix);
-            Ok(IpAddr::V6(Ipv6Addr::from(u128::from(address) & mask)))
+            Ok((
+                IpAddr::V6(Ipv6Addr::from(u128::from(address) & mask)),
+                prefix,
+            ))
         }
         IpAddr::V4(_) | IpAddr::V6(_) => Err(Error::InvalidEgressDestination),
     }
@@ -163,12 +189,11 @@ fn validate_domain(domain: &str) -> Result<()> {
             limit: EGRESS_DOMAIN_MAX_BYTES,
         });
     }
-    if domain.parse::<IpAddr>().is_ok() {
-        return Err(Error::InvalidEgressDestination);
-    }
     let name = domain.strip_prefix("*.").unwrap_or(domain);
     if name.is_empty()
         || !name.is_ascii()
+        || name.parse::<IpAddr>().is_ok()
+        || matches!(Host::parse(name), Ok(Host::Ipv4(_) | Host::Ipv6(_)))
         || name.split('.').any(invalid_dns_label)
         || name.contains('*')
     {

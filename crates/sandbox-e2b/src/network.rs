@@ -118,7 +118,7 @@ impl IpRange {
             IpAddr::V4(_) => 32,
             IpAddr::V6(_) => 128,
         };
-        self.overlaps(Self { address, prefix })
+        Self::new(address, prefix).is_some_and(|other| self.overlaps(other))
     }
 
     fn overlaps(self, other: Self) -> bool {
@@ -131,24 +131,51 @@ impl IpRange {
                 let prefix = self.prefix.min(other.prefix);
                 masked_v6(left, prefix) == masked_v6(right, prefix)
             }
-            (IpAddr::V4(_), IpAddr::V6(_)) | (IpAddr::V6(_), IpAddr::V4(_)) => false,
+            (IpAddr::V4(_), IpAddr::V6(_)) | (IpAddr::V6(_), IpAddr::V4(_)) => {
+                self.as_mapped_v6().overlaps(other.as_mapped_v6())
+            }
+        }
+    }
+
+    fn new(address: IpAddr, prefix: u8) -> Option<Self> {
+        match address {
+            IpAddr::V4(_) if prefix > 32 => None,
+            IpAddr::V6(_) if prefix > 128 => None,
+            IpAddr::V6(address) if prefix >= 96 => match address.to_ipv4_mapped() {
+                Some(address) => Some(Self {
+                    address: IpAddr::V4(address),
+                    prefix: prefix - 96,
+                }),
+                None => Some(Self {
+                    address: IpAddr::V6(address),
+                    prefix,
+                }),
+            },
+            IpAddr::V4(_) | IpAddr::V6(_) => Some(Self { address, prefix }),
+        }
+    }
+
+    fn as_mapped_v6(self) -> Self {
+        match self.address {
+            IpAddr::V4(address) => Self {
+                address: IpAddr::V6(address.to_ipv6_mapped()),
+                prefix: self.prefix + 96,
+            },
+            IpAddr::V6(_) => self,
         }
     }
 }
 
 fn destination_range(destination: &EgressDestination) -> Option<IpRange> {
     match destination {
-        EgressDestination::Ip(address) => Some(IpRange {
-            address: *address,
-            prefix: match address {
+        EgressDestination::Ip(address) => IpRange::new(
+            *address,
+            match address {
                 IpAddr::V4(_) => 32,
                 IpAddr::V6(_) => 128,
             },
-        }),
-        EgressDestination::Cidr { address, prefix } => Some(IpRange {
-            address: *address,
-            prefix: *prefix,
-        }),
+        ),
+        EgressDestination::Cidr { address, prefix } => IpRange::new(*address, *prefix),
         EgressDestination::Domain(_) => None,
     }
 }
@@ -165,12 +192,7 @@ fn parse_range(value: &str) -> Option<IpRange> {
             (address, prefix)
         }
     };
-    match address {
-        IpAddr::V4(_) if prefix > 32 => return None,
-        IpAddr::V6(_) if prefix > 128 => return None,
-        IpAddr::V4(_) | IpAddr::V6(_) => {}
-    }
-    Some(IpRange { address, prefix })
+    IpRange::new(address, prefix)
 }
 
 fn masked_v4(address: Ipv4Addr, prefix: u8) -> u32 {

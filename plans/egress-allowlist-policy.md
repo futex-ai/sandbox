@@ -64,4 +64,25 @@ noncanonical IPv4 spellings can pass domain validation, IPv4-mapped IPv6 rules
 can evade IPv4 deny overlap, and the denied-host conformance command can treat
 an HTTP error response as a successful denial proof. No finding was changed
 automatically; the delivery report includes the required severity, impact,
-options, and recommendation for each item.
+options, and recommendation for each item. Milestone 6 records the explicit
+follow-up approval to remediate all three.
+
+## Milestone 6: Review Finding Remediation
+
+Address the three retained review findings after explicit maintainer approval,
+without changing the completed implementation milestones above.
+
+- [x] Add failing regressions for legacy IPv4 domain spellings, IPv4-mapped
+      IPv6 policy values, and reachable HTTP error responses.
+- [x] Reject URL-style legacy IPv4 literals from domain destinations.
+- [x] Canonicalize representable IPv4-mapped IPv6 values and detect mapped
+      cross-family deny overlap.
+- [x] Make the denied-host conformance probe treat every HTTP response as
+      reachable.
+- [x] Align the contract and crate documentation with canonical address rules.
+- [x] Run focused tests, formatting, Clippy, smoke coverage, and
+      `cargo xtask check` with a 100% passing result.
+- [ ] Stage every change, commit with a Conventional Commit, and push the
+      current branch.
+- [ ] Run `cargo xtask review` after the push and report every finding without
+      automatically changing it.

@@ -89,6 +89,12 @@ fn malformed_domains_are_rejected() {
         "https://example.com",
         "example.com/path",
         "127.0.0.1",
+        "127.1",
+        "127.0.1",
+        "2130706433",
+        "0177.0.0.1",
+        "0x7f000001",
+        "*.127.1",
         "bad_name.example.com",
         "-bad.example.com",
         "bad-.example.com",
@@ -146,6 +152,31 @@ fn cidr_constructor_validates_both_families_and_canonicalizes_host_bits() {
         EgressDestination::cidr(address, 129),
         Err(Error::InvalidEgressDestination)
     ));
+}
+
+#[test]
+fn mapped_ipv6_values_canonicalize_to_ipv4() {
+    let policy = SandboxNetworkPolicy::allowlist(vec![
+        EgressDestination::Ip("::ffff:127.0.0.1".parse().expect("mapped loopback")),
+        EgressDestination::Cidr {
+            address: "::ffff:192.0.2.129".parse().expect("mapped test address"),
+            prefix: 120,
+        },
+    ])
+    .expect("mapped values should canonicalize");
+
+    assert_eq!(
+        policy,
+        SandboxNetworkPolicy::Allowlist {
+            destinations: vec![
+                EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
+                EgressDestination::Cidr {
+                    address: IpAddr::V4(Ipv4Addr::new(192, 0, 2, 0)),
+                    prefix: 24,
+                },
+            ],
+        }
+    );
 }
 
 #[test]
