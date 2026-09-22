@@ -48,6 +48,16 @@ async fn empty_snapshot_scope_fails_before_transport() {
     }
 }
 
+#[tokio::test]
+async fn empty_snapshot_creation_name_fails_before_transport() {
+    assert!(matches!(
+        client_without_transport()
+            .create_snapshot("sandbox", "")
+            .await,
+        Err(E2bAdapterError::InvalidRequest)
+    ));
+}
+
 fn client_without_transport() -> ReqwestE2bControlApi {
     ReqwestE2bControlApi {
         transport: Arc::new(Unimock::new(())),

@@ -6,7 +6,10 @@ use crate::error::{Error, Result};
 
 use super::{
     E2bControlApi,
-    helpers::{encode, ensure_sandbox_identity, map_access, map_state, path_segment},
+    helpers::{
+        encode, ensure_sandbox_identity, map_access, map_state, path_segment,
+        valid_provider_identity,
+    },
     http::{E2bHttpTransport, Method},
     pagination,
     types::{
@@ -155,6 +158,9 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn create_snapshot(&self, sandbox_id: &str, name: &str) -> Result<ControlSnapshot> {
+        if name.is_empty() {
+            return Err(Error::InvalidRequest);
+        }
         let response: SnapshotInfoBody = self
             .json(
                 Method::Post,
@@ -164,7 +170,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 true,
             )
             .await?;
-        if response.snapshot_id.is_empty() {
+        if !valid_provider_identity(&response.snapshot_id) {
             return Err(Error::DeliveryAmbiguous);
         }
         Ok(ControlSnapshot {
@@ -214,3 +220,7 @@ mod read_access_tests;
 #[cfg(test)]
 #[path = "_tests_/control_route_tests.rs"]
 mod control_route_tests;
+
+#[cfg(test)]
+#[path = "_tests_/control_response_validation_tests.rs"]
+mod control_response_validation_tests;

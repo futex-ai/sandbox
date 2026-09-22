@@ -29,9 +29,9 @@ pub struct ControlSandboxAccess {
     pub sandbox_id: String,
     /// E2B shared sandbox routing domain.
     pub domain: String,
-    /// Secret envd access token; never persist or log this value.
+    /// Nonblank secret envd access token; never persist or log this value.
     pub envd_access_token: String,
-    /// Secret traffic access token; never persist or log this value.
+    /// Nonblank secret traffic access token; never persist or log this value.
     pub traffic_access_token: String,
 }
 
@@ -92,7 +92,7 @@ impl fmt::Debug for ControlSandboxReadAccess {
 /// One immutable E2B snapshot version.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ControlSnapshot {
-    /// Opaque snapshot template identifier including its version tag.
+    /// Route-safe opaque snapshot template identifier including its version tag.
     pub snapshot_id: String,
 }
 

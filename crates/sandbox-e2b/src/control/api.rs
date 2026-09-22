@@ -17,22 +17,25 @@ use super::{
 pub trait E2bControlApi: Send + Sync {
     /// Lists running sandboxes matching exact consumer metadata.
     async fn list_sandboxes(&self, metadata: SandboxMetadata) -> Result<Vec<ControlSandbox>>;
-    /// Creates one sandbox.
+    /// Creates one sandbox and returns only nonblank access credentials.
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess>;
     /// Gets one sandbox and its provider state.
     async fn get_sandbox(&self, sandbox_id: &str) -> Result<ControlSandbox>;
     /// Gets read access only when the sandbox is already running and provider
     /// auto-resume is disabled; this operation never changes its timeout.
     async fn get_sandbox_read_access(&self, sandbox_id: &str) -> Result<ControlSandboxReadAccess>;
-    /// Connects to or resumes a sandbox and reacquires its call-local token.
+    /// Connects to or resumes a sandbox and reacquires nonblank call-local
+    /// credentials.
     async fn connect_sandbox(&self, sandbox_id: &str) -> Result<ControlSandboxAccess>;
     /// Pauses a sandbox while retaining memory.
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()>;
     /// Idempotently kills a sandbox.
     async fn kill_sandbox(&self, sandbox_id: &str) -> Result<()>;
-    /// Creates one persistent snapshot.
+    /// Creates one persistent snapshot with a nonempty recovery name and a
+    /// route-safe returned provider identity.
     async fn create_snapshot(&self, sandbox_id: &str, name: &str) -> Result<ControlSnapshot>;
-    /// Lists snapshots for one nonempty source sandbox and correlation name.
+    /// Lists route-safe snapshots for one nonempty source sandbox and
+    /// correlation name.
     async fn list_snapshots(&self, sandbox_id: &str, name: &str) -> Result<Vec<ControlSnapshot>>;
     /// Inspects a snapshot within its source-and-name-filtered inventory.
     async fn get_snapshot(

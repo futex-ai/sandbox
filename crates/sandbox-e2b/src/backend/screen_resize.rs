@@ -13,6 +13,7 @@ const MAX_EXECUTION: Duration = Duration::from_secs(15);
 const TERMINATION_ALLOWANCE: Duration = Duration::from_secs(3);
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ResizeAcknowledgment {
     version: u32,
     width: u32,

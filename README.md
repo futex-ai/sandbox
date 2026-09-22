@@ -35,11 +35,14 @@ cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
-credentials before construction. Snapshot inventory requires one nonempty
-source and correlation value. Provider mutations accept only their exact empty
-acknowledgment; missing read credentials stay retryable. Caller-controlled
-process durations are capped before provider access, including 30-second
-terminal output waits and 300-second process operations. Image preparation
+credentials before construction. Snapshot creation and inventory require one
+nonempty source and correlation value, and malformed returned snapshot IDs
+cannot escape recovery. Sandbox create and connect responses require nonblank
+process and private-traffic credentials. Provider mutations accept only their
+exact acknowledgment, including an exact versioned screen-resize object;
+missing read credentials stay retryable. Caller-controlled process durations
+are capped before provider access, including 30-second terminal output waits
+and 300-second process operations. Image preparation
 validates every input path and size before it
 connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers

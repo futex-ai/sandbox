@@ -824,7 +824,81 @@ inputs cannot panic, and unusable read credentials remain retryable.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 24: Exact Provider Results And Recoverable Identities
+
+Resolve every finding from the provider-input review. At the end of this
+milestone, screen resize succeeds only for the exact expected response,
+snapshot creation always carries the name needed for recovery, access responses
+always contain usable credentials, and snapshot recovery never returns an
+identity that later provider routes must reject.
+
+### Review Items
+
+1. **Severity: medium — reject extra screen-resize response fields.** A screen
+   helper confirms that it applied a requested width and height by returning a
+   small JSON object. Today the decoder ignores unexpected fields, so a response
+   such as `{"version":1,"width":390,"height":700,"error":"failed"}` can be
+   treated as success. Doing nothing can release the caller's safety fence even
+   though the helper returned an unexpected result. Option A: make the existing
+   response type reject unknown fields. Option B: manually inspect the raw JSON
+   keys. **Recommendation: A**, because it directly makes the versioned response
+   schema exact with less custom code.
+2. **Severity: medium — reject an empty snapshot name before creation.** A
+   snapshot name links a create request to later recovery. Today the public
+   control client can create a snapshot with an empty name, but recovery rejects
+   that same empty value. Doing nothing can leave a paid snapshot that the
+   normal recovery path cannot identify after an uncertain response. Option A:
+   reject an empty name before encoding or sending the create request. Option B:
+   replace raw strings with a new validated name type. **Recommendation: A**,
+   because it closes the unsafe mutation path without changing the public API.
+3. **Severity: medium — reject blank access credentials.** Sandbox creation and
+   connection return two secret tokens: one for process access and one for
+   private port access. Today present-but-empty or whitespace-only tokens are
+   accepted, even though they cannot authenticate the next request. Doing
+   nothing can report a sandbox or private port as ready while returning access
+   that cannot work. Option A: reject blank tokens in the shared response
+   mapper and report provider unavailability, while keeping accepted creates
+   delivery-ambiguous for recovery. Option B: introduce a validated credential
+   type. **Recommendation: A**, because one shared check protects creation,
+   connection, and ingress with the existing API.
+4. **Severity: medium — reject snapshot identities that cannot be routed.**
+   Snapshot inventory and creation return an opaque provider ID that later
+   inspection and deletion place in a URL path. Today an empty ID, `.` or `..`
+   can escape recovery even though later route construction must reject it.
+   Doing nothing can make a caller persist an unusable snapshot and destroy its
+   source before discovering that the snapshot cannot be addressed. Option A:
+   validate every decoded snapshot ID before returning it, treating malformed
+   inventory as provider unavailability and malformed accepted creation as
+   delivery ambiguity. Option B: deserialize all provider IDs into a validated
+   type. **Recommendation: A**, because it closes both response paths with a
+   small compatible change.
+
+- [x] Record all four review findings with severity, context, impact, options,
+      and recommendations in simple language that assumes no prior context.
+- [x] Add failing regressions first for extra resize fields, an empty snapshot
+      creation name, blank create/connect credentials, and unusable snapshot
+      identities from both creation and inventory.
+- [x] Require the screen resize acknowledgment to contain exactly the expected
+      version, width, and height fields.
+- [x] Reject an empty snapshot creation name before building or sending its
+      authenticated mutation.
+- [x] Reject missing or blank process and private-traffic credentials in the
+      shared access mapper, preserving delivery ambiguity for accepted creates.
+- [x] Validate snapshot identities from accepted creation and inventory before
+      they leave the adapter, with safe-read and mutation-specific errors.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the exact acknowledgment, recovery-name, credential, and identity rules.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, resolve superseded closeout tasks, record plan
+      completion, and move this plan from Active to Completed in
+      `plans/README.md`.

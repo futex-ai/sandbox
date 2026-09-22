@@ -42,7 +42,8 @@ same request; an empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.
 Snapshot inventory requires a nonempty source provider reference and nonempty
-correlation value before an authenticated provider request is built.
+correlation value before an authenticated provider request is built. Snapshot
+creation requires the same nonempty values before its mutation is sent.
 
 Image construction is a caller-persisted state machine:
 
@@ -109,7 +110,10 @@ a non-HTTPS or non-root API origin, an empty or padded API key, an invalid
 routing domain, and a zero idle timeout before it constructs its credentialed
 transport. Empty opaque provider identifiers and
 identifiers equal to `.` or `..` must fail before authenticated route
-construction. Port zero, empty required text, oversized values, unknown
+construction. Snapshot creation and inventory must also reject those values in
+provider responses: an accepted mutation remains delivery-ambiguous, while an
+invalid inventory row is provider unavailability. Port zero, empty required
+text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A
 direct process command cannot be empty; its command and arguments total at
 most 128 KiB, each requested stream limit is at most 64 MiB, and every direct,
@@ -165,16 +169,21 @@ starts before that shell, so login-profile output and exits remain captured
 without allowing the shell to replace, truncate, or forge the stored
 transcript.
 
-Read-only access is valid only when the provider returns a nonblank call-local
-credential for an already-running sandbox whose automatic resume is disabled.
-A missing or blank credential is retryable provider unavailability and must
-not be sent to the provider's process endpoint.
+Sandbox create and connect access is valid only when the provider returns both
+a nonblank process credential and a nonblank private-traffic credential. An
+accepted create with unusable credentials remains delivery-ambiguous; connect
+returns retryable provider unavailability. Read-only access is valid only when
+the provider returns a nonblank call-local process credential for an
+already-running sandbox whose automatic resume is disabled. A missing or blank
+credential is retryable provider unavailability and must not be sent to the
+provider's process endpoint.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact
-acknowledgment and a confirmed normal helper exit. An adapter that cannot
-confirm resize process termination returns `ScreenViewportResizeUnconfirmed`;
-the caller must retain its session fence and arrange cleanup.
+version, width, and height acknowledgment with no extra fields, plus a confirmed
+normal helper exit. An adapter that cannot confirm resize process termination
+returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
+fence and arrange cleanup.
 
 Provider diagnostics returned through handled errors must not contain secret
 values or opaque backend handles. Image-command failures must redact every

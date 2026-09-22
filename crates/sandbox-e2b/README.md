@@ -43,9 +43,12 @@ Creates use exact metadata, including the typed sandbox consumer class, to
 recover ambiguous delivery. Managed inventory maps recognized consumer
 metadata and leaves it absent for older resources. Create and recover validate
 the same profile and network-policy rules before any control request. Snapshot
-recovery requires a nonempty source sandbox and correlation name before its
-bounded, cursor-safe inventory traversal. Terminal identities
-combine an E2B PID with the consumer terminal ID; reads verify both values,
+creation and recovery require a nonempty source sandbox and correlation name
+before an authenticated request. Bounded, cursor-safe inventory rejects an
+empty or dot-segment snapshot identity as provider unavailability; an
+accepted create with such an unusable identity remains delivery-ambiguous.
+Terminal identities combine an E2B PID with the consumer terminal ID; reads
+verify both values,
 while input and close operations use envd's atomic tag selector so PID reuse
 cannot retarget them. File reads use one descriptor-relative, non-following
 helper; writes stage their payload, bind it to the caller-computed SHA-256
@@ -100,9 +103,11 @@ unavailability; failed mutating delivery remains ambiguous. A successful safe
 response with malformed JSON is also retryable provider unavailability. A
 terminal-input response must decode E2B's exact empty JSON acknowledgment;
 unknown fields or malformed output after that accepted mutation keep the
-delivery outcome ambiguous. A read-only access lookup treats a missing or
-blank envd token as retryable provider unavailability and does not attempt an
-unauthenticated envd request.
+delivery outcome ambiguous. Sandbox create and connect responses must contain
+nonblank envd and private-traffic tokens. Missing or blank credentials keep an
+accepted create delivery-ambiguous and make connect retryable. A read-only
+access lookup treats a missing or blank envd token as retryable provider
+unavailability and does not attempt an unauthenticated envd request.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -139,6 +144,7 @@ output and provider-side user scoping cannot hide the terminal from lifecycle
 operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
+accepts only the exact version, width, and height response with no extra fields,
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
 termination separately so callers do not release a possibly active session.
 Compatible custom template publication belongs to the external template

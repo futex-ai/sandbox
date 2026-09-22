@@ -6,7 +6,7 @@ use crate::error::{Error, Result};
 
 use super::{
     ReqwestE2bControlApi,
-    helpers::{map_listed_sandbox, metadata_query},
+    helpers::{map_listed_sandbox, metadata_query, valid_provider_identity},
     http::Method,
     types::{
         ControlSandbox, ControlSnapshot, ListedSandboxBody, SandboxMetadata, SnapshotInfoBody,
@@ -62,13 +62,16 @@ pub(super) async fn list_snapshots(
         let (rows, next): (Vec<SnapshotInfoBody>, _) = client
             .json_page(Method::Get, path, None, &[200], false)
             .await?;
-        result.extend(
-            rows.into_iter()
-                .filter(|row| snapshot_has_name(row, name))
-                .map(|row| ControlSnapshot {
+        for row in rows {
+            if !valid_provider_identity(&row.snapshot_id) {
+                return Err(Error::Unavailable);
+            }
+            if snapshot_has_name(&row, name) {
+                result.push(ControlSnapshot {
                     snapshot_id: row.snapshot_id,
-                }),
-        );
+                });
+            }
+        }
         if !pagination.advance(next)? {
             return Ok(result);
         }

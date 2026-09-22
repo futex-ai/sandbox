@@ -60,23 +60,29 @@ JSON, a non-object response, or an object with any field remains
 delivery-ambiguous instead of being treated as an acknowledgment.
 Empty opaque provider IDs and IDs equal to `.` or `..` are rejected before
 route construction, so URL normalization cannot move an API-key-authenticated
-call outside its intended sandbox or snapshot endpoint.
+call outside its intended sandbox or snapshot endpoint. Snapshot creation and
+inventory also reject those values in provider responses before an unusable
+identity can leave the adapter.
 
 Sandbox creation filters on exact configured metadata, including the stable
 runtime-or-browser consumer value. Managed inventory returns a recognized
 consumer class and leaves it absent for resources created before that metadata
 was added. Snapshot recovery walks bounded cursor pagination and adopts exactly
-one new correlated snapshot. It rejects an empty source sandbox or correlation
-name before issuing the authenticated inventory request.
+one new correlated snapshot. Snapshot creation and inventory reject an empty
+source sandbox or correlation name before issuing an authenticated request.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
-fail closed. If an accepted create response cannot be decoded or omits the
-identity or credentials needed to identify the created resource, the result
-remains delivery-ambiguous and enters recovery.
+fail closed. A malformed snapshot identity in inventory is retryable provider
+unavailability. If an accepted create response cannot be decoded or returns an
+unusable identity or credential, the result remains delivery-ambiguous and
+enters recovery.
 
 Envd routing is derived from adapter configuration, not a response-provided
 host. The complete HTTPS URL must parse to the exact configured envd hostname
 before the access-token header is added. Access tokens and private-traffic
 credentials stay inside call-local types and are redacted from debug output.
+Sandbox create and connect responses require nonblank envd and
+private-traffic credentials. Missing or blank credentials keep an accepted
+create delivery-ambiguous and make connect retryable provider unavailability.
 Read-only lookup also requires a nonblank envd access token from an already
 running sandbox with automatic resume disabled. A missing or blank token maps
 to retryable provider unavailability before any envd request is attempted.
@@ -211,9 +217,10 @@ inside terminal bookkeeping without giving the shell any way to replace,
 truncate, or forge earlier transcript bytes.
 
 Screen ensure and capability discovery invoke the configured helper with
-bounded streams. Resize accepts only an exact versioned acknowledgment and
-requires a normal helper exit before reporting success. Port zero is rejected
-before connecting to a sandbox. A custom screen-capable template is built and
+bounded streams. Resize accepts only the exact version, width, and height
+object with no extra fields and requires a normal helper exit before reporting
+success. Port zero is rejected before connecting to a sandbox. A custom
+screen-capable template is built and
 published by the separate template release project;
 `E2B_SCREEN_TEMPLATE_ID` selects one only for the ignored live smoke test.
 

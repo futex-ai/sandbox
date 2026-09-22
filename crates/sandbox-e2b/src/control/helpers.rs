@@ -34,12 +34,14 @@ pub(super) fn map_access(
     body: SandboxAccessBody,
     sandbox_domain: &str,
 ) -> Result<ControlSandboxAccess> {
-    let token = body.envd_access_token.ok_or_else(|| {
-        Error::internal_message("secure E2B sandbox response omitted envd access token")
-    })?;
-    let traffic_token = body.traffic_access_token.ok_or_else(|| {
-        Error::internal_message("private E2B sandbox response omitted traffic access token")
-    })?;
+    let token = body
+        .envd_access_token
+        .filter(|token| !token.trim().is_empty())
+        .ok_or(Error::Unavailable)?;
+    let traffic_token = body
+        .traffic_access_token
+        .filter(|token| !token.trim().is_empty())
+        .ok_or(Error::Unavailable)?;
     Ok(ControlSandboxAccess {
         sandbox_id: body.sandbox_id,
         domain: sandbox_domain.to_owned(),
@@ -79,10 +81,15 @@ pub(super) fn metadata_query(metadata: &SandboxMetadata) -> String {
 }
 
 pub(super) fn path_segment(value: &str) -> Result<String> {
-    if matches!(value, "" | "." | "..") {
+    if !valid_provider_identity(value) {
         return Err(Error::InvalidRequest);
     }
     Ok(url::form_urlencoded::byte_serialize(value.as_bytes()).collect())
+}
+
+/// Returns whether an opaque provider identity remains a usable route segment.
+pub(super) fn valid_provider_identity(value: &str) -> bool {
+    !matches!(value, "" | "." | "..")
 }
 
 #[cfg(test)]

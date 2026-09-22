@@ -99,6 +99,20 @@ async fn repeated_inventory_cursor_is_rejected() {
     ));
 }
 
+#[tokio::test]
+async fn snapshot_inventory_rejects_unusable_provider_identities() {
+    for snapshot_id in ["", ".", ".."] {
+        let body =
+            format!(r#"[{{"snapshotID":"{snapshot_id}","names":["team/sandbox-operation:one"]}}]"#);
+        let (client, _) = recording_client(vec![page(&body, None)]);
+
+        assert!(matches!(
+            client.list_snapshots("source", "sandbox-operation").await,
+            Err(E2bAdapterError::Unavailable)
+        ));
+    }
+}
+
 fn recording_client(responses: Vec<HttpResponse>) -> (ReqwestE2bControlApi, RecordedRequests) {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let responses = Arc::new(Mutex::new(VecDeque::from(responses)));
