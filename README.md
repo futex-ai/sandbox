@@ -51,19 +51,22 @@ start and inventory responses must contain a nonzero PID. Connect collectors
 and incremental process streams keep reading after a process end until they
 validate the required success trailer; a missing, malformed, or unsuccessful
 trailer cannot look like ordinary completion. Timer expiry after a process end
-but before that trailer is a transport failure, not a routine command timeout.
-Envd and private-port hosts always use the configured routing domain, never a
-domain supplied by an injected control response.
+but before that trailer is a transport failure, not a routine command timeout,
+and bytes following the terminal trailer are rejected. Envd and private-port
+hosts always use the configured routing domain, never a domain supplied by an
+injected control response.
 Missing read credentials stay retryable.
 Caller-controlled process durations are capped before provider access.
 Collected process, read-only, file, and terminal-helper operations retain their
 300-second ceiling, while incremental direct process streams accept an absolute
 deadline up to one hour plus a nonzero output-idle timeout no greater than that
-deadline. Exit events distinguish normal and signal termination. Each owned
-stream drains bounded queued data and ends in one independently stored outcome;
-consumer backpressure cannot block cleanup. Unfinished processes are still
-killed best-effort after timeout, overflow, failure, or consumer drop. Terminal
-output waits remain capped at 30 seconds.
+deadline. The E2B connection extends the sandbox lifetime to at least that
+deadline without shortening a longer configured lifetime. Exit events
+distinguish normal and signal termination. Each owned stream drains bounded
+queued data and ends in one independently stored outcome; consumer backpressure
+cannot block cleanup. Unfinished processes are still killed best-effort after
+timeout, overflow, failure, or consumer drop. Terminal output waits remain
+capped at 30 seconds.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined

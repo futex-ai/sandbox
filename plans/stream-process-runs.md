@@ -141,11 +141,11 @@ as incomplete transport until the required success trailer arrives.
       the post-exit trailer rule.
 - [x] Re-run focused tests and `cargo xtask check`, then audit the complete
       review-finding fix.
-- [ ] Commit and push the fix, then run `cargo xtask review` against
+- [x] Commit and push the fix, then run `cargo xtask review` against
       `origin/main` and record every new finding without automatically fixing
       it.
-- [ ] Mark this milestone complete and move the plan from Active to Completed
-      in `plans/README.md` after the review workflow finishes.
+- [x] Finish this review cycle and track its new findings in a separate
+      milestone.
 
 ### Follow-up Review Finding
 
@@ -182,3 +182,49 @@ as incomplete transport until the required success trailer arrives.
    **Resolution:** Option A now maps either timer to `TransportFailure` after
    process end, including while `Exited` is blocked on queue capacity. Focused
    regressions preserve `DeadlineExpired` and `IdleTimeout` before process end.
+
+## Milestone 5: Preserve Sandbox Lifetime And Trailer Finality
+
+At the end of this milestone, an accepted streaming deadline is covered by the
+E2B sandbox lifetime, and a Connect end-stream trailer is the final frame in its
+decoded stream.
+
+- [x] Add failing regressions for stream deadlines longer than the configured
+      sandbox timeout and for frames following a success trailer.
+- [x] Add a typed control operation for a call-specific nonzero connection
+      timeout while leaving every existing connection path unchanged.
+- [x] Connect streaming calls with the greater of the configured sandbox
+      timeout and the requested deadline rounded up to whole seconds.
+- [x] Make the shared Connect decoder reject bytes after an end-stream frame
+      and prove collected and incremental paths fail closed.
+- [x] Update the contract, adapter guide, workspace README, and crate READMEs.
+- [x] Run focused tests and `cargo xtask check`, then audit the complete diff.
+- [ ] Commit and push the fixes, then run `cargo xtask review` against
+      `origin/main` and report every new finding without automatically fixing
+      it.
+- [ ] Mark this milestone complete and move the plan from Active to Completed
+      in `plans/README.md` after the review workflow finishes.
+
+### Second Follow-up Review Findings
+
+1. **Severity: high — extend the E2B sandbox lifetime for long streams.** The
+   streaming backend accepted deadlines up to one hour but connected with only
+   the adapter's fixed sandbox timeout, which can be 600 seconds. A valid long
+   command could therefore lose its sandbox before its deadline. Option A: use
+   a call-specific connection timeout covering the stream deadline. Option B:
+   reject deadlines longer than the configured timeout. **Recommendation: A**,
+   because it preserves the advertised one-hour capability.
+
+   **Resolution:** Option A now uses the greater of the configured timeout and
+   the deadline rounded up to whole seconds. The concrete control client
+   forwards and validates that call-specific value.
+
+2. **Severity: medium — reject frames following a success trailer.** A valid
+   success trailer followed by another frame in the same HTTP fragment was
+   reported as `Completed` because consumers stopped at the trailer and ignored
+   the remaining decoded frames. Option A: check only the streaming consumer's
+   decoded batch. Option B: enforce terminal-frame finality in the shared
+   decoder. **Recommendation: B**, so every Connect collector fails closed.
+
+   **Resolution:** Option B makes the decoder terminal-aware and rejects any
+   trailing or subsequently supplied bytes after an end-stream frame.

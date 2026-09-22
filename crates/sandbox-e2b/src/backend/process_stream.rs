@@ -1,5 +1,7 @@
 //! Bounded streaming process execution through the envd transport.
 
+use std::time::Duration;
+
 use sandbox_interface::{
     BackendStreamProcessRequest, Error, PROCESS_STREAM_MAX_DEADLINE, ProcessEventStream, Result,
 };
@@ -13,7 +15,11 @@ pub(super) async fn stream(
     request: BackendStreamProcessRequest,
 ) -> Result<ProcessEventStream> {
     validate(&request)?;
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
+    let timeout_seconds =
+        sandbox_timeout_seconds(backend.config.idle_timeout_seconds(), request.deadline)?;
+    let connection =
+        mapping::connection_with_timeout(backend, &request.sandbox_provider_ref, timeout_seconds)
+            .await?;
     backend
         .processes
         .stream_process(
@@ -45,4 +51,20 @@ fn validate(request: &BackendStreamProcessRequest) -> Result<()> {
         return Err(Error::InvalidProcessIdleTimeout);
     }
     Ok(())
+}
+
+fn sandbox_timeout_seconds(configured: u32, deadline: Duration) -> Result<u32> {
+    let rounded_deadline = deadline
+        .as_secs()
+        .saturating_add(u64::from(deadline.subsec_nanos() != 0));
+    let requested = match u32::try_from(rounded_deadline) {
+        Ok(requested) => requested,
+        Err(source) => {
+            return Err(Error::internal_with(
+                source,
+                "convert stream deadline to E2B sandbox timeout",
+            ));
+        }
+    };
+    Ok(configured.max(requested))
 }

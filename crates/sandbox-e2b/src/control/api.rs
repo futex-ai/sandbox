@@ -28,6 +28,13 @@ pub trait E2bControlApi: Send + Sync {
     /// Connects to or resumes a sandbox and reacquires nonblank call-local
     /// credentials.
     async fn connect_sandbox(&self, sandbox_id: &str) -> Result<ControlSandboxAccess>;
+    /// Connects to or resumes a sandbox with one nonzero call-specific
+    /// lifetime in seconds and reacquires nonblank credentials.
+    async fn connect_sandbox_with_timeout(
+        &self,
+        sandbox_id: &str,
+        timeout_seconds: u32,
+    ) -> Result<ControlSandboxAccess>;
     /// Pauses a sandbox while retaining memory.
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()>;
     /// Idempotently kills a sandbox.

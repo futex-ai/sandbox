@@ -194,3 +194,44 @@ async fn missing_trailer_is_a_terminal_transport_failure_without_second_kill() {
         ]
     );
 }
+
+#[tokio::test]
+async fn frame_after_success_trailer_is_a_transport_failure() {
+    let terminal_fragment = [
+        success_trailer(),
+        event_frame(r#"{"event":{"keepalive":{}}}"#),
+    ]
+    .concat();
+    let events = vec![
+        event_frame(r#"{"event":{"start":{"pid":29}}}"#),
+        event_frame(r#"{"event":{"end":{"exitCode":0,"exited":true}}}"#),
+        terminal_fragment,
+    ];
+    let transport = transport(Unimock::new(
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers_arc(Arc::new(move |_, _, _, _, _| {
+                Ok(byte_stream(events.clone()))
+            })),
+    ));
+
+    let stream = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_secs(5), Duration::from_secs(2)),
+        )
+        .await
+        .expect("stream should start");
+
+    assert_eq!(
+        stream.collect::<Vec<_>>().await,
+        [
+            ProcessStreamEvent::Started { pid: 29 },
+            ProcessStreamEvent::Exited {
+                exit_code: 0,
+                exited: true,
+            },
+            ProcessStreamEvent::Outcome(ProcessStreamOutcome::TransportFailure),
+        ]
+    );
+}

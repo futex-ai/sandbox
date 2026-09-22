@@ -19,8 +19,8 @@ use super::configured::E2bSandboxBackend;
 #[tokio::test]
 async fn stream_process_forwards_validated_request_and_events() {
     let control = Arc::new(Unimock::new(
-        E2bControlApiMock::connect_sandbox
-            .next_call(matching!("provider"))
+        E2bControlApiMock::connect_sandbox_with_timeout
+            .next_call(matching!("provider", 900))
             .returns(Ok(ControlSandboxAccess {
                 sandbox_id: "provider".to_owned(),
                 domain: "untrusted.example".to_owned(),
@@ -64,6 +64,45 @@ async fn stream_process_forwards_validated_request_and_events() {
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
         ]
     );
+}
+
+#[tokio::test]
+async fn stream_process_rounds_up_deadline_without_shortening_configured_ttl() {
+    for (deadline, expected_timeout) in [
+        (Duration::from_secs(30), 600),
+        (Duration::from_secs(600) + Duration::from_nanos(1), 601),
+        (PROCESS_STREAM_MAX_DEADLINE, 3600),
+    ] {
+        let control = Arc::new(Unimock::new(
+            E2bControlApiMock::connect_sandbox_with_timeout
+                .next_call(matching!("provider", _))
+                .answers_arc(Arc::new(move |_, _, timeout_seconds| {
+                    assert_eq!(timeout_seconds, expected_timeout);
+                    Ok(ControlSandboxAccess {
+                        sandbox_id: "provider".to_owned(),
+                        domain: "untrusted.example".to_owned(),
+                        envd_access_token: "token".to_owned(),
+                        traffic_access_token: "traffic-token".to_owned(),
+                    })
+                })),
+        ));
+        let processes = Arc::new(Unimock::new(
+            ProcessTransportMock::stream_process
+                .next_call(matching!(_, _))
+                .answers(&|_, _, _| Ok(event_stream())),
+        ));
+        let backend = E2bSandboxBackend::with_transports(config(), control, processes);
+        let mut request = valid_request();
+        request.deadline = deadline;
+        request.idle_timeout = Duration::from_secs(1);
+
+        backend
+            .stream_process(request)
+            .await
+            .expect("valid process stream")
+            .collect::<Vec<_>>()
+            .await;
+    }
 }
 
 #[tokio::test]

@@ -50,7 +50,9 @@ and incremental process streaming share one end-stream decoder. After a process
 end, each path keeps reading until it consumes the final trailer. A missing
 trailer, malformed trailer JSON, or non-null error object fails collection or
 produces the streaming `TransportFailure` outcome; a present trailer with a
-missing or null error field is successful completion.
+missing or null error field is successful completion. The decoder records that
+terminal frame and rejects any remaining bytes in the fragment or bytes supplied
+by a later decoder call, so no collector accepts a frame after its trailer.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
@@ -167,14 +169,16 @@ incremental `stream_process` accepts a deadline up to 3,600 seconds. Its idle
 timeout must be nonzero and no greater than its absolute deadline. Both timers
 start before the envd stream is opened; only a nonempty stdout or stderr data
 frame resets idle time. Start, keep-alive, PTY, process-end, and Connect trailer
-frames do not reset it. Caller-controlled bounds are checked before provider
-access, and every absolute Tokio deadline uses checked arithmetic. File and
-maintenance helpers require a normal process exit;
-a default zero exit code on
-a signal event is not success. A one-shot process whose collection times out,
-overflows, or fails decoding is killed with a bounded cleanup call once its PID
-has been observed; persistent terminal connections are left running
-intentionally.
+frames do not reset it. Before provider access, the adapter rounds a fractional
+stream deadline up to whole seconds and connects with the greater of that value
+and the configured sandbox timeout. The call-specific control operation rejects
+zero, and existing connection paths continue using the configured timeout.
+Caller-controlled bounds are checked before provider access, and every absolute
+Tokio deadline uses checked arithmetic. File and maintenance helpers require a
+normal process exit; a default zero exit code on a signal event is not success.
+A one-shot process whose collection times out, overflows, or fails decoding is
+killed with a bounded cleanup call once its PID has been observed; persistent
+terminal connections are left running intentionally.
 
 Incremental execution emits the decoded start, bounded stdout and stderr, and
 process-end events in provider order. Its exit event preserves both the exit

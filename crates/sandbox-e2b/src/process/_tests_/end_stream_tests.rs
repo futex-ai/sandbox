@@ -88,6 +88,32 @@ async fn split_collector_rejects_a_missing_trailer_after_process_end() {
         .expect_err("process end without a final trailer must fail collection");
 }
 
+#[tokio::test]
+async fn collectors_reject_a_frame_after_the_success_trailer() {
+    for split in [false, true] {
+        let fragment = [
+            process_end_frame(),
+            success_end_stream_frame(),
+            keepalive_frame(),
+        ]
+        .concat();
+        let transport = transport_with_frames(vec![fragment]);
+        let result = if split {
+            transport
+                .run_split(connection(), split_command())
+                .await
+                .map(|_| ())
+        } else {
+            transport
+                .connect(connection(), 7, Duration::from_secs(1), 1024)
+                .await
+                .map(|_| ())
+        };
+
+        assert!(result.is_err());
+    }
+}
+
 fn transport() -> ConnectProcessTransport {
     transport_with_frames(vec![error_end_stream_frame()])
 }
@@ -120,6 +146,14 @@ fn process_end_frame() -> Vec<u8> {
 
 fn error_end_stream_frame() -> Vec<u8> {
     end_stream_frame(br#"{"error":{"code":"unavailable","message":"failed"}}"#)
+}
+
+fn success_end_stream_frame() -> Vec<u8> {
+    end_stream_frame(b"{}")
+}
+
+fn keepalive_frame() -> Vec<u8> {
+    connect_frame(0, br#"{"event":{"keepalive":{}}}"#)
 }
 
 fn connection() -> ProcessConnection {

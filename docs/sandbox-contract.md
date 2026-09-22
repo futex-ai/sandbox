@@ -113,10 +113,11 @@ decoder must validate the bounded frame header before retaining the rest of a
 provider chunk, and its partial-frame buffer may retain only the current
 allowed frame. A streaming protocol's end marker must also be decoded:
 malformed metadata or a reported application error must fail collection rather
-than look like an ordinary completion. Once a process end event is observed,
-collection must continue until that final marker succeeds; stream exhaustion or
-deadline expiry before the marker is a malformed completion. A bounded one-shot
-process must be terminated when collection fails after its PID is known. Credentialed HTTP
+than look like an ordinary completion, and any bytes following that terminal
+marker are malformed. Once a process end event is observed, collection must
+continue until that final marker succeeds; stream exhaustion or deadline expiry
+before the marker is a malformed completion. A bounded one-shot process must be
+terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Provider-returned routing fields are
 not authorities: credentialed process, read-only, and private-port hosts must
@@ -179,9 +180,11 @@ transport helpers retain their 300-second ceiling. Only incremental
 idle timeout must be nonzero and no greater than that deadline. A terminal
 output long poll is at most 30 seconds. A terminal create or recovery request
 cannot set its provider transcript limit above the shared 256 MiB regular-file
-ceiling. These bounds must be checked before acquiring provider sandbox access,
-and absolute deadlines must use checked arithmetic so no caller duration can
-panic. In particular, an
+ceiling. A backend accepting a streaming deadline must arrange for the provider
+resource to remain available through that deadline before starting the command.
+These bounds must be checked before acquiring provider sandbox access, and
+absolute deadlines must use checked arithmetic so no caller duration can panic.
+In particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
 Helper processes may report success only after a normal exit; an exit-code

@@ -195,6 +195,26 @@ fn complete_frames_are_preserved_before_a_terminal_decode_error() {
 }
 
 #[test]
+fn bytes_after_an_end_stream_frame_are_rejected() {
+    let trailer = frame(2, b"{}");
+    let extra = encode_frame(br#"{"event":{"keepalive":{}}}"#).expect("extra frame");
+    let mut decoder = FrameDecoder::new(1024);
+
+    let decoded = decoder.push(&[trailer, extra.clone()].concat());
+
+    assert_eq!(decoded.frames.len(), 1);
+    assert!(decoded.frames[0].end_stream);
+    assert!(matches!(
+        decoded.terminal_error,
+        Some(E2bAdapterError::MalformedFrame)
+    ));
+    assert!(matches!(
+        decoder.push(&extra).terminal_error,
+        Some(E2bAdapterError::MalformedFrame)
+    ));
+}
+
+#[test]
 fn announced_oversized_frames_are_rejected() {
     let mut decoder = FrameDecoder::new(3);
     assert!(matches!(

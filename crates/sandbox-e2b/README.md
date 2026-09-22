@@ -103,15 +103,16 @@ unbounded intermediate buffer. Both combined and split-stream collectors
 keep reading after a process end and decode the required Connect trailer
 through one path: a missing trailer or malformed JSON fails closed, an error
 object is retryable provider unavailability, and a present trailer with a
-missing or null error field is a clean close. Incremental execution emits
-ordered start, stdout, stderr, exit, and final outcome events. Exit events retain
-envd's normal-exit flag, and a successful trailer is required for `Completed`;
-that outcome does not by itself mean the command succeeded. Timer expiry after
-exit but before the trailer is a transport failure, including while exit-event
-delivery is blocked. Only stdout or stderr bytes reset the idle timer. The
-terminal outcome is published through a slot independent from the bounded data
-queue: queued data drains in order before the outcome and EOF, while cleanup
-starts without waiting for consumer capacity.
+missing or null error field is a clean close. The decoder treats an end-stream
+frame as final and rejects bytes in that fragment or a later decoder input.
+Incremental execution emits ordered start, stdout, stderr, exit, and final
+outcome events. Exit events retain envd's normal-exit flag, and a successful
+trailer is required for `Completed`; that outcome does not by itself mean the
+command succeeded. Timer expiry after exit but before the trailer is a transport
+failure, including while exit-event delivery is blocked. Only stdout or stderr
+bytes reset the idle timer. The terminal outcome is published through a slot
+independent from the bounded data queue: queued data drains in order before the
+outcome and EOF, while cleanup starts without waiting for consumer capacity.
 Direct process, streaming, and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
@@ -119,10 +120,13 @@ combined stateless output cap is at most 64 MiB. Existing process, read-only,
 and regular-file durations
 retain their 300-second ceiling. Only incremental streams accept up to 3,600
 seconds, with a nonzero idle timeout no greater than the deadline. Their envd
-HTTP request timeout is that deadline plus a 10-second transport allowance;
-existing paths retain the fixed 310-second client timeout. Terminal output waits
-cannot exceed 30 seconds. Every bound is checked before provider access, and
-absolute Tokio deadlines use checked arithmetic. Failed
+HTTP request timeout is that deadline plus a 10-second transport allowance. The
+control connection uses the greater of the configured sandbox timeout and the
+deadline rounded up to whole seconds, so an accepted stream does not outlive its
+sandbox. Existing connection paths retain their configured sandbox timeout, and
+existing HTTP paths retain the fixed 310-second client timeout. Terminal output
+waits cannot exceed 30 seconds. Every bound is checked before provider access,
+and absolute Tokio deadlines use checked arithmetic. Failed
 image-command diagnostics redact the call-local
 opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
