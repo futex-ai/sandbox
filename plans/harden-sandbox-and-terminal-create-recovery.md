@@ -97,10 +97,37 @@ committed, pushed, and independently reviewed against `origin/main`.
       failure until the complete suite passes.
 - [x] Audit tracked files for prohibited legacy terms, secrets, generated
       artifacts, whitespace errors, and unrelated edits.
-- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+- [x] Run `git add -A`, commit all completed work with a Conventional Commit,
       push the branch, and confirm GitHub CI passes on that exact commit.
-- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+- [x] Run `cargo xtask review` after the push so the AI reviewer checks the
       clean local diff against `origin/main`; record every finding without
       automatically fixing it.
 - [ ] After a clean review, mark all milestones complete and move this plan
       from Active to Completed in `plans/README.md`.
+
+### Post-Push Review Findings
+
+3. **Severity: high — initialize terminal storage before identity lookup.** In
+   `crates/sandbox-e2b/src/backend/terminal_record.rs:98`, terminal recovery
+   tries to read the identity record below `/var/lib/sandbox-e2b/terminals`
+   before terminal creation runs the secure directory initializer. On a fresh
+   sandbox, or after restored-terminal cleanup removed that directory, the
+   production file reader reports an invalid root rather than an absent file.
+   Doing nothing means the first terminal create stops before it can dispatch a
+   PTY. Option A: run the existing ownership- and symlink-validating directory
+   initializer before identity lookup. Option B: distinguish a missing root
+   from an unsafe root and treat only the missing-root result as no identity
+   record. **Recommendation: A**, because it reuses the existing secure
+   initialization path and keeps unsafe roots fail-closed.
+4. **Severity: medium — publish identity records only after they are durable.**
+   In `crates/sandbox-e2b/src/process/helpers/terminal_transcript.py:206`, the
+   wrapper creates the final identity filename before writing and syncing its
+   JSON. Recovery can concurrently read an empty or partial record and fail as
+   an internal error, or see a complete record before it is durable. Doing
+   nothing makes ambiguous-start recovery race terminal initialization and can
+   expose identity state that a crash has not safely persisted. Option A:
+   write and fsync a private temporary inode, publish it atomically without
+   replacing an existing record, then fsync the directory. Option B: retry
+   incomplete records while the exact tagged process is still live.
+   **Recommendation: A**, because it preserves strict malformed-record handling
+   and prevents both partial and pre-durability publication.
