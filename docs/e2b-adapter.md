@@ -196,6 +196,12 @@ record remains, recovery and inspection reconstruct the same `e2b-pty-v1`
 provider reference and report `Exited`; an exited legacy terminal without a
 record remains unrecoverable.
 
+Create and recover run the same root-authenticated, ownership- and
+symlink-validating directory initializer before they list or read terminal
+identity state. This makes a missing directory on a fresh sandbox an
+idempotent initialization case while unsafe existing storage still fails
+closed.
+
 Inspection and output reads bind the stored PID to the exact tag. Input first
 rejects an absent process, then selects the tag inside the provider mutation;
 close uses the same atomic selector, so PID reuse cannot target an unrelated
@@ -209,11 +215,14 @@ operation without creating or deleting content through its target. The
 root-authenticated transcript wrapper traverses
 `/var/lib/sandbox-e2b/terminals` through non-following directory descriptors,
 creates a root-owned `0600` identity record and transcript below the root-owned
-`0700` directory, fsyncs the identity record and directory before it forks the
-shell recorder, and gives the transcript descriptor only to the tagged root
-supervisor. The identity record lasts until explicit close, restored cleanup,
-or sandbox destruction; close leaves the transcript available for final
-ingestion. The root recorder writes through a private pipe,
+`0700` directory. It writes and fsyncs the identity JSON through a private
+temporary name, atomically hard-links the final name without replacement,
+fsyncs the directory, removes the temporary name, and syncs the directory
+again before it forks the shell recorder. Recovery therefore cannot observe an
+empty or partial final record. The supervisor gives the transcript descriptor
+only to the tagged root process. The identity record lasts until explicit
+close, restored cleanup, or sandbox destruction; close leaves the transcript
+available for final ingestion. The root recorder writes through a private pipe,
 which the supervisor clips to the exact remaining byte count while continuing
 to drain overflow. The recorder's child closes all private descriptors,
 initializes supplementary groups, and drops its UID and GID to the configured

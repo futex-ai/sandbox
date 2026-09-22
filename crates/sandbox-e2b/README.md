@@ -61,13 +61,15 @@ and inventory responses reject PID zero before exposing a process. Reads
 verify both identity values,
 while input and close operations use envd's atomic tag selector so PID reuse
 cannot retarget them. Before the login shell can run, the trusted supervisor
-fsyncs a root-owned `0600` versioned identity record containing the PID,
-terminal ID, operation ID, and exact tag. Recovery and inspection use it to
-return the same provider reference as `Exited` after an immediate shell exit.
-Live terminals without a record remain compatible; exited legacy terminals and
-unknown record versions fail closed. Input rejects exited terminals, explicit
-close removes the record idempotently, and restored cleanup removes all
-terminal identity state. File reads use one descriptor-relative, non-following
+initializes its private storage, fsyncs a root-owned `0600` versioned identity
+record containing the PID, terminal ID, operation ID, and exact tag under a
+temporary name, then atomically publishes the final name without replacement.
+Recovery and inspection use it to return the same provider reference as
+`Exited` after an immediate shell exit. Live terminals without a record remain
+compatible; exited legacy terminals and unknown record versions fail closed.
+Input rejects exited terminals, explicit close removes the record idempotently,
+and restored cleanup removes all terminal identity state. File reads use one
+descriptor-relative, non-following
 helper; writes stage their payload, bind it to the caller-computed SHA-256
 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an

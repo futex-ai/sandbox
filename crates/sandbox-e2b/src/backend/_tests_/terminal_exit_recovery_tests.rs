@@ -16,19 +16,47 @@ use crate::{
 use super::configured::E2bSandboxBackend;
 
 #[tokio::test]
+async fn terminal_create_initializes_storage_before_identity_lookup() {
+    let request = terminal_request();
+    let terminal_id = request.terminal_id;
+    let processes = Unimock::new((
+        successful_directory_creation(),
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(Vec::new())),
+        missing_identity(),
+        ProcessTransportMock::start_pty
+            .next_call(matching!(_, _))
+            .returns(Ok(process(terminal_id))),
+    ));
+    let backend = backend(processes);
+
+    let terminal = backend
+        .create_terminal(request)
+        .await
+        .expect("fresh terminal storage should initialize before recovery");
+
+    assert_eq!(
+        terminal.provider_ref,
+        ProviderRef::new(format!("e2b-pty-v1:42:{terminal_id}"))
+    );
+}
+
+#[tokio::test]
 async fn acknowledged_terminal_start_recovers_after_an_immediate_exit() {
     let request = terminal_request();
     let terminal_id = request.terminal_id;
     let operation_id = request.operation_id;
     let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
         missing_identity(),
-        successful_directory_creation(),
         ProcessTransportMock::start_pty
             .next_call(matching!(_, _))
             .returns(Ok(process(terminal_id))),
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
@@ -66,14 +94,15 @@ async fn ambiguous_terminal_start_recovers_after_an_immediate_exit() {
     let terminal_id = request.terminal_id;
     let operation_id = request.operation_id;
     let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
         missing_identity(),
-        successful_directory_creation(),
         ProcessTransportMock::start_pty
             .next_call(matching!(_, _))
             .returns(Err(Error::DeliveryUnknown)),
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),

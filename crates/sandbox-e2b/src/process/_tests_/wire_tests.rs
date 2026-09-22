@@ -144,8 +144,59 @@ fn terminal_wrapper_persists_a_private_versioned_identity() {
     assert!(record["pid"].as_u64().is_some_and(|pid| pid > 0));
 }
 
+#[test]
+fn terminal_identity_is_hidden_until_its_contents_are_synced() {
+    let directory = tempdir().expect("temporary transcript directory");
+    let transcript = directory.path().join("terminal.log");
+    let identity = transcript.with_extension("identity.json");
+    let marker = directory.path().join("identity-synced.marker");
+    let mut child = start_wrapper_paused_after_identity_sync(&transcript, &marker);
+
+    wait_for_path(&marker);
+    let published_before_sync_completed = identity.exists();
+    fs::remove_file(&marker).expect("release identity publisher");
+    let mut input = child.stdin.take().expect("terminal wrapper stdin");
+    input.write_all(b"exit\n").expect("exit terminal shell");
+    let status = child.wait().expect("wait for terminal wrapper");
+
+    assert!(status.success(), "terminal wrapper did not exit normally");
+    assert!(
+        !published_before_sync_completed,
+        "final identity name became visible before atomic publication"
+    );
+    assert!(identity.is_file());
+}
+
 fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
     let wrapper = test_wrapper();
+    spawn_wrapper(&wrapper, path, limit, None)
+}
+
+fn start_wrapper_paused_after_identity_sync(
+    path: &std::path::Path,
+    marker: &std::path::Path,
+) -> std::process::Child {
+    let wrapper = test_wrapper();
+    let sync = "    os.fsync(identity)\n";
+    let paused = concat!(
+        "    os.fsync(identity)\n",
+        "    marker = sys.argv[8]\n",
+        "    with open(marker, 'x', encoding='utf-8'):\n",
+        "        pass\n",
+        "    while os.path.exists(marker):\n",
+        "        time.sleep(0.01)\n",
+    );
+    let wrapper = wrapper.replacen(sync, paused, 1);
+    assert_ne!(wrapper, test_wrapper(), "identity sync hook changed");
+    spawn_wrapper(&wrapper, path, 1024, Some(marker))
+}
+
+fn spawn_wrapper(
+    wrapper: &str,
+    path: &std::path::Path,
+    limit: usize,
+    marker: Option<&std::path::Path>,
+) -> std::process::Child {
     let identity_path = path.with_extension("identity.json");
     let terminal_id = TerminalId::new();
     let parent = path.parent().expect("terminal transcript parent");
@@ -157,20 +208,33 @@ fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
         fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
             .expect("private terminal transcript parent");
     }
-    Command::new("/usr/bin/timeout")
-        .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", &wrapper])
+    let mut command = Command::new("/usr/bin/timeout");
+    command
+        .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", wrapper])
         .arg(path)
         .arg(identity_path)
         .arg(limit.to_string())
         .arg(current_username())
         .arg(terminal_id.to_string())
         .arg(OperationId::new().to_string())
-        .arg(format!("sandbox-terminal-{terminal_id}"))
+        .arg(format!("sandbox-terminal-{terminal_id}"));
+    if let Some(marker) = marker {
+        command.arg(marker);
+    }
+    command
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("start terminal wrapper")
+}
+
+fn wait_for_path(path: &std::path::Path) {
+    let deadline = Instant::now() + Duration::from_secs(4);
+    while !path.exists() {
+        assert!(Instant::now() < deadline, "timed out waiting for {path:?}");
+        thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn test_wrapper() -> String {

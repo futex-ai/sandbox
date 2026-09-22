@@ -39,15 +39,6 @@ pub(super) async fn create(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         request.terminal_id,
     );
-    let directory = backend
-        .processes
-        .run(connection.clone(), create_directory_command())
-        .await?;
-    if !directory.succeeded() {
-        return Err(Error::internal_message(
-            "E2B terminal log directory creation failed",
-        ));
-    }
     let log_path = format!("{TERMINAL_LOG_DIRECTORY}/{}.log", request.terminal_id);
     let process = backend
         .processes
@@ -110,6 +101,7 @@ async fn recover_connected(
     terminal_id: sandbox_interface::TerminalId,
     operation_id: sandbox_interface::OperationId,
 ) -> Result<Option<BackendTerminal>> {
+    initialize_storage(backend, connection).await?;
     let tag = terminal_tag(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         terminal_id,
@@ -139,6 +131,22 @@ async fn recover_connected(
         provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{terminal_id}.log"),
         state: TerminalState::Ready,
     }))
+}
+
+async fn initialize_storage(
+    backend: &E2bSandboxBackend,
+    connection: &ProcessConnection,
+) -> Result<()> {
+    let directory = backend
+        .processes
+        .run(connection.clone(), create_directory_command())
+        .await?;
+    if !directory.succeeded() {
+        return Err(Error::internal_message(
+            "E2B terminal log directory creation failed",
+        ));
+    }
+    Ok(())
 }
 
 pub(super) async fn inspect(

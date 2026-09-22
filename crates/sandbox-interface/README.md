@@ -79,7 +79,9 @@ The adapter must persist a trusted, versioned terminal identity before the
 shell can exit. Recovery and inspection return the same provider reference as
 `Exited` when only that identity and transcript remain; input rejects that
 state, close removes the identity idempotently, and unknown record versions
-fail closed.
+fail closed. Storage initialization precedes identity lookup, and the final
+record name becomes visible only after its contents are synced and atomically
+published without replacement.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only

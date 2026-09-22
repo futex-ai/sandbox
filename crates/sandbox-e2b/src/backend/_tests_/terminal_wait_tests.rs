@@ -27,6 +27,12 @@ async fn terminal_create_and_durable_read_map_process_state() {
             .returns(Ok(access("source"))),
     ));
     let processes = Unimock::new((
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
+            .answers(&|_, connection, _| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(successful_run())
+            }),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .answers(&|_, connection| {
@@ -38,12 +44,6 @@ async fn terminal_create_and_durable_read_map_process_state() {
             .returns(Err(Error::NotFound {
                 resource: ResourceKind::File,
             })),
-        ProcessTransportMock::run
-            .next_call(matching!(_, _))
-            .answers(&|_, connection, _| {
-                assert_eq!(connection.user(), Some("root"));
-                Ok(successful_run())
-            }),
         ProcessTransportMock::start_pty
             .next_call(matching!(_, _))
             .answers_arc(Arc::new(move |_, connection, request| {

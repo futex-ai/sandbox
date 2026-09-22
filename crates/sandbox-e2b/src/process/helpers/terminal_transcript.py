@@ -155,6 +155,7 @@ def open_parent(path):
 
 directory = None
 identity = None
+identity_temporary_name = None
 transcript = None
 pipe_reader = None
 pipe_writer = None
@@ -202,8 +203,9 @@ try:
     if not stat.S_ISREG(os.fstat(transcript).st_mode):
         fail()
     os.fchmod(transcript, 0o600)
+    identity_temporary_name = f'.{identity_name}.{os.getpid()}.tmp'
     identity_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
-    identity = os.open(identity_name, identity_flags, 0o600, dir_fd=directory)
+    identity = os.open(identity_temporary_name, identity_flags, 0o600, dir_fd=directory)
     identity_bytes = (json.dumps(
         {
             'schema': 'sandbox-e2b-terminal-identity-v1',
@@ -221,9 +223,25 @@ try:
     if not stat.S_ISREG(identity_metadata.st_mode) or identity_metadata.st_uid != os.geteuid():
         fail()
     os.fsync(identity)
-    os.fsync(directory)
     os.close(identity)
     identity = None
+    os.link(
+        identity_temporary_name,
+        identity_name,
+        src_dir_fd=directory,
+        dst_dir_fd=directory,
+        follow_symlinks=False,
+    )
+    published_identity = os.stat(identity_name, dir_fd=directory, follow_symlinks=False)
+    if (published_identity.st_dev, published_identity.st_ino) != (
+        identity_metadata.st_dev,
+        identity_metadata.st_ino,
+    ):
+        fail()
+    os.fsync(directory)
+    os.unlink(identity_temporary_name, dir_fd=directory)
+    identity_temporary_name = None
+    os.fsync(directory)
     os.close(directory)
     directory = None
     _, hard_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
@@ -269,6 +287,11 @@ try:
     recorder_pid = None
     exit_with_status(recorder_status)
 except (IndexError, OSError, ValueError):
+    if identity_temporary_name is not None and directory is not None:
+        try:
+            os.unlink(identity_temporary_name, dir_fd=directory)
+        except OSError:
+            pass
     if recorder_pid not in (None, 0):
         for descriptor in (pipe_reader, pipe_writer):
             if descriptor is not None:

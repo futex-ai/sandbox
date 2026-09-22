@@ -8,7 +8,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, E2bRuntimeConventions,
-    ProcessInfo, ProcessSelector, ProcessTransportMock,
+    ProcessInfo, ProcessRunOutput, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -28,6 +28,7 @@ async fn terminal_recovery_finds_the_tagged_process_without_restarting_it() {
             })),
     );
     let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![ProcessInfo {
@@ -83,6 +84,7 @@ async fn terminal_recovery_does_not_allocate_when_the_tag_is_absent() {
             })),
     );
     let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
@@ -211,6 +213,17 @@ async fn restored_cleanup_rejects_non_normal_helper_termination() {
         .expect_err("signalled cleanup must fail closed");
 
     assert!(matches!(error, Error::Internal(_)));
+}
+
+fn successful_directory_creation() -> impl unimock::Clause {
+    ProcessTransportMock::run
+        .next_call(matching!(_, _))
+        .returns(Ok(ProcessRunOutput {
+            bytes: Vec::new(),
+            exit_code: Some(0),
+            exited: true,
+            output_truncated: false,
+        }))
 }
 
 fn config() -> E2bAdapterConfig {

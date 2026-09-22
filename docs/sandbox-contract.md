@@ -202,8 +202,12 @@ transcript.
 Before the interactive shell can run or exit, the provider must durably record
 the terminal's provider identity, consumer terminal ID, create-operation ID,
 and atomic process selector in the same trusted storage class as the
-transcript. Recovery validates that versioned record against the original
-request. If the process has already disappeared, recovery and inspection
+transcript. Create and recovery must securely initialize that storage before
+attempting an identity read. The final record name must remain absent while
+its private inode is written and synced, then be published atomically without
+replacing another record and followed by a directory sync. Recovery validates
+that versioned record against the original request. If the process has already
+disappeared, recovery and inspection
 return the recorded provider reference and `Exited`; they never allocate a
 replacement. Unknown record versions, malformed records, identity conflicts,
 and duplicate selectors fail closed. A live legacy terminal without a record

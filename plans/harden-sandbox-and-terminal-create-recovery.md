@@ -131,3 +131,28 @@ committed, pushed, and independently reviewed against `origin/main`.
    incomplete records while the exact tagged process is still live.
    **Recommendation: A**, because it preserves strict malformed-record handling
    and prevents both partial and pre-durability publication.
+
+## Milestone 4: Close Terminal Identity Review Findings
+
+At the end of this milestone, fresh and restored sandboxes initialize trusted
+terminal storage before recovery reads it, and concurrent recovery cannot see
+an identity record until its contents have been synced.
+
+- [x] Add failing regressions for fresh-directory identity lookup and
+      pre-durability final-name visibility.
+- [x] Initialize terminal storage through the existing secure helper before
+      create or recovery reads an identity record.
+- [x] Write and sync identity data under a private temporary name, publish it
+      atomically without replacement, and sync the directory.
+- [x] Align the terminal storage documentation with the final publication
+      sequence and recovery behavior.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, generated
+      artifacts, whitespace errors, and unrelated edits.
+- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+      push the branch, and confirm GitHub CI passes on that exact commit.
+- [ ] Run `cargo xtask review` after the push and record every finding without
+      automatically fixing it.
+- [ ] After a clean review, mark all milestones complete and move this plan
+      from Active to Completed in `plans/README.md`.
