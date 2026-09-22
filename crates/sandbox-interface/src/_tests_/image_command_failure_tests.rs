@@ -80,6 +80,19 @@ fn redacts_truncated_sensitive_suffix_before_ansi_removal() {
 }
 
 #[test]
+fn redacts_longest_truncated_suffix_before_contained_complete_value() {
+    let failure = ImageCommandFailure::from_captured_output(
+        b"fix-password123",
+        Some(1),
+        true,
+        &["prefix-password123".to_owned(), "password".to_owned()],
+    );
+
+    assert_eq!(failure.output.as_deref(), Some("[REDACTED]"));
+    assert!(failure.output_truncated);
+}
+
+#[test]
 fn normalized_output_keeps_a_utf8_bounded_tail() {
     let input = ["prefix", &"🙂".repeat(IMAGE_COMMAND_OUTPUT_MAX_BYTES)].concat();
     let failure = ImageCommandFailure::from_captured_output(input.as_bytes(), Some(2), false, &[]);

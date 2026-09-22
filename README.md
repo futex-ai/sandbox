@@ -62,8 +62,8 @@ an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
 output before credentials are acquired. Trusted direct process calls may select
 a validated absolute working directory and bounded environment map, while
 template-owned resolution variables remain protected and environment values
-are redacted from raw diagnostics before output normalization. Image
-preparation validates every input path and size before it
+are redacted from raw diagnostics with overlap-safe ordering before output
+normalization. Image preparation validates every input path and size before it
 connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A

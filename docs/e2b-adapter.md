@@ -180,11 +180,13 @@ all `LD_*`, and all `DYLD_*` names so the template remains responsible for
 executable and loader resolution. Validation happens before the control API is
 asked for sandbox access. Environment values are redacted from request and
 command debug output and are removed from raw image-failure bytes before ANSI,
-newline, or control-character normalization. Normalized fallback redaction
-still handles formatting inserted around otherwise unchanged secret text. The
-stateless read-only path still supplies only its existing explicit `cwd` and an
-empty environment map. PTY startup remains separate and keeps its fixed `LANG`,
-`LC_ALL`, and `TERM` values plus its existing optional `cwd`.
+newline, or control-character normalization. For truncated capture, the longest
+leading secret suffix is removed before contained complete values; normalized
+fallback redaction still handles formatting inserted around otherwise
+unchanged secret text. The stateless read-only path still supplies only its
+existing explicit `cwd` and an empty environment map. PTY startup remains
+separate and keeps its fixed `LANG`, `LC_ALL`, and `TERM` values plus its
+existing optional `cwd`.
 
 The adapter starts every trusted Python file and terminal helper with isolated
 module lookup and without Python site initialization. Sandbox files in the

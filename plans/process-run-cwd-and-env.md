@@ -140,3 +140,39 @@ removal can change their representation and defeat exact matching.
       automatically fixing it.
 - [x] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md`.
+
+## Milestone 6: Preserve Overlapping Truncated Secrets
+
+At the end of this milestone, a captured leading suffix of a longer secret is
+redacted before any contained complete secret can obscure that match and leave
+credential fragments visible.
+
+### Review Item
+
+3. **Severity: high — redact truncated prefixes before inner complete values.**
+   Complete-value replacement currently runs before the truncated-prefix check.
+   When `prefix-password123` and `password` are both sensitive, captured output
+   beginning with `fix-password123` can become `fix-[REDACTED]123`, preventing
+   recognition of the longer secret and exposing its suffix. Option A: perform
+   raw truncated-prefix redaction before complete-value replacement. Option B:
+   combine both operations in one overlap-aware matcher. **Recommendation: A**,
+   because it is the smallest safe ordering fix; the user requested the review
+   finding be fixed.
+
+- [x] Add a failing regression for a truncated longer secret containing a
+      complete shorter secret.
+- [x] Redact the longest raw leading suffix before replacing complete values,
+      while retaining pre- and post-normalization defenses.
+- [x] Update the contract, adapter documentation, and both crate READMEs with
+      the overlap-safe ordering guarantee.
+- [x] Run focused diagnostic tests, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for secrets, generated artifacts, whitespace errors,
+      stale documentation, and unrelated edits.
+- [ ] Run `git add -A`, commit the completed fix with a Conventional Commit,
+      and push the current branch.
+- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+      clean local diff against `origin/main`; report every finding without
+      automatically fixing it.
+- [ ] Mark this milestone complete and move the plan from Active to Completed
+      in `plans/README.md`.

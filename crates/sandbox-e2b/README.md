@@ -122,10 +122,11 @@ entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
 `DYLD_*` are rejected as template-owned. Environment values are redacted from
 request and transport debugging, tracing, handled errors, and image-command
 failure output. Image failures remove complete values and truncated prefixes
-from raw bytes before ANSI, newline, and control normalization, then apply a
-normalized fallback. Read-only execution keeps its existing explicit cwd and
-passes no environment entries; PTY startup keeps its fixed locale and terminal
-map.
+from raw bytes before ANSI, newline, and control normalization. Truncated
+capture resolves its longest leading secret suffix before contained complete
+values, then applies a normalized fallback. Read-only execution keeps its
+existing explicit cwd and passes no environment entries; PTY startup keeps its
+fixed locale and terminal map.
 The shared conformance probe verifies the selected cwd and environment on
 stdout while independently asserting a deterministic stderr token.
 Credentialed clients, including opt-in live ingress probes, do not follow

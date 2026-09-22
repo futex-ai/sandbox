@@ -23,9 +23,9 @@ impl ImageCommandFailure {
     /// Normalizes captured process bytes into the provider-neutral diagnostic.
     ///
     /// Backends pass any sensitive values available at this boundary. Empty
-    /// values are ignored so they cannot rewrite every byte boundary. Complete
-    /// sensitive values and truncated leading suffixes are redacted before
-    /// output normalization and final tail bounding.
+    /// values are ignored so they cannot rewrite every byte boundary. Truncated
+    /// leading suffixes are redacted before complete sensitive values, output
+    /// normalization, and final tail bounding.
     #[must_use]
     pub fn from_captured_output(
         bytes: &[u8],
@@ -33,8 +33,8 @@ impl ImageCommandFailure {
         capture_truncated: bool,
         sensitive_values: &[String],
     ) -> Self {
-        let redacted = redact_complete_values(bytes, sensitive_values);
-        let redacted = redact_truncated_prefix(redacted, capture_truncated, sensitive_values);
+        let redacted = redact_truncated_prefix(bytes.to_vec(), capture_truncated, sensitive_values);
+        let redacted = redact_complete_values(&redacted, sensitive_values);
         let stripped = strip_ansi_escapes::strip(redacted);
         let stripped = redact_truncated_prefix(stripped, capture_truncated, sensitive_values);
         let mut output = String::from_utf8_lossy(&stripped).replace("\r\n", "\n");
