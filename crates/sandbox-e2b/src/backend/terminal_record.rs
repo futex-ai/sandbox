@@ -84,21 +84,19 @@ pub(super) async fn resolve_state(
     processes: &[ProcessInfo],
     terminal_tag_prefix: &str,
 ) -> Result<TerminalState> {
+    if let Some(record) = read(backend, connection, identity.terminal_id()).await? {
+        record.ensure_identity(identity)?;
+        record.ensure_tag(&terminal_tag(terminal_tag_prefix, identity.terminal_id()))?;
+        return record.state(processes);
+    }
     match identity.resolve(processes, terminal_tag_prefix) {
         Ok(Some(_)) => Ok(TerminalState::Ready),
         Ok(None)
         | Err(Error::NotFound {
             resource: ResourceKind::Terminal,
-        }) => {
-            let record = read(backend, connection, identity.terminal_id())
-                .await?
-                .ok_or(Error::NotFound {
-                    resource: ResourceKind::Terminal,
-                })?;
-            record.ensure_identity(identity)?;
-            record.ensure_tag(&terminal_tag(terminal_tag_prefix, identity.terminal_id()))?;
-            record.state(processes)
-        }
+        }) => Err(Error::NotFound {
+            resource: ResourceKind::Terminal,
+        }),
         Err(error) => Err(error),
     }
 }

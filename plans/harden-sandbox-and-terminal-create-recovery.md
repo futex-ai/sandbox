@@ -193,3 +193,42 @@ weakening terminal identity fencing.
       a clean post-push `cargo xtask review` against `origin/main`.
 - [ ] After a clean review, mark this milestone complete and move the plan back
       to Completed in `plans/README.md`.
+
+## Milestone 6: Validate Live Terminal Identity Records
+
+At the end of this milestone, inspection and output validate every present
+durable identity record, including while the exact provider process is live,
+while record-free legacy terminals retain their selector-only fallback.
+
+### Review Finding
+
+6. **Severity: medium — validate present records for live terminals.** In
+   `crates/sandbox-e2b/src/backend/terminal_record.rs:87`, the shared resolver
+   returns `Ready` as soon as the provider lists the exact PID and tag. It does
+   not read a durable identity record in that branch, so a live terminal with
+   an unknown record version, malformed data, or conflicting identity is
+   accepted even though exited terminals fail closed on the same record.
+   Doing nothing makes identity validation depend on whether the provider
+   process is still running, allowing record corruption or incompatible
+   versions to bypass the terminal identity fence until exit. Option A: read
+   the optional record first, validate it whenever present, and use the live
+   selector only when no record exists. Option B: add a separate optional
+   record check only to the live branch. **Recommendation: A**, because one
+   record-first path keeps live and exited terminal behavior consistent.
+
+- [x] Record the finding with severity, location, context, impact, options, and
+      recommendation.
+- [x] Add a failing regression proving a live terminal rejects an incompatible
+      identity record.
+- [x] Make the shared resolver validate every present identity record and keep
+      selector-only fallback for record-free legacy terminals.
+- [x] Align protocol and adapter documentation with live-record validation.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [ ] Audit the final diff, run `git add -A`, commit all work with a
+      Conventional Commit, push the branch, and confirm GitHub CI passes on
+      that exact commit.
+- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+      record any findings without automatically fixing them.
+- [ ] After a clean review, mark the remaining milestones complete and move
+      this plan back to Completed in `plans/README.md`.

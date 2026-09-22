@@ -3,8 +3,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendOutputRequest, Error, OperationId, ProviderRef, SandboxBackend, TerminalId,
-    TerminalState,
+    BackendOutputRequest, Error, OperationId, ProviderRef, ResourceKind, SandboxBackend,
+    TerminalId, TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -27,6 +27,11 @@ async fn terminal_output_uses_a_non_following_root_relative_read() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .answers_arc(Arc::new(

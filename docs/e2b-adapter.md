@@ -231,9 +231,11 @@ identity state. This makes a missing directory on a fresh sandbox an
 idempotent initialization case while unsafe existing storage still fails
 closed.
 
-Inspection and output reads share one record-aware resolver that binds the
-stored PID to the exact tag. If an unrelated process reuses the numeric PID,
-the durable record classifies the original terminal as `Exited` and output can
+Inspection and output reads share one record-aware resolver that validates any
+present record and binds its stored PID to the exact tag, even while that
+process is live. Selector-only lookup remains available only for live legacy
+terminals without a record. If an unrelated process reuses the numeric PID, the
+durable record classifies the original terminal as `Exited` and output can
 still ingest its retained transcript; reuse of the expected tag by another PID
 fails closed. Input first rejects an absent process, then selects the tag inside
 the provider mutation; close uses the same atomic selector, so PID reuse cannot

@@ -90,8 +90,10 @@ state, close removes the identity idempotently, and unknown record versions
 fail closed. Storage initialization precedes identity lookup, and the final
 record name becomes visible only after its contents are synced and atomically
 published without replacement. Inspection and output use the same record-aware
-resolution, keeping an exited terminal's transcript readable after unrelated
-PID reuse without accepting a conflicting terminal tag.
+resolution and validate any present record even while the process is live.
+Selector-only fallback applies only to a record-free live legacy terminal,
+keeping an exited terminal's transcript readable after unrelated PID reuse
+without accepting a conflicting terminal tag.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only

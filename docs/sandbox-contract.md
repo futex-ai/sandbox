@@ -234,10 +234,12 @@ no recoverable provider identity. Input rejects an exited terminal. Explicit
 close stays idempotent and removes its identity record; restored-sandbox
 cleanup removes all retained terminal identity state.
 Inspection and output reads must share the same record-aware identity
-resolution. If an unrelated process reuses an exited terminal's numeric PID,
-the trusted record proves the original terminal is `Exited` and its retained
-transcript remains readable. A conflicting process using the expected terminal
-tag still fails closed.
+resolution. They validate any present record even while its exact process is
+live, and use selector-only compatibility only when no record exists. If an
+unrelated process reuses an exited terminal's numeric PID, the trusted record
+proves the original terminal is `Exited` and its retained transcript remains
+readable. A conflicting process using the expected terminal tag still fails
+closed.
 
 Sandbox create access is valid only when the provider returns both a nonblank
 process credential and a nonblank private-traffic credential. An accepted

@@ -7,7 +7,8 @@ use std::{
 };
 
 use sandbox_interface::{
-    BackendOutputRequest, Error, ProviderRef, SandboxBackend, TerminalId, TerminalState,
+    BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxBackend, TerminalId,
+    TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -36,6 +37,11 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
             .answers_arc({
                 let observed = observed.clone();
                 Arc::new(move |_, _, request: ProcessRegularFileRequest| {
+                    if request.path.ends_with(".identity.json") {
+                        return Err(Error::NotFound {
+                            resource: ResourceKind::File,
+                        });
+                    }
                     observed
                         .lock()
                         .expect("deadline observations")

@@ -3,14 +3,14 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendInputRequest, BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxBackend,
-    TerminalId,
+    BackendInputRequest, BackendOutputRequest, Error, OperationId, ProviderRef, ResourceKind,
+    SandboxBackend, TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
-    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessInfo,
-    ProcessRunOutput, ProcessSelector, ProcessTransportMock,
+    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
+    ProcessInfo, ProcessRunOutput, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -87,6 +87,50 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
         .close_terminal(ProviderRef::new("sandbox"), provider_ref)
         .await
         .expect("closing an absent tag is idempotent");
+}
+
+#[tokio::test]
+async fn live_terminal_rejects_a_present_unknown_identity_record() {
+    let terminal_id = TerminalId::new();
+    let operation_id = OperationId::new();
+    let provider_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
+    let tag = format!("sandbox-terminal-{terminal_id}");
+    let record = format!(
+        concat!(
+            "{{\"schema\":\"sandbox-e2b-terminal-identity-v2\",",
+            "\"pid\":41,\"terminal_id\":\"{}\",",
+            "\"operation_id\":\"{}\",\"tag\":\"{}\"}}\n"
+        ),
+        terminal_id, operation_id, tag,
+    )
+    .into_bytes();
+    let record_size = record.len() as u64;
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(access())),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(tag),
+            }])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Ok(ProcessFileChunk {
+                bytes: record,
+                total_size: record_size,
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    backend
+        .inspect_terminal(ProviderRef::new("sandbox"), provider_ref)
+        .await
+        .expect_err("a present unknown identity record must fail closed");
 }
 
 #[tokio::test]
