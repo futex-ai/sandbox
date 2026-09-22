@@ -6,6 +6,7 @@ milestones are finished.
 
 ## Active
 
+- [Add egress allowlist policy](egress-allowlist-policy.md)
 - [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)
 
 ## Completed

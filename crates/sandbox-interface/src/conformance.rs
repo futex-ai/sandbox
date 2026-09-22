@@ -27,6 +27,21 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
     finish(outcome, cleanup)
 }
 
+/// Proves that one domain allowlist permits its exact HTTPS destination and
+/// prevents an application response from a different HTTPS destination.
+///
+/// The target image must provide `/bin/sh` and `curl`. The helper tracks and
+/// destroys its sandbox even when either fetch probe fails.
+pub async fn exercise_network_allowlist(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let outcome =
+        crate::conformance_network::exercise(backend, &mut resources, owner, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
 async fn exercise_backend_with_resources(
     backend: &dyn SandboxBackend,
     resources: &mut ConformanceResources<'_>,
@@ -117,6 +132,8 @@ async fn exercise_backend_with_resources(
             "backend process run changed bounded split output",
         ));
     }
+
+    crate::conformance_network::exercise(backend, resources, owner, profile).await?;
 
     let first = resources
         .create_sandbox(sandbox_request(

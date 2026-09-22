@@ -13,6 +13,8 @@ using the provider-neutral interface.
   inside the adapter boundary.
 - Reconcile ambiguous creation and snapshot delivery without allocating
   duplicate resources.
+- Encode deny-by-default per-session allowlists without weakening deployment
+  deny ranges.
 - Enforce bounded IO, exact provider identity checks, and private port ingress.
 - Keep all credentialed provider tests feature-gated and ignored by default.
 
@@ -39,14 +41,26 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. A sandbox ID must be a lowercase DNS-label
-fragment that fits every envd hostname. An accepted create with an unusable ID
-remains delivery-ambiguous; managed inventory rejects the same ID as provider
-unavailability, maps recognized consumer metadata, and leaves that metadata
-absent for older resources. Create and recover validate the same profile and
-network-policy rules before any control request. Snapshot creation and
-recovery require a nonempty source sandbox and correlation name before an
+An Open sandbox keeps the profile's existing public-egress setting and omits
+`allowOut`. An allowlisted sandbox always disables ordinary internet access
+and sends canonical destinations through E2B's `network.allowOut`, while the
+same built-in private and profile deny ranges remain in `denyOut`. Because E2B
+gives allow rules precedence, overlapping allowed IP/CIDR ranges are rejected
+before control dispatch. Domain rules cover HTTP/80 and TLS/443 only and cause
+E2B to permit its `8.8.8.8` resolver; a profile that denies that resolver
+cannot use domain rules. Allowlist policy identity is hashed into provider
+metadata so recovery returns a typed mismatch instead of adopting a sandbox
+created with different egress access. Open bodies remain unchanged.
+
+Creates use exact stable correlation metadata, including the typed sandbox
+consumer class, to recover ambiguous delivery. Allowlist policy identity is
+verified separately on the returned row. A sandbox ID must be a lowercase
+DNS-label fragment that fits every envd hostname. An accepted create with an
+unusable ID remains delivery-ambiguous; managed inventory rejects the same ID
+as provider unavailability, maps recognized consumer metadata, and leaves that
+metadata absent for older resources. Create and recover validate the same
+profile and network-policy rules before any control request. Snapshot creation
+and recovery require a nonempty source sandbox and correlation name before an
 authenticated request. Bounded, cursor-safe snapshot inventory rejects an
 empty or dot-segment identity as provider unavailability; an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
@@ -212,6 +226,10 @@ Live tests are opt-in, ignored, and billable:
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
 
+E2B_API_KEY=... cargo test -p sandbox-e2b \
+  --features live-e2b --test live_e2b \
+  live_e2b_egress_allowlist -- --ignored
+
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
   live_e2b_private_screen_bridges -- --ignored
@@ -234,6 +252,7 @@ deletable snapshot handle.
 - `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/control/` — E2B control API boundary.
+- `src/network.rs` — allowlist translation, deny overlap, and recovery identity.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.

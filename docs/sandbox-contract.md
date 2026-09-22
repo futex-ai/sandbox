@@ -35,6 +35,38 @@ Every `SandboxBackend` implementation must support:
   recovery, and explicit source cleanup; and
 - idempotent screen-stack ensure plus exact validated viewport resize.
 
+## Network Policies
+
+`SandboxNetworkPolicy::Open` adds no per-session restriction. It never weakens
+the deployment-owned private-network or profile deny rules applied by an
+adapter. `SandboxNetworkPolicy::Allowlist` denies ordinary outbound traffic by
+default and permits only its typed `EgressDestination` values.
+
+An allowlist accepts no more than 64 caller-supplied entries. Exact IP values
+use `IpAddr`; CIDRs carry an address and a family-appropriate prefix and are
+canonicalized to their network address. Domain values are lowercase ASCII DNS
+names no longer than 253 bytes. Each label is `1..=63` bytes, begins and ends
+with an ASCII letter or digit, and otherwise contains only letters, digits, or
+hyphens. A domain may have one leading `*.` label, which matches subdomains at
+any depth but not the apex. Bare wildcards, embedded wildcards, IP literals
+represented as domains, schemes, ports, paths, leading or trailing dots, and
+empty labels are invalid. Construction sorts and
+deduplicates canonical entries, but the original list must meet the 64-entry
+bound before deduplication. Adapters revalidate values from every construction
+or deserialization path before provider dispatch.
+
+Domain matching covers HTTP on port 80 through the `Host` header and TLS on
+port 443 through SNI. It does not cover QUIC/HTTP3 or arbitrary ports; those
+flows are controlled only by allowed IP and CIDR values. A provider whose
+allow rules outrank deny rules must reject any allowed IP or CIDR overlapping a
+private or deployment deny range before mutation. An implicitly allowed DNS
+resolver must pass the same check.
+
+Create recovery receives the exact original policy. A backend must correlate
+the policy applied by create, revalidate the recovery value, and return
+`SandboxNetworkPolicyMismatch` when the correlated sandbox used a different
+policy. It must not silently adopt that sandbox or dispatch a replacement.
+
 Creation and snapshot methods separate an initial mutation from recovery. The
 trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
@@ -131,9 +163,9 @@ sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
 remains delivery-ambiguous, while an invalid inventory row is provider
 unavailability. Snapshot inspection must reject a returned provider ID that
 differs from the requested ID.
-Port zero, empty required
-text, oversized values, unknown
-profiles, and unsupported network policies fail before provider dispatch. A
+Port zero, empty required text, oversized values, unknown profiles, invalid or
+unsupported network policies, and allowlist conflicts with deployment denies
+fail before provider dispatch. A
 direct or stateless process command cannot be empty, and its command and
 arguments total at most 128 KiB. Each direct stream or combined stateless
 output limit is at most 64 MiB. Every direct, stateless read-only, or
@@ -220,10 +252,13 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 ## Conformance
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
-shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-The process probe uses `/bin/sh` plus a self-contained script that emits exact
-stdout and stderr bytes; conforming images therefore need a standard shell but
-no harness-only executable.
+shared lifecycle, recovery, process, ingress, image, terminal, and network
+guarantees. Its allowlist probe creates a sandbox that permits only
+`example.com`, uses `/bin/sh -c` and `curl` to require an application response
+from that host, and requires a fetch from a different host to exit
+unsuccessfully. It also proves that recovery rejects a different policy. The
+split-output probe uses a self-contained shell script; conforming images need a
+standard shell and `curl`, but no harness-only executable.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never

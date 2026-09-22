@@ -35,6 +35,40 @@ and commands use the account present in their templates. Root, unsafe account
 names, unsafe prefixes or paths, shell characters, whitespace, and process
 names longer than Linux's 15-byte task-name limit are rejected.
 
+## Network Policies
+
+The adapter preserves the existing `Open` request exactly: the profile's
+`allow_public_egress` value becomes `allow_internet_access`, `allowOut` is
+omitted, and `denyOut` remains the sorted, deduplicated merge of built-in
+private ranges and profile `denied_destinations`.
+
+For `Allowlist`, `allow_internet_access` is always `false`, the same merged
+`denyOut` is retained, and canonical IP, CIDR, and domain values are sent in
+`network.allowOut`. E2B treats disabled internet access as a deny-all rule and
+lets explicit allow rules take precedence. The adapter therefore rejects an
+allowed IP or CIDR that overlaps any built-in private or profile deny range
+instead of letting provider precedence weaken the deployment policy. E2B
+automatically permits `8.8.8.8` when a domain rule is present, so a domain
+allowlist is also rejected when a profile deny range covers that resolver.
+
+E2B domain rules inspect HTTP `Host` on port 80 and TLS SNI on port 443. Other
+ports and UDP protocols such as QUIC use only IP/CIDR filtering. Hostname
+filtering is a routing control rather than a strict isolation boundary for
+multi-tenant endpoints, so callers should scope credentials and prefer a
+controlled proxy when they need a stronger boundary. Exact and leading `*.`
+names follow the shared lowercase DNS validation contract; a wildcard matches
+subdomains at any depth but not the apex. See E2B's current [internet-access
+documentation](https://docs.e2b.dev/network/internet-access) for provider
+semantics.
+
+Allowlist creates add a versioned hash of the canonical policy to provider
+metadata. Recovery queries by the unchanged stable operation identity, then
+compares that hash before adopting the sandbox. A missing or different hash
+returns `SandboxNetworkPolicyMismatch`. Open creates add no policy metadata,
+which preserves their prior request body and lets existing Open resources
+recover unchanged. Create and recovery both rerun shape, bound, canonical, and
+deny-overlap validation before any mutating provider call.
+
 ## Transport And Reconciliation
 
 Control and process transports are traits and can be injected. Control calls
@@ -71,10 +105,12 @@ inventory retain the broader opaque route-segment format. An unusable ID from
 an accepted create remains delivery-ambiguous; an unusable inventory row is
 retryable provider unavailability.
 
-Sandbox creation filters on exact configured metadata, including the stable
-runtime-or-browser consumer value. Managed inventory returns a recognized
-consumer class, rejects an unusable sandbox identity, and leaves the consumer
-absent for resources created before that metadata was added. Snapshot recovery
+Sandbox creation filters on exact stable correlation metadata, including the
+runtime-or-browser consumer value. Allowlist policy identity is compared on
+the returned row rather than included in that inventory filter. Managed
+inventory returns a recognized consumer class, rejects an unusable sandbox
+identity, and leaves the consumer absent for resources created before that
+metadata was added. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
 The source stays paused when recovery sees no new snapshot or more than one
 candidate; only a synchronous completed create or exactly one recovered
@@ -108,9 +144,9 @@ Failed setup and verification diagnostics also redact the active opaque
 sandbox ID and envd access token before the final 4 KiB tail is selected. A
 known value split by the streaming tail boundary has its visible suffix
 redacted as well.
-Creation and recovery share validation. An unconfigured logical profile or
-unsupported network policy returns a handled provider-neutral error before any
-provider request.
+Creation and recovery share validation. An unconfigured logical profile,
+invalid or unsupported network policy, deployment-deny conflict, or recovered
+policy mismatch returns a handled provider-neutral error.
 
 ## Files, Processes, Terminals, And Screens
 
@@ -271,3 +307,6 @@ delivery-ambiguous response, and retries that recovery during cleanup when no
 provider snapshot handle was obtained. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.
+The ignored allowlist test invokes the shared shell-level probe against a real
+E2B sandbox. Default and all-feature test runs compile it but never read
+credentials or contact E2B unless ignored tests are explicitly selected.

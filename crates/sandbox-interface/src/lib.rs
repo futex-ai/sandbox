@@ -8,11 +8,13 @@ mod backend_images;
 mod backend_terminal;
 pub mod conformance;
 mod conformance_image;
+mod conformance_network;
 mod conformance_resources;
 mod constants;
 mod consumer;
 mod domain;
 mod error;
+mod error_kinds;
 mod ids;
 mod image_command_failure;
 mod network;
@@ -49,10 +51,13 @@ pub use self::domain::{
     FileContent, RealizedImage, ResourceOwner, RetainedSandboxRef, Sandbox, SandboxSnapshot,
     Terminal, TerminalAction, TerminalActionResult, TerminalStatus, TranscriptWindow,
 };
-pub use self::error::{Error, QuotaKind, ResourceKind, Result};
+pub use self::error::{Error, Result};
+pub use self::error_kinds::{QuotaKind, ResourceKind};
 pub use self::ids::{ActionId, OperationId, SandboxId, SnapshotId, TerminalId};
 pub use self::image_command_failure::ImageCommandFailure;
-pub use self::network::SandboxNetworkPolicy;
+pub use self::network::{
+    EGRESS_DESTINATION_MAX_ITEMS, EGRESS_DOMAIN_MAX_BYTES, EgressDestination, SandboxNetworkPolicy,
+};
 pub use self::port_ingress::{
     BackendPortIngressRequest, PortIngress, PortIngressCredential, PortIngressRequest,
 };

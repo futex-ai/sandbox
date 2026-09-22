@@ -12,6 +12,7 @@ instead of depending on one another.
   registries, and read-only access.
 - Define bounded data types for file transfer, process output, terminal logs,
   image preparation, ingress credentials, and screen viewport sizes.
+- Define validated per-session Open and deny-by-default egress policies.
 - Provide mocks and a public conformance harness that every backend can run.
 - Preserve provider-neutral lifecycle, reconciliation, and recovery semantics.
 
@@ -30,6 +31,13 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
+`SandboxNetworkPolicy::allowlist` accepts at most 64 typed IP, CIDR, or
+lowercase DNS destinations, canonicalizes CIDRs, and sorts and deduplicates the
+result. Domains may use one leading `*.` label, which matches subdomains at any
+depth but not the apex, and are limited to HTTP/80 and TLS/443 hostname
+matching; other traffic requires an IP or CIDR rule. Raw or deserialized values
+are revalidated by adapters. Recovery must reject a policy that differs from
+the one used to create the correlated sandbox.
 Direct process and stateless read-only execution requests require a non-empty
 command, at most 128 KiB across the command and arguments, and a deadline no
 longer than 300 seconds. Each direct-process stream and the combined stateless
@@ -48,7 +56,10 @@ process end is observed, an adapter must also validate the provider stream's
 final status instead of accepting an absent or unsuccessful completion marker.
 
 The public `conformance` module exercises creation, recovery, image
-preparation, split-stream execution, private ingress, and terminal identity.
+preparation, split-stream execution, private ingress, terminal identity, and
+deny-by-default egress. Its network probe requires `/bin/sh` and `curl`, allows
+one exact domain, and verifies that another domain cannot return an
+application response.
 Its process probe invokes `/bin/sh` with a self-contained script that emits
 exact stdout and stderr bytes, so a normal backend image needs no test-only
 executable.
@@ -99,13 +110,22 @@ or inventory responses whose operating-system PID is zero.
 ## Quick Start
 
 ```rust
-use sandbox_interface::{SandboxId, ScreenViewportSize};
+use std::net::{IpAddr, Ipv4Addr};
+
+use sandbox_interface::{
+    EgressDestination, SandboxId, SandboxNetworkPolicy, ScreenViewportSize,
+};
 
 let sandbox_id = SandboxId::new();
 let viewport = ScreenViewportSize::new(1280, 720)?;
+let network = SandboxNetworkPolicy::allowlist(vec![
+    EgressDestination::domain("api.example.com")?,
+    EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))),
+])?;
 
 assert!(!sandbox_id.to_string().is_empty());
 assert_eq!(viewport.width(), 1280);
+assert!(matches!(network, SandboxNetworkPolicy::Allowlist { .. }));
 # Ok::<(), sandbox_interface::Error>(())
 ```
 
@@ -126,6 +146,7 @@ cargo clippy -p sandbox-interface --all-targets --all-features -- -D warnings
 - `src/backend_files.rs` and `src/process_run.rs` — bounded file/process data.
 - `src/read_only.rs` — narrow non-mutating capability.
 - `src/screen_stack.rs` — screen capabilities and validated viewport values.
+- `src/network.rs` — typed, bounded outbound network policies.
 - `src/conformance.rs` — reusable backend conformance harness.
 - `src/conformance_image.rs` — durable image phase conformance flow.
 

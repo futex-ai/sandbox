@@ -13,7 +13,7 @@ mod support;
 use std::sync::Arc;
 
 use sandbox_e2b::E2bSandboxBackend;
-use sandbox_interface::ResourceOwner;
+use sandbox_interface::{ResourceOwner, conformance::exercise_network_allowlist};
 use uuid::Uuid;
 
 use self::support::{LiveResources, live_config};
@@ -57,6 +57,18 @@ async fn live_e2b_private_port_ingress() {
     if let Err(error) = cleanup {
         panic!("live E2B port ingress cleanup failed: {error}");
     }
+}
+
+#[tokio::test]
+#[ignore = "requires E2B_API_KEY and incurs live provider usage"]
+async fn live_e2b_egress_allowlist() {
+    let api_key = std::env::var("E2B_API_KEY").expect("E2B_API_KEY is required");
+    let template = std::env::var("E2B_TEMPLATE_ID").unwrap_or_else(|_| "base".to_owned());
+    let backend = E2bSandboxBackend::new(live_config(api_key, template)).expect("live backend");
+
+    exercise_network_allowlist(&backend, "live")
+        .await
+        .expect("live E2B allowlist conformance");
 }
 
 #[tokio::test]

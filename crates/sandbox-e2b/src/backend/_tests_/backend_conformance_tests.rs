@@ -13,12 +13,10 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
-    ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
-    ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
-    ProcessSelector, ProcessSplitOutput, ProcessTransportMock, SandboxMetadata,
+    ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, SandboxMetadata,
 };
 
-use super::configured::E2bSandboxBackend;
+use super::{backend_conformance_process, configured::E2bSandboxBackend};
 
 #[tokio::test]
 async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
@@ -35,7 +33,13 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                         .lock()
                         .expect("created sandbox lock")
                         .iter()
-                        .filter(|(created_metadata, _)| created_metadata == &metadata)
+                        .filter(|(created_metadata, _)| {
+                            metadata.iter().all(|(key, value)| {
+                                created_metadata
+                                    .get(key)
+                                    .is_some_and(|created| created == value)
+                            })
+                        })
                         .map(|(created_metadata, sandbox_id)| ControlSandbox {
                             sandbox_id: sandbox_id.clone(),
                             state: ControlSandboxState::Running,
@@ -53,9 +57,10 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 Arc::new(move |_, request| {
                     let sandbox_id = match create_index.fetch_add(1, Ordering::Relaxed) {
                         0 => "source",
-                        1 => "restore-one",
-                        2 => "restore-two",
-                        3 => "image-source",
+                        1 => "allowlist",
+                        2 => "restore-one",
+                        3 => "restore-two",
+                        4 => "image-source",
                         _ => "failed-image-source",
                     };
                     created_sandboxes
@@ -140,120 +145,7 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
             .each_call(matching!(_))
             .answers(&|_, _| Ok(())),
     ));
-    let active_terminal = Arc::new(Mutex::new(None));
-    let process = Unimock::new((
-        ProcessTransportMock::run
-            .each_call(matching!(_, _))
-            .answers(&|_, _, command| {
-                let setup_fails = command
-                    .args
-                    .iter()
-                    .any(|argument| argument.contains("exit 7"));
-                let measures_image = command
-                    .args
-                    .iter()
-                    .any(|argument| argument.contains("du -sbx"));
-                let bytes = if measures_image {
-                    b"__SANDBOX_IMAGE_SIZE__=8192\n".to_vec()
-                } else {
-                    Vec::new()
-                };
-                Ok(ProcessRunOutput {
-                    bytes,
-                    exit_code: Some(if setup_fails { 7 } else { 0 }),
-                    exited: true,
-                    output_truncated: false,
-                })
-            }),
-        ProcessTransportMock::list
-            .each_call(matching!(_))
-            .answers_arc({
-                let active_terminal = active_terminal.clone();
-                Arc::new(move |_, _| {
-                    Ok(active_terminal
-                        .lock()
-                        .expect("active terminal lock")
-                        .clone()
-                        .into_iter()
-                        .collect())
-                })
-            }),
-        ProcessTransportMock::start_pty
-            .each_call(matching!(_, _))
-            .answers_arc({
-                let active_terminal = active_terminal.clone();
-                Arc::new(move |_, _, request| {
-                    let process = ProcessInfo {
-                        pid: 9,
-                        tag: Some(request.tag.clone()),
-                    };
-                    *active_terminal.lock().expect("active terminal lock") = Some(process.clone());
-                    Ok(process)
-                })
-            }),
-        ProcessTransportMock::send_input
-            .each_call(matching!(_, _, _))
-            .answers(&|_, _, selector, _| {
-                assert!(matches!(selector, ProcessSelector::Tag(_)));
-                Ok(())
-            }),
-        ProcessTransportMock::read_regular_file
-            .each_call(matching!(_, _))
-            .answers(&|_, _, request: ProcessRegularFileRequest| {
-                if request.root == "/workspace" {
-                    assert_eq!(request.path, "conformance.txt");
-                    Ok(ProcessFileChunk {
-                        bytes: b"file-transfer".to_vec(),
-                        total_size: 13,
-                    })
-                } else {
-                    assert_eq!(request.root, "/var/lib/sandbox-e2b/terminals");
-                    assert!(request.path.ends_with(".log"));
-                    assert_eq!(request.offset, 0);
-                    assert_eq!(request.max_bytes, 4096);
-                    Ok(ProcessFileChunk {
-                        bytes: b"conformance".to_vec(),
-                        total_size: 11,
-                    })
-                }
-            }),
-        ProcessTransportMock::write_regular_file
-            .each_call(matching!(_, _))
-            .answers(&|_, _, request: ProcessRegularFileWriteRequest| {
-                if request.path == "conformance.txt" {
-                    assert_eq!(request.root, "/workspace");
-                    assert_eq!(request.bytes, b"file-transfer");
-                } else {
-                    assert_eq!(request.bytes, b"input");
-                }
-                Ok(())
-            }),
-        ProcessTransportMock::run_split
-            .next_call(matching!(_, _))
-            .answers(&|_, _, command| {
-                assert_eq!(command.command, "/bin/sh");
-                assert_eq!(
-                    command.args,
-                    [
-                        "-c",
-                        "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2"
-                    ]
-                );
-                Ok(ProcessSplitOutput {
-                    stdout: b"argv-direct".to_vec(),
-                    stderr: b"separate-stderr".to_vec(),
-                    exit_code: Some(0),
-                    exited: true,
-                    ..ProcessSplitOutput::default()
-                })
-            }),
-        ProcessTransportMock::kill
-            .each_call(matching!(_, _))
-            .answers(&|_, _, selector| {
-                assert!(matches!(selector, ProcessSelector::Tag(_)));
-                Ok(())
-            }),
-    ));
+    let process = backend_conformance_process::transport();
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(process));
 

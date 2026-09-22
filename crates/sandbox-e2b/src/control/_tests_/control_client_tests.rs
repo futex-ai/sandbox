@@ -5,7 +5,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use serde_json::Value;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -63,48 +62,6 @@ async fn list_sandboxes_uses_v2_and_escapes_metadata_once() {
         query.get("metadata").map(AsRef::as_ref),
         Some("agent+key=agent%2Fvalue&operation=a%26b")
     );
-}
-
-#[tokio::test]
-async fn create_sandbox_applies_secure_private_defaults() {
-    let (client, requests) = recording_client(vec![json_response(
-        201,
-        r#"{"sandboxID":"provider-sandbox","envdAccessToken":"token","trafficAccessToken":"traffic-token","domain":"attacker.example"}"#,
-    )]);
-
-    let access = client
-        .create_sandbox(ControlCreateSandbox {
-            template_id: "template".to_owned(),
-            metadata: SandboxMetadata::from([("sandbox_agent_id".to_owned(), "agent".to_owned())]),
-            allow_public_egress: false,
-            denied_destinations: vec!["203.0.113.0/24".to_owned()],
-            idle_timeout_seconds: 600,
-        })
-        .await
-        .expect("create should decode");
-
-    assert_eq!(access.sandbox_id, "provider-sandbox");
-    assert_eq!(access.domain, "e2b.app");
-    assert_eq!(access.traffic_access_token, "traffic-token");
-    let body: Value = serde_json::from_slice(
-        only_request(&requests)
-            .body
-            .as_deref()
-            .expect("create body"),
-    )
-    .expect("body should be JSON");
-    assert_eq!(body["secure"], true);
-    assert_eq!(body["allow_internet_access"], false);
-    assert_eq!(body["autoPause"], true);
-    assert_eq!(body["autoPauseMemory"], true);
-    assert_eq!(body["autoResume"]["enabled"], false);
-    assert_eq!(body["network"]["allowPublicTraffic"], false);
-    let denies = body["network"]["denyOut"].as_array().expect("deny list");
-    assert!(denies.iter().any(|value| value == "127.0.0.0/8"));
-    assert!(denies.iter().any(|value| value == "203.0.113.0/24"));
-    assert!(!denies.iter().any(|value| value == "0.0.0.0/8"));
-    assert!(!denies.iter().any(|value| value == "::/128"));
-    assert!(!String::from_utf8_lossy(&only_request(&requests).body.unwrap()).contains("token"));
 }
 
 #[tokio::test]
@@ -248,6 +205,7 @@ fn create_request() -> ControlCreateSandbox {
         metadata: SandboxMetadata::new(),
         allow_public_egress: false,
         denied_destinations: Vec::new(),
+        allowed_destinations: None,
         idle_timeout_seconds: 600,
     }
 }

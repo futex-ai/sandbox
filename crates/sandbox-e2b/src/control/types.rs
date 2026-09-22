@@ -18,6 +18,8 @@ pub struct ControlCreateSandbox {
     pub allow_public_egress: bool,
     /// Additional deployment-owned denied destinations.
     pub denied_destinations: Vec<String>,
+    /// Canonical per-session allow destinations, absent for open policy.
+    pub allowed_destinations: Option<Vec<String>>,
     /// Auto-pause timeout in seconds.
     pub idle_timeout_seconds: u32,
 }
@@ -119,6 +121,8 @@ pub(super) struct CreateSandboxBody {
 pub(super) struct NetworkBody {
     pub(super) allow_public_traffic: bool,
     pub(super) deny_out: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) allow_out: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]

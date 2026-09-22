@@ -22,6 +22,10 @@ credentials, payloads, access tokens, and errors out of higher-level services.
 Sandbox create requests carry their runtime-or-browser consumer class through
 provider metadata; managed inventory returns that class when present and leaves
 it absent for resources created before the metadata existed.
+Creates can also select a typed deny-by-default egress allowlist of canonical
+IP, CIDR, and DNS destinations. The E2B adapter preserves private and
+deployment deny ranges, and recovery refuses to adopt a sandbox created with a
+different policy.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
@@ -105,6 +109,10 @@ Run them only when external calls are intended:
 ```bash
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
+
+E2B_API_KEY=... cargo test -p sandbox-e2b \
+  --features live-e2b --test live_e2b \
+  live_e2b_egress_allowlist -- --ignored
 
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
