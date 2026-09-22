@@ -22,7 +22,7 @@ async fn read_only_exec_forwards_exact_argv_cwd_and_bounds_without_a_pty() {
             .next_call(matching!("provider"))
             .returns(Ok(ControlSandboxReadAccess {
                 sandbox_id: "provider".to_owned(),
-                domain: "e2b.app".to_owned(),
+                domain: "untrusted.example".to_owned(),
                 envd_access_token: "token".to_owned(),
             })),
     ));
@@ -31,6 +31,7 @@ async fn read_only_exec_forwards_exact_argv_cwd_and_bounds_without_a_pty() {
             .next_call(matching!(_, _))
             .answers_arc(Arc::new(move |_, connection, command| {
                 assert_eq!(connection.sandbox_id(), "provider");
+                assert_eq!(connection.sandbox_domain(), "e2b.app");
                 assert_eq!(command.command, "/usr/bin/git");
                 assert_eq!(command.args, ["status", "--short"]);
                 assert_eq!(command.cwd.as_deref(), Some("/tmp/sandbox/repo"));

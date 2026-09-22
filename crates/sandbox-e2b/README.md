@@ -99,9 +99,10 @@ observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors
-decode Connect end-stream JSON through one path: an error object is retryable
-provider unavailability, malformed JSON fails closed, and a missing or null
-error is a clean close. Direct process and stateless read-only requests are
+keep reading after a process end and decode the required Connect trailer
+through one path: a missing trailer or malformed JSON fails closed, an error
+object is retryable provider unavailability, and a present trailer with a
+missing or null error field is a clean close. Direct process and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
 combined stateless output cap is at most 64 MiB. Caller-controlled process,
@@ -115,7 +116,9 @@ process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
-attached. Empty provider IDs and IDs equal to `.` or `..` are rejected before
+attached. Process, read-only, and private-port hosts use the adapter's validated
+configured domain even when an injected control transport returns a different
+domain. Empty provider IDs and IDs equal to `.` or `..` are rejected before
 an API-key-authenticated control request can be built. Definitive rejection
 headers are mapped without waiting for an unused response body. DNS,
 connection, timeout, and response-stream failures remain typed as provider

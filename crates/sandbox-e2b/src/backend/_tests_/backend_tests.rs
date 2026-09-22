@@ -218,6 +218,26 @@ async fn envd_connection_rejects_mismatched_provider_identity() {
     ));
 }
 
+#[tokio::test]
+async fn envd_connection_uses_the_configured_domain() {
+    let mut provider_access = access("expected");
+    provider_access.domain = "untrusted.example".to_owned();
+    let backend = backend(
+        Unimock::new(
+            E2bControlApiMock::connect_sandbox
+                .next_call(matching!("expected"))
+                .returns(Ok(provider_access)),
+        ),
+        Unimock::new(()),
+    );
+
+    let connection = super::mapping::connection(&backend, &ProviderRef::new("expected"))
+        .await
+        .expect("matching provider identity");
+
+    assert_eq!(connection.sandbox_domain(), "e2b.app");
+}
+
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {
     E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes))
 }

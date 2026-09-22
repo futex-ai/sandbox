@@ -48,8 +48,11 @@ value. Sandbox create and connect responses require nonblank process and
 private-traffic credentials. Provider mutations accept only their exact
 acknowledgment, including an exact versioned screen-resize object; process
 start and inventory responses must contain a nonzero PID. Connect streaming
-collectors reject malformed or unsuccessful end-stream envelopes instead of
-reporting an ordinary completion. Missing read credentials stay retryable.
+collectors keep reading after a process end until they validate the required
+success trailer; a missing, malformed, or unsuccessful trailer cannot look like
+ordinary completion. Envd and private-port hosts always use the configured
+routing domain, never a domain supplied by an injected control response.
+Missing read credentials stay retryable.
 Caller-controlled process durations are capped before provider access,
 including 30-second terminal output waits and 300-second process operations.
 Terminal creation and recovery also reject transcript limits above the shared

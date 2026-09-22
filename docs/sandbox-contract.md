@@ -112,10 +112,15 @@ decoder must validate the bounded frame header before retaining the rest of a
 provider chunk, and its partial-frame buffer may retain only the current
 allowed frame. A streaming protocol's end marker must also be decoded:
 malformed metadata or a reported application error must fail collection rather
-than look like an ordinary completion. A bounded one-shot process must be
-terminated when collection fails after its PID is known. Credentialed HTTP
+than look like an ordinary completion. Once a process end event is observed,
+collection must continue until that final marker succeeds; stream exhaustion or
+deadline expiry before the marker is a malformed completion. A bounded one-shot
+process must be terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
-the exact destination host is validated. A public concrete client must reject
+the exact destination host is validated. Provider-returned routing fields are
+not authorities: credentialed process, read-only, and private-port hosts must
+come from validated adapter configuration even when a control transport is
+injected. A public concrete client must reject
 a non-HTTPS or non-root API origin, an empty or padded API key, an invalid
 routing domain, and a zero idle timeout before it constructs its credentialed
 transport. Empty opaque provider identifiers and

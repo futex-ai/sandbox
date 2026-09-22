@@ -21,6 +21,7 @@ async fn tail_capture_keeps_draining_until_exit() {
         data_event("1234"),
         data_event("5678"),
         event_frame(r#"{"event":{"end":{"exitCode":9,"exited":true}}}"#),
+        success_end_stream_frame(),
     ];
     let transport = process_transport(events);
 
@@ -43,6 +44,7 @@ async fn exact_limit_tail_capture_is_complete() {
     let events = vec![
         data_event("12345"),
         event_frame(r#"{"event":{"end":{"exitCode":1,"exited":true}}}"#),
+        success_end_stream_frame(),
     ];
 
     let output = process_transport(events)
@@ -117,9 +119,10 @@ async fn helper_deadline_after_start_kills_the_observed_process() {
 
 #[tokio::test]
 async fn helper_rejects_a_non_normal_end_even_when_its_default_code_is_zero() {
-    let events = vec![event_frame(
-        r#"{"event":{"end":{"exitCode":0,"exited":false}}}"#,
-    )];
+    let events = vec![
+        event_frame(r#"{"event":{"end":{"exitCode":0,"exited":false}}}"#),
+        success_end_stream_frame(),
+    ];
 
     let error = process_transport(events)
         .run_helper(
@@ -178,6 +181,12 @@ fn data_event(text: &str) -> Vec<u8> {
 
 fn event_frame(json: &str) -> Vec<u8> {
     encode_frame(json.as_bytes()).expect("test event frame")
+}
+
+fn success_end_stream_frame() -> Vec<u8> {
+    let mut frame = event_frame("{}");
+    frame[0] = 2;
+    frame
 }
 
 fn byte_stream(fragments: Vec<Vec<u8>>) -> ByteStream {

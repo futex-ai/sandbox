@@ -37,7 +37,7 @@ impl ProcessConnection {
         &self.sandbox_id
     }
 
-    /// Borrows the provider shared routing domain.
+    /// Borrows the configured provider routing domain.
     #[must_use]
     pub fn sandbox_domain(&self) -> &str {
         &self.sandbox_domain

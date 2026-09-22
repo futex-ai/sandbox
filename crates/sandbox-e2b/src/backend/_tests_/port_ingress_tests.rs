@@ -34,6 +34,29 @@ async fn ingress_uses_the_exact_port_and_distinct_traffic_token() {
 }
 
 #[tokio::test]
+async fn ingress_uses_the_configured_domain() {
+    let mut provider_access = access("provider");
+    provider_access.domain = "untrusted.example".to_owned();
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("provider"))
+            .returns(Ok(provider_access)),
+    );
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(Unimock::new(())));
+
+    let ingress = backend
+        .port_ingress(BackendPortIngressRequest {
+            sandbox_provider_ref: ProviderRef::new("provider"),
+            port: 4173,
+        })
+        .await
+        .expect("private port ingress");
+
+    assert_eq!(ingress.upstream_url(), "https://4173-provider.e2b.app/");
+}
+
+#[tokio::test]
 async fn ingress_rejects_port_zero_without_contacting_the_provider() {
     let backend = E2bSandboxBackend::with_transports(
         config(),

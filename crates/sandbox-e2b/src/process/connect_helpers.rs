@@ -52,6 +52,7 @@ impl ConnectProcessTransport {
         let mut decoder = FrameDecoder::new(MAX_FRAME_BYTES);
         let mut collected = CollectedEvents::default();
         let collection: Result<()> = async {
+            let mut process_ended = false;
             while let Some(remaining) = deadline.checked_duration_since(tokio::time::Instant::now())
             {
                 let fragment = match tokio::time::timeout(remaining, stream.next()).await {
@@ -65,6 +66,9 @@ impl ConnectProcessTransport {
                         decode_end_stream(&frame.payload)?;
                         complete = true;
                         break;
+                    }
+                    if process_ended {
+                        return Err(Error::MalformedFrame);
                     }
                     match decode_event(&frame.payload)? {
                         ProcessEvent::Start(pid) => {
@@ -80,8 +84,7 @@ impl ConnectProcessTransport {
                         ProcessEvent::End { exit_code, exited } => {
                             collected.exit_code = Some(exit_code);
                             collected.exited = exited;
-                            complete = true;
-                            break;
+                            process_ended = true;
                         }
                         ProcessEvent::KeepAlive => {}
                     }
@@ -93,7 +96,11 @@ impl ConnectProcessTransport {
                     return Ok(());
                 }
             }
-            Ok(())
+            if process_ended {
+                Err(Error::MalformedFrame)
+            } else {
+                Ok(())
+            }
         }
         .await;
         if mode == CollectionMode::RunOneShot && collected.exit_code.is_none() {

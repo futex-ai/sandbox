@@ -46,9 +46,10 @@ that carry an API or envd access token never follow HTTP redirects. The
 streaming Connect decoder copies only one header and its declared bounded
 payload at a time; an oversized declaration is rejected before the rest of the
 HTTP chunk is copied into decoder state. Combined and split-stream collectors
-share one end-stream decoder. A non-null error object becomes retryable provider
-unavailability, malformed end-stream JSON fails closed, and a missing or null
-error is successful completion.
+share one end-stream decoder. After either collector observes a process end, it
+keeps reading until it consumes the final trailer. A missing trailer, malformed
+trailer JSON, or non-null error object fails collection; a present trailer with
+a missing or null error field is successful completion.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
@@ -88,9 +89,12 @@ cannot be decoded or returns an unusable identity or credential, the result
 remains delivery-ambiguous and enters recovery.
 
 Envd routing is derived from adapter configuration, not a response-provided
-host. The complete HTTPS URL must parse to the exact configured envd hostname
-before the access-token header is added. Access tokens and private-traffic
-credentials stay inside call-local types and are redacted from debug output.
+host. Process, read-only, and private-port routing ignore the domain carried by
+a control result, including results from an injected transport, and use the
+validated configured sandbox domain. The complete HTTPS URL must parse to the
+exact configured envd hostname before the access-token header is added. Access
+tokens and private-traffic credentials stay inside call-local types and are
+redacted from debug output.
 Sandbox create and connect responses require nonblank envd and
 private-traffic credentials. Missing or blank credentials keep an accepted
 create delivery-ambiguous and make connect retryable provider unavailability.

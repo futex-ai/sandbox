@@ -25,7 +25,12 @@ pub(super) async fn resolve(
         Some(ResourceKind::Sandbox),
     )?;
     mapping::ensure_sandbox_identity(&request.sandbox_provider_ref, &access.sandbox_id)?;
-    let expected_host = format!("{}-{}.{}", request.port, access.sandbox_id, access.domain);
+    let expected_host = format!(
+        "{}-{}.{}",
+        request.port,
+        access.sandbox_id,
+        backend.config.sandbox_domain()
+    );
     let upstream = format!("https://{expected_host}");
     let upstream = match Url::parse(&upstream) {
         Ok(upstream)

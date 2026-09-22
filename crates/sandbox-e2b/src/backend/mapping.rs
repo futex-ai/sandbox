@@ -85,7 +85,7 @@ pub(super) async fn connection(
     ensure_sandbox_identity(sandbox_ref, &access.sandbox_id)?;
     Ok(ProcessConnection::new(
         sandbox_ref.as_str().to_owned(),
-        access.domain,
+        backend.config.sandbox_domain().to_owned(),
         access.envd_access_token,
     )
     .with_user(backend.config.runtime_conventions().workload_user()))
@@ -111,7 +111,7 @@ pub(super) async fn read_only_connection(
     ensure_sandbox_identity(sandbox_ref, &access.sandbox_id)?;
     Ok(ProcessConnection::new(
         sandbox_ref.as_str().to_owned(),
-        access.domain,
+        backend.config.sandbox_domain().to_owned(),
         access.envd_access_token,
     )
     .with_user(backend.config.runtime_conventions().workload_user()))

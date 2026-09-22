@@ -67,6 +67,7 @@ async fn split_run_separates_streams_and_reports_exit() {
         event_frame(&data_frame("stderr", "Session: bsr_1")),
         event_frame(&data_frame("stdout", "-more")),
         event_frame(r#"{"event":{"end":{"exitCode":0,"exited":true}}}"#),
+        success_end_stream_frame(),
     ];
     let transport = transport(Unimock::new(
         stream_call
@@ -119,6 +120,7 @@ async fn signalled_process_end_is_terminal_without_a_second_kill() {
     let events = vec![
         event_frame(r#"{"event":{"start":{"pid":19}}}"#),
         event_frame(r#"{"event":{"end":{"exitCode":-1,"exited":false}}}"#),
+        success_end_stream_frame(),
     ];
     let transport = transport(Unimock::new(
         stream_call
@@ -260,6 +262,12 @@ fn connection() -> ProcessConnection {
 
 fn event_frame(json: &str) -> Vec<u8> {
     encode_frame(json.as_bytes()).expect("test event frame")
+}
+
+fn success_end_stream_frame() -> Vec<u8> {
+    let mut frame = event_frame("{}");
+    frame[0] = 2;
+    frame
 }
 
 fn byte_stream(fragments: Vec<Vec<u8>>) -> ByteStream {

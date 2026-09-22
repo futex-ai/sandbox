@@ -43,7 +43,9 @@ provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is
 split by a bounded-output cutoff. Provider adapters must enforce transport
 frame bounds before retaining provider chunks and must decode the exact typed
-empty mutation acknowledgment before reporting delivery success.
+empty mutation acknowledgment before reporting delivery success. After a
+process end is observed, an adapter must also validate the provider stream's
+final status instead of accepting an absent or unsuccessful completion marker.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.

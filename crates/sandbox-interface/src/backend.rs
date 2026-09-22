@@ -210,11 +210,16 @@ pub trait SandboxBackend: Send + Sync {
     /// Removes inherited consumer terminal helpers from a restored sandbox.
     async fn clean_restored_terminals(&self, sandbox_provider_ref: ProviderRef) -> Result<()>;
     /// Runs one bounded argv-direct non-interactive process to completion.
+    ///
+    /// A streaming provider may report completion only after both the process
+    /// end event and its final stream status have been validated.
     async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput>;
     /// Reads a bounded regular file without exposing provider credentials.
     async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent>;
     /// Runs one bounded non-interactive read-only command without allocating a
     /// provider terminal, retaining command state, or changing sandbox lifecycle.
+    /// Streaming providers must validate the final stream status after process
+    /// end before returning output.
     async fn read_only_exec(
         &self,
         request: BackendReadOnlyExecRequest,

@@ -27,7 +27,8 @@ pub struct ControlCreateSandbox {
 pub struct ControlSandboxAccess {
     /// Lowercase DNS-route-safe E2B sandbox identifier.
     pub sandbox_id: String,
-    /// E2B shared sandbox routing domain.
+    /// Control-reported domain retained for transport tests and diagnostics.
+    /// Backend credential routing always uses validated adapter configuration.
     pub domain: String,
     /// Nonblank secret envd access token; never persist or log this value.
     pub envd_access_token: String,
@@ -72,7 +73,8 @@ pub struct ControlSandbox {
 pub struct ControlSandboxReadAccess {
     /// Lowercase DNS-route-safe E2B sandbox identifier.
     pub sandbox_id: String,
-    /// E2B shared sandbox routing domain.
+    /// Control-reported domain retained for transport tests and diagnostics.
+    /// Backend credential routing always uses validated adapter configuration.
     pub domain: String,
     /// Secret envd access token; never persist or log this value.
     pub envd_access_token: String,

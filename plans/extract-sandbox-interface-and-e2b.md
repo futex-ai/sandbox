@@ -485,8 +485,8 @@ without bursting their APIs.
       whitespace errors, and unrelated edits.
 - [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 15: Boundary And Recovery Review Remediation
 
@@ -515,10 +515,10 @@ multi-channel process events fail closed.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 16: Trusted Shell And Cleanup Recovery
 
@@ -546,10 +546,10 @@ initialized provider resource.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 17: Storage, Cleanup, And Identity Remediation
 
@@ -580,10 +580,10 @@ provider access, and backend inventory preserves each sandbox consumer class.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 18: Trusted Python Helper Isolation
 
@@ -603,10 +603,10 @@ helper.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fix, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fix, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 19: Final Routing And Resource Remediation
 
@@ -636,10 +636,10 @@ and incremental file-length checks inspect only relevant Rust files.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 20: Workload Isolation And Safe Cache Cleanup
 
@@ -679,10 +679,10 @@ setup-created symlink outside the intended cache paths.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 21: Provider Boundary Completion
 
@@ -710,10 +710,10 @@ limit.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 22: Trusted Replacement Temporary Storage
 
@@ -742,10 +742,10 @@ destination filesystem until the atomic replacement.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 23: Provider Input And Response Safety
 
@@ -826,8 +826,8 @@ inputs cannot panic, and unusable read credentials remain retryable.
       whitespace errors, and unrelated edits.
 - [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Carry the review findings into the next remediation milestone instead of
+      closing the extraction plan early.
 
 ## Milestone 24: Exact Provider Results And Recoverable Identities
 
@@ -897,11 +897,10 @@ identity that later provider routes must reject.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, resolve superseded closeout tasks, record plan
-      completion, and move this plan from Active to Completed in
-      `plans/README.md`.
+- [x] Resolve earlier closeout placeholders and carry the new review findings
+      into the next remediation milestone.
 
 ## Milestone 25: Routable Sandbox Identities
 
@@ -935,11 +934,10 @@ identity that later provider operations and cleanup are required to reject.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, resolve superseded closeout tasks, record plan
-      completion, and move this plan from Active to Completed in
-      `plans/README.md`.
+- [x] Resolve earlier closeout placeholders and carry the new review findings
+      into the next remediation milestone.
 
 ## Milestone 26: Complete Request And Identity Validation
 
@@ -998,11 +996,10 @@ inspection cannot silently return a different provider resource.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, resolve superseded closeout tasks, record plan
-      completion, and move this plan from Active to Completed in
-      `plans/README.md`.
+- [x] Resolve earlier closeout placeholders and carry the new review findings
+      into the next remediation milestone.
 
 ## Milestone 27: Complete Write Recovery And Process Identity Safety
 
@@ -1066,11 +1063,10 @@ real nonzero operating-system process ID.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, resolve superseded closeout tasks, record plan
-      completion, and move this plan from Active to Completed in
-      `plans/README.md`.
+- [x] Resolve earlier closeout placeholders and carry the new review findings
+      into the next remediation milestone.
 
 ## Milestone 28: Complete Snapshot And Stream Bounds
 
@@ -1141,8 +1137,8 @@ transcript remains within the size that its reader supports.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, resolve superseded closeout tasks, record plan
-      completion, and move this plan from Active to Completed in
+- [x] Resolve earlier closeout placeholders, move the final hardening findings
+      to the follow-up plan, and record this extraction plan as completed in
       `plans/README.md`.

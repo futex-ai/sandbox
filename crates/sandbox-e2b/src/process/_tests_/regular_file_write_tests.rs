@@ -156,10 +156,18 @@ fn completed_stream(exit_code: i32) -> ByteStream {
     let end = frame(
         format!(r#"{{"event":{{"end":{{"exitCode":{exit_code},"exited":true}}}}}}"#).as_bytes(),
     );
+    let trailer = success_end_stream_frame();
     Box::pin(futures_util::stream::iter(vec![
         Ok(Bytes::from(start)),
         Ok(Bytes::from(end)),
+        Ok(Bytes::from(trailer)),
     ]))
+}
+
+fn success_end_stream_frame() -> Vec<u8> {
+    let mut trailer = frame(b"{}");
+    trailer[0] = 2;
+    trailer
 }
 
 fn frame(payload: &[u8]) -> Vec<u8> {

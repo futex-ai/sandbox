@@ -2,7 +2,7 @@
 
 use futures_util::StreamExt;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 use super::connect::ConnectProcessTransport;
 use super::framing::{
@@ -28,7 +28,7 @@ impl ConnectProcessTransport {
         } = command;
         let absolute_deadline = tokio::time::Instant::now()
             .checked_add(deadline)
-            .ok_or(crate::error::Error::InvalidRequest)?;
+            .ok_or(Error::InvalidRequest)?;
         let limits = StreamLimits {
             stdout: stdout_limit,
             stderr: stderr_limit,
@@ -45,6 +45,8 @@ impl ConnectProcessTransport {
         let mut collected = ProcessSplitOutput::default();
         let mut pid = None;
         let collection: Result<()> = async {
+            let mut process_ended = false;
+            let mut trailer_consumed = false;
             'stream: while let Some(remaining) =
                 absolute_deadline.checked_duration_since(tokio::time::Instant::now())
             {
@@ -57,8 +59,12 @@ impl ConnectProcessTransport {
                 for frame in decoded.frames {
                     if frame.end_stream {
                         decode_end_stream(&frame.payload)?;
+                        trailer_consumed = true;
                         stop = true;
                         break;
+                    }
+                    if process_ended {
+                        return Err(Error::MalformedFrame);
                     }
                     match decode_event(&frame.payload)? {
                         ProcessEvent::Start(started) => pid = Some(started),
@@ -72,8 +78,7 @@ impl ConnectProcessTransport {
                         ProcessEvent::End { exit_code, exited } => {
                             collected.exit_code = Some(exit_code);
                             collected.exited = exited;
-                            stop = true;
-                            break;
+                            process_ended = true;
                         }
                         ProcessEvent::KeepAlive => {}
                     }
@@ -85,7 +90,11 @@ impl ConnectProcessTransport {
                     break 'stream;
                 }
             }
-            Ok(())
+            if process_ended && !trailer_consumed {
+                Err(Error::MalformedFrame)
+            } else {
+                Ok(())
+            }
         }
         .await;
         if collected.exit_code.is_none() {

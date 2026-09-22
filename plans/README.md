@@ -6,8 +6,8 @@ milestones are finished.
 
 ## Active
 
-- [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)
+- [Harden stream completion and credential routing](harden-stream-completion-and-credential-routing.md)
 
 ## Completed
 
-- None.
+- [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)
