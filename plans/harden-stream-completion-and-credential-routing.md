@@ -58,7 +58,8 @@ the configured sandbox routing domain.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
       whitespace errors, and unrelated edits.
-- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+- [x] Commit and push the fixes, confirm GitHub CI, then run a post-push
       implementation review without changing the worktree.
-- [ ] After a clean review, record plan completion and move this plan from
-      Active to Completed in `plans/README.md`.
+- [x] Record the review outcome, move the newly discovered create-recovery
+      work to a dedicated follow-up plan, and move this plan from Active to
+      Completed in `plans/README.md`.
