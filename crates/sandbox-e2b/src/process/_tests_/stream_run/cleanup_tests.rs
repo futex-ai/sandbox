@@ -15,7 +15,7 @@ use crate::process::http::{
     ByteStream, ConnectHttpTransport, stream_with_timeout as stream_call, unary as unary_call,
 };
 
-use super::{
+use super::support::{
     byte_stream, command, connection, data_frame, event_frame, start_then_pending, transport,
 };
 

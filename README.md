@@ -49,11 +49,11 @@ private-traffic credentials. Provider mutations accept only their exact
 acknowledgment, including an exact versioned screen-resize object; process
 start and inventory responses must contain a nonzero PID. Connect collectors
 and incremental process streams keep reading after a process end until they
-validate the required success trailer; a missing, malformed, or unsuccessful
-trailer cannot look like ordinary completion. Timer expiry after a process end
-but before that trailer is a transport failure, not a routine command timeout,
-and bytes following the terminal trailer are rejected. Envd and private-port
-hosts always use the configured routing domain, never a domain supplied by an
+validate the required success trailer and HTTP EOF; a missing, malformed, or
+unsuccessful trailer cannot look like ordinary completion. Timer expiry after a process end
+but before HTTP EOF is a transport failure, not a routine command timeout,
+and bytes following the terminal trailer are rejected across HTTP chunks. Envd
+and private-port hosts always use the configured routing domain, never a domain supplied by an
 injected control response.
 Missing read credentials stay retryable.
 Caller-controlled process durations are capped before provider access.
@@ -61,10 +61,13 @@ Collected process, read-only, file, and terminal-helper operations retain their
 300-second ceiling, while incremental direct process streams accept an absolute
 deadline up to one hour plus a nonzero output-idle timeout no greater than that
 deadline. The E2B connection extends the sandbox lifetime to at least that
-deadline without shortening a longer configured lifetime. Exit events
-distinguish normal and signal termination. Each owned stream drains bounded
-queued data and ends in one independently stored outcome; consumer backpressure
-cannot block cleanup. Unfinished processes are still killed best-effort after
+deadline without shortening a longer configured lifetime. The absolute budget
+starts before connection, so setup time cannot extend execution beyond that
+lifetime. Exit events distinguish normal and signal termination. Each owned
+stream drains bounded
+queued data, any independently stored final overflow prefix, and one terminal
+outcome; consumer backpressure cannot block cleanup. Unfinished processes are
+still killed best-effort after
 timeout, overflow, failure, or consumer drop. Terminal output waits remain
 capped at 30 seconds.
 Terminal creation and recovery also reject transcript limits above the shared

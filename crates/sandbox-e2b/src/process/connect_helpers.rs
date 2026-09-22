@@ -53,18 +53,24 @@ impl ConnectProcessTransport {
         let mut collected = CollectedEvents::default();
         let collection: Result<()> = async {
             let mut process_ended = false;
+            let mut trailer_consumed = false;
+            let mut reached_eof = false;
             while let Some(remaining) = deadline.checked_duration_since(tokio::time::Instant::now())
             {
                 let fragment = match tokio::time::timeout(remaining, stream.next()).await {
                     Ok(Some(fragment)) => fragment?,
-                    Ok(None) | Err(_) => break,
+                    Ok(None) => {
+                        reached_eof = true;
+                        break;
+                    }
+                    Err(_) => break,
                 };
                 let decoded = decoder.push(&fragment);
                 let mut complete = false;
                 for frame in decoded.frames {
                     if frame.end_stream {
                         decode_end_stream(&frame.payload)?;
-                        complete = true;
+                        trailer_consumed = true;
                         break;
                     }
                     if process_ended {
@@ -96,7 +102,7 @@ impl ConnectProcessTransport {
                     return Ok(());
                 }
             }
-            if process_ended {
+            if (process_ended || trailer_consumed) && !(trailer_consumed && reached_eof) {
                 Err(Error::MalformedFrame)
             } else {
                 Ok(())

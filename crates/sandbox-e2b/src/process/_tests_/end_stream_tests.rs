@@ -3,8 +3,11 @@
 use std::{sync::Arc, time::Duration};
 
 use bytes::Bytes;
+use futures_util::{StreamExt, stream};
 use sandbox_interface::Error as DomainError;
 use unimock::{MockFn, Unimock, matching};
+
+use crate::error::Error;
 
 use super::{
     ConnectProcessTransport, ProcessConnection, ProcessTransport, SplitProcessCommand,
@@ -111,6 +114,70 @@ async fn collectors_reject_a_frame_after_the_success_trailer() {
         };
 
         assert!(result.is_err());
+    }
+}
+
+#[tokio::test]
+async fn collectors_reject_later_http_chunks_after_the_success_trailer() {
+    for split in [false, true] {
+        for trailing in [keepalive_frame(), vec![0]] {
+            let transport = transport_with_frames(vec![
+                process_end_frame(),
+                success_end_stream_frame(),
+                trailing,
+            ]);
+            let result = if split {
+                transport
+                    .run_split(connection(), split_command())
+                    .await
+                    .map(|_| ())
+            } else {
+                transport
+                    .connect(connection(), 7, Duration::from_secs(1), 1024)
+                    .await
+                    .map(|_| ())
+            };
+
+            assert!(result.is_err(), "a later chunk must invalidate completion");
+        }
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn collectors_require_http_eof_even_after_a_success_trailer() {
+    for split in [false, true] {
+        for stall in [false, true] {
+            let http: Arc<dyn ConnectHttpTransport> = Arc::new(Unimock::new(
+                stream_call
+                    .next_call(matching!(_, _, _))
+                    .answers_arc(Arc::new(move |_, _, _, _| {
+                        let tail: ByteStream = if stall {
+                            Box::pin(stream::pending())
+                        } else {
+                            Box::pin(stream::iter([Err(Error::Unavailable)]))
+                        };
+                        let frames = vec![process_end_frame(), success_end_stream_frame()];
+                        Ok(Box::pin(byte_stream(frames).chain(tail)))
+                    })),
+            ));
+            let transport = ConnectProcessTransport {
+                http,
+                backend_id: "configured-e2b".to_owned(),
+            };
+            let result = if split {
+                transport
+                    .run_split(connection(), split_command())
+                    .await
+                    .map(|_| ())
+            } else {
+                transport
+                    .connect(connection(), 7, Duration::from_secs(1), 1024)
+                    .await
+                    .map(|_| ())
+            };
+
+            assert!(result.is_err(), "a trailer cannot replace HTTP EOF");
+        }
     }
 }
 

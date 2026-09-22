@@ -65,6 +65,7 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
         .stream_process(
             connection(),
             StreamProcessCommand {
+                requested_at: tokio::time::Instant::now(),
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
                 stdout_limit: 0,
@@ -105,6 +106,7 @@ async fn process_transport_rejects_invalid_stream_idle_timeout() {
         .stream_process(
             connection(),
             StreamProcessCommand {
+                requested_at: tokio::time::Instant::now(),
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
                 stdout_limit: 0,

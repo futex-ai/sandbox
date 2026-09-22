@@ -199,11 +199,11 @@ decoded stream.
       and prove collected and incremental paths fail closed.
 - [x] Update the contract, adapter guide, workspace README, and crate READMEs.
 - [x] Run focused tests and `cargo xtask check`, then audit the complete diff.
-- [ ] Commit and push the fixes, then run `cargo xtask review` against
+- [x] Commit and push the fixes, then run `cargo xtask review` against
       `origin/main` and report every new finding without automatically fixing
       it.
-- [ ] Mark this milestone complete and move the plan from Active to Completed
-      in `plans/README.md` after the review workflow finishes.
+- [x] Complete this milestone after reviewing `2bc577a`; track its three new
+      findings in Milestone 6 before moving the plan to Completed.
 
 ### Second Follow-up Review Findings
 
@@ -228,3 +228,26 @@ decoded stream.
 
    **Resolution:** Option B makes the decoder terminal-aware and rejects any
    trailing or subsequently supplied bytes after an end-stream frame.
+
+## Milestone 6: Finish Overflow, HTTP Finality, And Deadline Fixes
+
+At the end of this milestone, overflow cleanup starts even with a full output
+queue, successful collectors validate HTTP EOF after the trailer, and one
+absolute execution budget includes E2B sandbox connection time.
+
+- [x] Add failing regressions for a full queue with an overflowing final
+      prefix, bytes in a later HTTP chunk, and connection latency.
+- [x] Store the bounded overflow prefix alongside the independent terminal
+      outcome, preserving output order without delaying cleanup.
+- [x] Keep streaming, combined, and split collectors reading through HTTP EOF
+      and reject later bytes, transport failure, or expiry before that EOF.
+- [x] Anchor the absolute budget before control connection and pass the same
+      origin to the process transport; skip process start if setup exhausts it.
+- [x] Update the shared contract, adapter guide, and affected READMEs.
+- [x] Run focused regressions, formatting, Clippy, workspace tests, file-length
+      validation, smoke coverage, and `cargo xtask check`; audit the diff.
+- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [ ] Run `cargo xtask review` after the push against `origin/main`; report
+      every finding without automatically fixing it.
+- [ ] Mark this milestone complete and move the plan to Completed when the
+      review workflow finishes.

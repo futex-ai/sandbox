@@ -115,9 +115,10 @@ allowed frame. A streaming protocol's end marker must also be decoded:
 malformed metadata or a reported application error must fail collection rather
 than look like an ordinary completion, and any bytes following that terminal
 marker are malformed. Once a process end event is observed, collection must
-continue until that final marker succeeds; stream exhaustion or deadline expiry
-before the marker is a malformed completion. A bounded one-shot process must be
-terminated when collection fails after its PID is known. Credentialed HTTP
+continue until that final marker succeeds and the underlying transport reaches
+EOF. Later bytes, transport failure, or deadline expiry before that EOF are
+malformed completion, even after a valid marker. A bounded one-shot process
+must be terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Provider-returned routing fields are
 not authorities: credentialed process, read-only, and private-port hosts must
@@ -135,7 +136,8 @@ unavailability. Snapshot inspection must reject a returned provider ID that
 differs from the requested ID.
 
 `SandboxBackend::stream_process` and the matching trusted-service method return
-a boxed stream after request validation and sandbox access succeed. The service
+a boxed stream after request validation and sandbox access succeed, or a single
+`DeadlineExpired` outcome if connection uses the entire budget. The service
 request identifies an owned sandbox; the backend request carries its provider
 reference. Both also carry only direct argv, separate stdout and stderr limits,
 an absolute deadline, and an idle timeout. Once a provider start is decoded,
@@ -145,26 +147,31 @@ a transport or timer failure before start may emit only the outcome. The
 `exited` field is true only for a normal process exit, so signal termination
 cannot be mistaken for a successful zero exit code.
 `Exited` is not terminal: `Completed` is valid only after the provider's success
-trailer is decoded, and means the provider stream completed rather than that
-the command succeeded. Consumers must inspect both `exit_code` and `exited`.
+trailer is decoded and transport EOF follows. It confirms provider stream
+completion; consumers must inspect both `exit_code` and `exited` to determine
+whether the command succeeded.
 Missing or failed trailers, invalid ordering, malformed frames, and provider
 transport errors end with `TransportFailure`. Once `Exited` has been decoded,
-expiry of either timer before the success trailer is also a
-`TransportFailure`, including expiry while delivery of `Exited` is blocked.
+expiry of either timer before both the success trailer and transport EOF is
+also a `TransportFailure`, including expiry while delivery of `Exited` is blocked.
 `StdoutOverflow` and `StderrOverflow` are distinct, and only the bounded prefix
 may be emitted before either. Before process end, an absolute deadline produces
 `DeadlineExpired`; an idle timer produces `IdleTimeout` and resets only when
 stdout or stderr data arrives, not for start, keep-alive, process-end, or
 transport frames. Every stream consumed to its end contains exactly one
-`Outcome` as its last item.
+`Outcome` as its last item. The absolute budget begins before backend sandbox
+connection; setup consumes that same budget and cannot extend the process run.
+The idle timer begins before opening the process transport.
 
 If streaming ends before a process end is observed, the backend makes a bounded
 best-effort kill after it has learned the PID. This includes overflow, idle or
 absolute timeout, transport failure, and a consumer dropping the returned
 stream. For an owned stream, the backend sends its terminal outcome and closes
 the producer side before awaiting cleanup, so bounded-queue backpressure cannot
-delay that cleanup. The returned stream drains already queued data first, then
-yields the independently stored outcome and ends. A slow consumer can delay its
+delay that cleanup. An overflowing frame's final bounded output prefix is stored
+with the terminal outcome instead of waiting for data-queue capacity. The
+returned stream drains already queued data first, then yields that optional
+prefix, the independently stored outcome, and EOF. A slow consumer can delay its
 own observation but cannot extend process execution or cleanup. A consumer drop
 cannot receive an outcome because it no longer owns the stream, but it still
 triggers provider cleanup.

@@ -50,12 +50,15 @@ process end is observed, an adapter must also validate the provider stream's
 final status instead of accepting an absent or unsuccessful completion marker.
 Incremental process streams emit typed start, stdout, stderr, exit, and final
 outcome events. Exit events preserve whether termination was normal or caused
-by a signal; `Completed` confirms the provider stream trailer, not command
-success. Timer expiry after exit but before that trailer is a transport failure,
-not a command timeout, and any frame following the trailer is invalid. A backend
+by a signal; `Completed` confirms the provider stream trailer and transport EOF,
+not command success. Timer expiry after exit but before EOF is a transport failure,
+not a command timeout, and later bytes following the trailer are invalid. A backend
 must keep the provider resource available through every accepted streaming
-deadline. Only stdout or stderr data resets the idle timer. Every owned stream
-drains its bounded queued data, ends with one independently stored outcome, and
+deadline, including time spent connecting to the sandbox. Setup that consumes
+the budget returns a single `DeadlineExpired` event without starting a process.
+Only stdout or stderr data resets the idle timer, which starts before the process
+transport opens. Every owned stream drains its bounded queued data and any
+independently stored final overflow prefix, ends with one terminal outcome, and
 cannot block best-effort cleanup through consumer backpressure. Unfinished
 processes are still killed after overflow, timeout, transport failure, or
 consumer drop.

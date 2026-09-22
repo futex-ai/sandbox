@@ -17,8 +17,8 @@ use super::{
     framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event},
     mapping::map_result,
     stream_state::{
-        Completion, Delivery, EventReceiver, EventResult, StreamSettings, StreamState, deliver,
-        finish_stream,
+        Completion, Delivery, EventReceiver, EventResult, StreamSettings, StreamState,
+        StreamTerminal, deliver, finish_stream,
     },
     types::{ProcessConnection, StreamProcessCommand},
     wire::{argv_start, encode},
@@ -39,12 +39,13 @@ impl ConnectProcessTransport {
             args,
             stdout_limit,
             stderr_limit,
+            requested_at,
             deadline,
             idle_timeout,
         } = command;
         let request = map_result(encode(&argv_start(command, args)), false, &self.backend_id)?;
         let started_at = tokio::time::Instant::now();
-        let absolute_deadline = started_at
+        let absolute_deadline = requested_at
             .checked_add(deadline)
             .ok_or_else(|| DomainError::internal_message("stream process deadline overflow"))?;
         let idle_deadline = started_at
@@ -56,7 +57,9 @@ impl ConnectProcessTransport {
             stderr_limit,
             absolute_deadline,
             idle_timeout,
-            request_timeout: deadline.saturating_add(STREAM_TRANSPORT_ALLOWANCE),
+            request_timeout: absolute_deadline
+                .saturating_duration_since(started_at)
+                .saturating_add(STREAM_TRANSPORT_ALLOWANCE),
         };
         let (sender, receiver) = mpsc::channel(EVENT_CHANNEL_CAPACITY);
         let (outcome_sender, outcome_receiver) = oneshot::channel();
@@ -77,14 +80,19 @@ impl ConnectProcessTransport {
         connection: ProcessConnection,
         settings: StreamSettings,
         sender: Sender<ProcessStreamEvent>,
-        outcome_sender: oneshot::Sender<ProcessStreamOutcome>,
+        outcome_sender: oneshot::Sender<StreamTerminal>,
         idle_deadline: tokio::time::Instant,
     ) {
         let mut state = StreamState::new(idle_deadline);
         let completion = self
             .drive_stream(connection.clone(), &settings, &sender, &mut state)
             .await;
-        finish_stream(sender, outcome_sender, completion);
+        finish_stream(
+            sender,
+            outcome_sender,
+            completion,
+            state.final_output.take(),
+        );
         if !state.ended {
             self.kill_best_effort(connection, state.pid).await;
         }
@@ -118,6 +126,7 @@ impl ConnectProcessTransport {
             },
         };
         let mut decoder = FrameDecoder::new(MAX_FRAME_BYTES);
+        let mut trailer_received = false;
         loop {
             let fragment = tokio::select! {
                 biased;
@@ -130,6 +139,9 @@ impl ConnectProcessTransport {
                 }
                 item = provider_stream.next() => match item {
                     Some(Ok(fragment)) => fragment,
+                    None if trailer_received => {
+                        return Completion::Outcome(ProcessStreamOutcome::Completed);
+                    }
                     Some(Err(_)) | None => {
                         return Completion::Outcome(ProcessStreamOutcome::TransportFailure);
                     }
@@ -139,13 +151,11 @@ impl ConnectProcessTransport {
             let mut batch_outcome = None;
             for frame in decoded.frames {
                 if frame.end_stream {
-                    batch_outcome = Some(
-                        if state.ended && decode_end_stream(&frame.payload).is_ok() {
-                            ProcessStreamOutcome::Completed
-                        } else {
-                            ProcessStreamOutcome::TransportFailure
-                        },
-                    );
+                    if state.ended && decode_end_stream(&frame.payload).is_ok() {
+                        trailer_received = true;
+                    } else {
+                        batch_outcome = Some(ProcessStreamOutcome::TransportFailure);
+                    }
                     break;
                 }
                 if state.ended {
@@ -215,6 +225,10 @@ impl ConnectProcessTransport {
             ProcessEvent::End { .. } => return EventResult::transport_failure(),
             ProcessEvent::KeepAlive => (None, None),
         };
+        if let Some(outcome) = overflow {
+            state.final_output = event;
+            return EventResult::Outcome(outcome);
+        }
         if let Some(event) = event {
             match deliver(event, settings, sender, state).await {
                 Delivery::Sent => {}
@@ -224,10 +238,7 @@ impl ConnectProcessTransport {
                 Delivery::Outcome(outcome) => return EventResult::Outcome(outcome),
             }
         }
-        match overflow {
-            Some(outcome) => EventResult::Outcome(outcome),
-            None => EventResult::Continue,
-        }
+        EventResult::Continue
     }
 }
 

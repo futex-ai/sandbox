@@ -9,11 +9,11 @@ use unimock::{MockFn, Unimock, matching};
 use crate::ProcessTransport;
 use crate::process::http::{stream_with_timeout as stream_call, unary as unary_call};
 
-use super::{
+use super::support::{
     byte_stream, command, connection, data_frame, event_frame, success_trailer, transport,
 };
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn stream_preserves_event_order_and_waits_for_success_trailer() {
     let events = vec![
         event_frame(r#"{"event":{"start":{"pid":11}}}"#),

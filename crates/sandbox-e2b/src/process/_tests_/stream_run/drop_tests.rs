@@ -10,7 +10,7 @@ use unimock::{MockFn, Unimock, matching};
 use crate::ProcessTransport;
 use crate::process::http::{stream_with_timeout as stream_call, unary as unary_call};
 
-use super::{command, connection, start_then_pending, transport};
+use super::support::{command, connection, start_then_pending, transport};
 
 #[tokio::test]
 async fn dropping_consumer_stream_kills_an_observed_process() {

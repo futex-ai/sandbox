@@ -100,19 +100,21 @@ bodies, process output, and terminal output are bounded while streaming.
 Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors
-keep reading after a process end and decode the required Connect trailer
-through one path: a missing trailer or malformed JSON fails closed, an error
+keep reading after a process end and decode the required Connect trailer and
+HTTP EOF through one path: a missing trailer or malformed JSON fails closed, an error
 object is retryable provider unavailability, and a present trailer with a
-missing or null error field is a clean close. The decoder treats an end-stream
-frame as final and rejects bytes in that fragment or a later decoder input.
+missing or null error field permits a clean close once HTTP EOF follows.
+Collectors keep polling after the trailer and reject later bytes, response
+errors, or timeout before EOF, including across HTTP chunks.
 Incremental execution emits ordered start, stdout, stderr, exit, and final
 outcome events. Exit events retain envd's normal-exit flag, and a successful
-trailer is required for `Completed`; that outcome does not by itself mean the
-command succeeded. Timer expiry after exit but before the trailer is a transport
+trailer and HTTP EOF are required for `Completed`; that outcome does not by
+itself mean the command succeeded. Timer expiry after exit but before HTTP EOF is a transport
 failure, including while exit-event delivery is blocked. Only stdout or stderr
-bytes reset the idle timer. The terminal outcome is published through a slot
-independent from the bounded data queue: queued data drains in order before the
-outcome and EOF, while cleanup starts without waiting for consumer capacity.
+bytes reset the idle timer. The terminal outcome and any final bounded overflow
+prefix are published through a slot independent from the bounded data queue.
+Queued data drains in order before that optional prefix, outcome, and EOF,
+while cleanup starts without waiting for consumer capacity.
 Direct process, streaming, and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
@@ -120,10 +122,14 @@ combined stateless output cap is at most 64 MiB. Existing process, read-only,
 and regular-file durations
 retain their 300-second ceiling. Only incremental streams accept up to 3,600
 seconds, with a nonzero idle timeout no greater than the deadline. Their envd
-HTTP request timeout is that deadline plus a 10-second transport allowance. The
-control connection uses the greater of the configured sandbox timeout and the
+HTTP request timeout is the remaining budget plus a 10-second transport
+allowance. The control connection uses the greater of the configured sandbox timeout and the
 deadline rounded up to whole seconds, so an accepted stream does not outlive its
-sandbox. Existing connection paths retain their configured sandbox timeout, and
+sandbox. The absolute budget starts before control connection, and the process
+transport retains that origin in `StreamProcessCommand::requested_at`. Setup
+consumes the same budget; expiry during connection returns `DeadlineExpired`
+without starting a process. The idle timer starts before envd connection.
+Existing connection paths retain their configured sandbox timeout, and
 existing HTTP paths retain the fixed 310-second client timeout. Terminal output
 waits cannot exceed 30 seconds. Every bound is checked before provider access,
 and absolute Tokio deadlines use checked arithmetic. Failed

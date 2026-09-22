@@ -47,12 +47,13 @@ streaming Connect decoder copies only one header and its declared bounded
 payload at a time; an oversized declaration is rejected before the rest of the
 HTTP chunk is copied into decoder state. Combined and split-stream collectors
 and incremental process streaming share one end-stream decoder. After a process
-end, each path keeps reading until it consumes the final trailer. A missing
-trailer, malformed trailer JSON, or non-null error object fails collection or
+end, each path keeps reading until it consumes the final trailer and HTTP EOF.
+A missing trailer, malformed trailer JSON, or non-null error object fails collection or
 produces the streaming `TransportFailure` outcome; a present trailer with a
 missing or null error field is successful completion. The decoder records that
 terminal frame and rejects any remaining bytes in the fragment or bytes supplied
-by a later decoder call, so no collector accepts a frame after its trailer.
+by a later decoder call. Collectors continue polling after a valid trailer, so
+later HTTP chunks, response errors, or timeout before EOF cannot bypass finality.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
@@ -166,12 +167,18 @@ Public Connect waits, combined-output commands, collected split-stream
 commands, regular-file reads, and stateless read-only execution retain the same
 300-second ceiling; terminal output long polls retain a 30-second ceiling. Only
 incremental `stream_process` accepts a deadline up to 3,600 seconds. Its idle
-timeout must be nonzero and no greater than its absolute deadline. Both timers
-start before the envd stream is opened; only a nonempty stdout or stderr data
-frame resets idle time. Start, keep-alive, PTY, process-end, and Connect trailer
+timeout must be nonzero and no greater than its absolute deadline. The absolute
+budget starts before sandbox connection; `StreamProcessCommand::requested_at`
+preserves that origin through envd setup. Connection is bounded by the same
+deadline and returns a single `DeadlineExpired` without starting a process if
+setup exhausts it. The idle timer starts before the envd stream is opened;
+only a nonempty stdout or stderr data frame resets idle time. Start, keep-alive,
+PTY, process-end, and Connect trailer
 frames do not reset it. Before provider access, the adapter rounds a fractional
 stream deadline up to whole seconds and connects with the greater of that value
-and the configured sandbox timeout. The call-specific control operation rejects
+and the configured sandbox timeout. Connection latency consumes the requested
+budget rather than requiring a larger sandbox timeout, including at the
+3,600-second ceiling. The call-specific control operation rejects
 zero, and existing connection paths continue using the configured timeout.
 Caller-controlled bounds are checked before provider access, and every absolute
 Tokio deadline uses checked arithmetic. File and maintenance helpers require a
@@ -184,20 +191,22 @@ Incremental execution emits the decoded start, bounded stdout and stderr, and
 process-end events in provider order. Its exit event preserves both the exit
 code and envd's normal-exit flag, so signal termination cannot resemble a
 successful zero exit. A process end does not become `Completed` until the
-success trailer follows; that outcome confirms stream completion, not command
-success. Before process end, idle or absolute expiry produces its matching
-timeout outcome. After process end, either timer expiring before the trailer,
+success trailer and HTTP EOF follow; that outcome confirms stream completion,
+not command success. Before process end, idle or absolute expiry produces its matching
+timeout outcome. After process end, either timer expiring before HTTP EOF,
 including while a queued exit event is blocked, produces `TransportFailure`
 because provider completion remains unverified. Overflow, timeout, malformed or
 failed transport, and consumer drop stop the worker. Streams that remain owned
 receive their one typed `Outcome` through a terminal slot independent of the
-bounded data queue. The producer closes and cleanup starts without waiting for
+bounded data queue, along with any final bounded prefix from an overflowing
+frame. The producer closes and cleanup starts without waiting for
 consumer capacity; the returned stream preserves ordering by draining queued
-data before that outcome and EOF. When no process end was observed, the detached
-worker makes the same bounded PID-scoped kill attempt; a dropped consumer wakes
+data before the optional final prefix, outcome, and EOF. When no process end was
+observed, the detached worker makes the same bounded PID-scoped kill attempt;
+a dropped consumer wakes
 that worker even while envd is silent. Envd's
 HTTP client keeps its fixed 310-second timeout for existing paths. The new path
-alone applies a per-request timeout equal to the requested deadline plus a
+alone applies a per-request timeout equal to the remaining absolute budget plus a
 10-second transport allowance, so the client cannot truncate a valid one-hour
 stream.
 

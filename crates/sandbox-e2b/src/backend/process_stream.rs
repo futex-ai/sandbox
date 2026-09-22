@@ -2,9 +2,12 @@
 
 use std::time::Duration;
 
+use futures_util::stream;
 use sandbox_interface::{
-    BackendStreamProcessRequest, Error, PROCESS_STREAM_MAX_DEADLINE, ProcessEventStream, Result,
+    BackendStreamProcessRequest, Error, PROCESS_STREAM_MAX_DEADLINE, ProcessEventStream,
+    ProcessStreamEvent, ProcessStreamOutcome, Result,
 };
+use tokio::time::Instant;
 
 use crate::process::StreamProcessCommand;
 
@@ -15,11 +18,24 @@ pub(super) async fn stream(
     request: BackendStreamProcessRequest,
 ) -> Result<ProcessEventStream> {
     validate(&request)?;
+    let requested_at = Instant::now();
+    let absolute_deadline = requested_at
+        .checked_add(request.deadline)
+        .ok_or_else(|| Error::internal_message("stream process deadline overflow"))?;
     let timeout_seconds =
         sandbox_timeout_seconds(backend.config.idle_timeout_seconds(), request.deadline)?;
-    let connection =
-        mapping::connection_with_timeout(backend, &request.sandbox_provider_ref, timeout_seconds)
-            .await?;
+    let connection = match tokio::time::timeout_at(
+        absolute_deadline,
+        mapping::connection_with_timeout(backend, &request.sandbox_provider_ref, timeout_seconds),
+    )
+    .await
+    {
+        Ok(connection) => connection?,
+        Err(_) => return Ok(expired()),
+    };
+    if Instant::now() >= absolute_deadline {
+        return Ok(expired());
+    }
     backend
         .processes
         .stream_process(
@@ -29,11 +45,18 @@ pub(super) async fn stream(
                 args: request.args,
                 stdout_limit: request.stdout_limit,
                 stderr_limit: request.stderr_limit,
+                requested_at,
                 deadline: request.deadline,
                 idle_timeout: request.idle_timeout,
             },
         )
         .await
+}
+
+fn expired() -> ProcessEventStream {
+    Box::pin(stream::iter([ProcessStreamEvent::Outcome(
+        ProcessStreamOutcome::DeadlineExpired,
+    )]))
 }
 
 fn validate(request: &BackendStreamProcessRequest) -> Result<()> {

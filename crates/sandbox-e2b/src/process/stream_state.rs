@@ -23,6 +23,8 @@ pub(super) struct StreamState {
     pub(super) pid: Option<u32>,
     pub(super) started: bool,
     pub(super) ended: bool,
+    /// The bounded overflow prefix bypasses the full data queue with its outcome.
+    pub(super) final_output: Option<ProcessStreamEvent>,
     stdout_bytes: usize,
     stderr_bytes: usize,
     pub(super) idle_deadline: tokio::time::Instant,
@@ -31,17 +33,25 @@ pub(super) struct StreamState {
 /// Drains ordered data events before yielding one separately published outcome.
 pub(super) struct EventReceiver {
     events: Receiver<ProcessStreamEvent>,
-    outcome: Option<oneshot::Receiver<ProcessStreamOutcome>>,
+    terminal: Option<oneshot::Receiver<StreamTerminal>>,
+    outcome: Option<ProcessStreamOutcome>,
+}
+
+/// At most one bounded output prefix followed by exactly one terminal outcome.
+pub(super) struct StreamTerminal {
+    final_output: Option<ProcessStreamEvent>,
+    outcome: ProcessStreamOutcome,
 }
 
 impl EventReceiver {
     pub(super) fn new(
         events: Receiver<ProcessStreamEvent>,
-        outcome: oneshot::Receiver<ProcessStreamOutcome>,
+        terminal: oneshot::Receiver<StreamTerminal>,
     ) -> Self {
         Self {
             events,
-            outcome: Some(outcome),
+            terminal: Some(terminal),
+            outcome: None,
         }
     }
 
@@ -50,12 +60,22 @@ impl EventReceiver {
         if let Some(event) = self.events.recv().await {
             return Some((event, self));
         }
-        let receiver = self.outcome.take()?;
-        let outcome = match receiver.await {
-            Ok(outcome) => outcome,
-            Err(_) => ProcessStreamOutcome::TransportFailure,
+        if let Some(outcome) = self.outcome.take() {
+            return Some((ProcessStreamEvent::Outcome(outcome), self));
+        }
+        let receiver = self.terminal.take()?;
+        let terminal = match receiver.await {
+            Ok(terminal) => terminal,
+            Err(_) => StreamTerminal {
+                final_output: None,
+                outcome: ProcessStreamOutcome::TransportFailure,
+            },
         };
-        Some((ProcessStreamEvent::Outcome(outcome), self))
+        if let Some(event) = terminal.final_output {
+            self.outcome = Some(terminal.outcome);
+            return Some((event, self));
+        }
+        Some((ProcessStreamEvent::Outcome(terminal.outcome), self))
     }
 }
 
@@ -65,6 +85,7 @@ impl StreamState {
             pid: None,
             started: false,
             ended: false,
+            final_output: None,
             stdout_bytes: 0,
             stderr_bytes: 0,
             idle_deadline,
@@ -151,11 +172,15 @@ pub(super) async fn deliver(
 /// Publishes the terminal outcome without waiting for event-queue capacity.
 pub(super) fn finish_stream(
     _sender: Sender<ProcessStreamEvent>,
-    outcome_sender: oneshot::Sender<ProcessStreamOutcome>,
+    outcome_sender: oneshot::Sender<StreamTerminal>,
     completion: Completion,
+    final_output: Option<ProcessStreamEvent>,
 ) {
     if let Completion::Outcome(outcome) = completion {
-        let _result = outcome_sender.send(outcome);
+        let _result = outcome_sender.send(StreamTerminal {
+            final_output,
+            outcome,
+        });
     }
 }
 

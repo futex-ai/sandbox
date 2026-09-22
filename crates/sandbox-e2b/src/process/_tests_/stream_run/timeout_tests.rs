@@ -10,7 +10,7 @@ use crate::ProcessTransport;
 use crate::process::http::{stream_with_timeout as stream_call, unary as unary_call};
 
 use super::super::EVENT_CHANNEL_CAPACITY;
-use super::{
+use super::support::{
     byte_stream, command, connection, data_frame, event_frame, start_end_then_pending,
     start_then_periodic, transport,
 };

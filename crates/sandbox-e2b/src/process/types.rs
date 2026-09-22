@@ -81,7 +81,10 @@ pub struct StreamProcessCommand {
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before the stream terminates.
     pub stderr_limit: usize,
-    /// Absolute execution budget, capped at 3,600 seconds.
+    /// Monotonic budget origin, captured before acquiring sandbox access.
+    /// Direct transport callers capture this when they create the command.
+    pub requested_at: tokio::time::Instant,
+    /// Absolute execution budget from `requested_at`, capped at 3,600 seconds.
     pub deadline: Duration,
     /// Maximum duration without stdout or stderr data.
     pub idle_timeout: Duration,

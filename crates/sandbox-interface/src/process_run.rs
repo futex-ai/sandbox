@@ -66,9 +66,10 @@ pub struct BackendRunProcessRequest {
 
 /// Request to stream one bounded non-interactive process in an owned sandbox.
 ///
-/// The absolute deadline bounds the complete stream, while `idle_timeout`
-/// bounds time without stdout or stderr data. Both timers begin when execution
-/// starts. The idle timeout must be nonzero and no greater than the deadline.
+/// The absolute deadline includes backend sandbox connection and the complete
+/// stream. The idle timer begins before opening the process transport and
+/// bounds time without stdout or stderr data. It must be nonzero and no greater
+/// than the requested deadline.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamProcessRequest {
     /// Caller resource owner.
@@ -83,7 +84,7 @@ pub struct StreamProcessRequest {
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before overflow terminates the stream.
     pub stderr_limit: usize,
-    /// Absolute execution budget for the complete stream.
+    /// Absolute execution budget, including backend sandbox connection.
     pub deadline: Duration,
     /// Maximum duration without stdout or stderr data.
     pub idle_timeout: Duration,
@@ -107,7 +108,7 @@ pub struct BackendStreamProcessRequest {
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before overflow terminates the stream.
     pub stderr_limit: usize,
-    /// Absolute execution budget for the complete stream.
+    /// Absolute execution budget, including backend sandbox connection.
     pub deadline: Duration,
     /// Maximum duration without stdout or stderr data.
     pub idle_timeout: Duration,
@@ -116,7 +117,7 @@ pub struct BackendStreamProcessRequest {
 /// Terminal result of a streaming process run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessStreamOutcome {
-    /// A process end and provider success trailer were observed.
+    /// A process end, provider success trailer, and transport EOF were observed.
     ///
     /// This confirms protocol completion, not a successful command exit. The
     /// preceding [`ProcessStreamEvent::Exited`] event carries that distinction.
@@ -137,7 +138,7 @@ pub enum ProcessStreamOutcome {
 ///
 /// `Outcome` is emitted exactly once and is always the final stream item.
 /// `Exited` is not terminal because provider completion still requires a
-/// decoded success trailer.
+/// decoded success trailer followed by transport EOF.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProcessStreamEvent {
     /// The provider started the process with a nonzero operating-system PID.
