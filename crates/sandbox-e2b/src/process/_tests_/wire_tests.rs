@@ -17,10 +17,8 @@ fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
         let directory = tempdir().expect("temporary transcript directory");
         let transcript = directory.path().join("terminal.log");
         let mut child = start_wrapper(&transcript, limit);
-        child
-            .stdin
-            .take()
-            .expect("terminal wrapper stdin")
+        let mut input = child.stdin.take().expect("terminal wrapper stdin");
+        input
             .write_all(b"printf '%010000d' 0\nexit\n")
             .expect("write terminal command");
 
@@ -45,10 +43,8 @@ fn terminal_wrapper_does_not_follow_an_existing_log_symlink() {
     fs::write(&protected, b"protected").expect("protected file");
     symlink(&protected, &transcript).expect("transcript symlink");
     let mut child = start_wrapper(&transcript, 1024 * 1024);
-    child
-        .stdin
-        .take()
-        .expect("terminal wrapper stdin")
+    let mut input = child.stdin.take().expect("terminal wrapper stdin");
+    input
         .write_all(b"echo captured\nexit\n")
         .expect("write terminal command");
 
@@ -84,10 +80,8 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
     let directory = tempdir().expect("temporary transcript directory");
     let transcript = directory.path().join("terminal.log");
     let mut child = start_wrapper(&transcript, 1024 * 1024);
-    child
-        .stdin
-        .take()
-        .expect("terminal wrapper stdin")
+    let mut input = child.stdin.take().expect("terminal wrapper stdin");
+    input
         .write_all(b"echo complete\nexit\n")
         .expect("write terminal command");
 
