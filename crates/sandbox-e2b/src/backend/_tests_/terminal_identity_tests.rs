@@ -28,7 +28,8 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
     let processes = Unimock::new((
         ProcessTransportMock::list
             .each_call(matching!(_))
-            .answers_arc(Arc::new(move |_, _| {
+            .answers_arc(Arc::new(move |_, connection| {
+                assert_eq!(connection.user(), Some("root"));
                 Ok(vec![ProcessInfo {
                     pid: 41,
                     tag: Some(wrong_tag.clone()),
@@ -36,14 +37,18 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
             })),
         ProcessTransportMock::send_input
             .next_call(matching!(_, _, _))
-            .answers(&|_, _, _, _| {
+            .answers(&|_, connection, _, _| {
+                assert_eq!(connection.user(), Some("root"));
                 Err(Error::NotFound {
                     resource: ResourceKind::Terminal,
                 })
             }),
         ProcessTransportMock::kill
             .next_call(matching!(_, _))
-            .answers(&|_, _, _| Ok(())),
+            .answers(&|_, connection, _| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(())
+            }),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -58,7 +63,7 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
             .read_terminal(BackendOutputRequest {
                 sandbox_provider_ref: ProviderRef::new("sandbox"),
                 terminal_provider_ref: provider_ref.clone(),
-                provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
+                provider_log_path: format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log"),
                 offset: 0,
                 max_bytes: 1024,
                 provider_log_limit: 2048,
@@ -96,14 +101,16 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
     let processes = Unimock::new((
         ProcessTransportMock::send_input
             .next_call(matching!(_, _, _))
-            .answers_arc(Arc::new(move |_, _, selector, input| {
+            .answers_arc(Arc::new(move |_, connection, selector, input| {
+                assert_eq!(connection.user(), Some("root"));
                 assert_eq!(selector, ProcessSelector::Tag(write_tag.clone()));
                 assert_eq!(input, b"safe");
                 Ok(())
             })),
         ProcessTransportMock::kill
             .next_call(matching!(_, _))
-            .answers_arc(Arc::new(move |_, _, selector| {
+            .answers_arc(Arc::new(move |_, connection, selector| {
+                assert_eq!(connection.user(), Some("root"));
                 assert_eq!(selector, ProcessSelector::Tag(close_tag.clone()));
                 Ok(())
             })),

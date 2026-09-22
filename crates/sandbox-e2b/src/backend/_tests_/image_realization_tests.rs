@@ -60,6 +60,9 @@ async fn image_preparation_precedes_separate_source_cleanup() {
             }),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
+            .returns(Ok(success())),
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
             .answers(&|_, _, command| {
                 assert!(
                     command
@@ -115,7 +118,7 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
         ProcessTransportMock::run
             .next_call(matching!(_, _))
             .answers(&|_, _, command| {
-                let script = command.args.last().expect("shell script argument");
+                let script = command.args.get(1).expect("shell script argument");
                 assert!(!script.contains("/root/"));
                 assert!(script.contains("tenant-helper"));
                 assert!(script.contains("tenant-agent"));
@@ -126,6 +129,7 @@ async fn image_scrub_is_safe_for_the_unprivileged_template_user() {
                 assert!(script.contains("sandbox_home=\"${HOME:?"));
                 assert!(script.contains("-user \"$sandbox_uid\""));
                 assert!(script.contains("! -name '.*'"));
+                assert!(!script.contains("rm -rf -- \"$sandbox_home/.cache\""));
                 Ok(ProcessRunOutput {
                     bytes: Vec::new(),
                     exit_code: Some(1),
@@ -207,6 +211,12 @@ async fn image_commands_never_load_user_login_profiles() {
             .answers_arc({
                 let run_count = run_count.clone();
                 Arc::new(move |_, _, command| {
+                    if command.command == "/usr/bin/python3" {
+                        assert_eq!(command.args.first().map(String::as_str), Some("-I"));
+                        assert_eq!(command.args.get(1).map(String::as_str), Some("-S"));
+                        run_count.fetch_add(1, Ordering::Relaxed);
+                        return Ok(success());
+                    }
                     assert_eq!(command.command, "/bin/sh");
                     assert_eq!(command.args.first().map(String::as_str), Some("-c"));
                     assert_eq!(command.args.len(), 2);
@@ -237,7 +247,7 @@ async fn image_commands_never_load_user_login_profiles() {
         .expect("non-login image phases should prepare the source");
 
     assert_eq!(prepared.size_bytes, 4096);
-    assert_eq!(run_count.load(Ordering::Relaxed), 4);
+    assert_eq!(run_count.load(Ordering::Relaxed), 5);
 }
 
 fn backend(control: Unimock, processes: Unimock) -> E2bSandboxBackend {

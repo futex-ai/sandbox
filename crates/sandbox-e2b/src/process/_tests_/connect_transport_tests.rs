@@ -39,6 +39,7 @@ fn pty_start_caps_only_the_private_provider_log() {
             tag: "sandbox-terminal".to_owned(),
             log_path: "/tmp/sandbox.log".to_owned(),
             log_limit: 2 * 1024 * 1024,
+            workload_user: "user".to_owned(),
             cwd: None,
         }))
         .expect("PTY body"),
@@ -51,14 +52,17 @@ fn pty_start_caps_only_the_private_provider_log() {
     assert_eq!(body["process"]["args"][2], "-c");
     assert_eq!(body["process"]["args"][4], "/tmp/sandbox.log");
     assert_eq!(body["process"]["args"][5], (2 * 1024 * 1024).to_string());
+    assert_eq!(body["process"]["args"][6], "user");
     let wrapper = body["process"]["args"][3]
         .as_str()
         .expect("wrapper command");
     assert!(wrapper.contains("os.O_NOFOLLOW"));
     assert!(wrapper.contains("os.dup2"));
     assert!(wrapper.contains("resource.RLIMIT_FSIZE"));
-    assert!(wrapper.contains("/proc/self/fd/2"));
-    assert!(wrapper.contains("ulimit -S -f unlimited"));
+    assert!(wrapper.contains("LOG_DESCRIPTOR = 3"));
+    assert!(wrapper.contains("/proc/self/fd/{LOG_DESCRIPTOR}"));
+    assert!(wrapper.contains("os.closerange"));
+    assert!(wrapper.contains("os.setuid"));
     assert!(!wrapper.contains("--log-size"));
     assert!(!wrapper.contains("/dev/null"));
 }
@@ -83,6 +87,7 @@ async fn fragmented_start_stream_returns_the_provider_pid() {
                 tag: "sandbox-terminal".to_owned(),
                 log_path: "/tmp/sandbox.log".to_owned(),
                 log_limit: 1024,
+                workload_user: "user".to_owned(),
                 cwd: None,
             },
         )

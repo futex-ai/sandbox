@@ -2,6 +2,7 @@
 
 mod connect;
 mod connect_helpers;
+mod connection;
 mod file;
 mod framing;
 mod http;
@@ -17,10 +18,11 @@ mod types;
 mod wire;
 
 pub use self::connect::ConnectProcessTransport;
+pub use self::connection::ProcessConnection;
 pub use self::regular_file_write::ProcessRegularFileWriteRequest;
 pub use self::selector::ProcessSelector;
 pub use self::types::{
-    DynProcessTransport, ProcessCommand, ProcessConnectOutput, ProcessConnection, ProcessFileChunk,
+    DynProcessTransport, ProcessCommand, ProcessConnectOutput, ProcessFileChunk,
     ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,
     ProcessRegularFileRequest, ProcessRunOutput, ProcessSplitOutput, ProcessTransport,
     ProcessTransportMock, SplitProcessCommand,

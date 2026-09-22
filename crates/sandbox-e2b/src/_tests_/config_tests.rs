@@ -20,6 +20,7 @@ fn runtime_conventions_have_neutral_defaults() {
     );
     assert_eq!(conventions.image_helper_process_name(), "sandbox-helper");
     assert_eq!(conventions.image_agent_process_name(), "sandbox-agent");
+    assert_eq!(conventions.workload_user(), "user");
 }
 
 #[test]
@@ -45,6 +46,8 @@ fn runtime_conventions_accept_deployment_owned_values() {
     )
     .unwrap()
     .with_image_process_names("tenant-helper", "tenant-agent")
+    .unwrap()
+    .with_workload_user("tenant_user")
     .unwrap();
     let config = config(vec!["203.0.113.10/32".to_owned()])
         .unwrap()
@@ -59,6 +62,17 @@ fn runtime_conventions_accept_deployment_owned_values() {
         config.runtime_conventions().image_agent_process_name(),
         "tenant-agent"
     );
+    assert_eq!(config.runtime_conventions().workload_user(), "tenant_user");
+}
+
+#[test]
+fn runtime_conventions_reject_privileged_or_unsafe_workload_users() {
+    for user in ["", "root", "User", "user name", "../user", "user.example"] {
+        assert!(matches!(
+            E2bRuntimeConventions::default().with_workload_user(user),
+            Err(E2bAdapterError::InvalidRequest)
+        ));
+    }
 }
 
 #[test]

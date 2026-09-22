@@ -28,6 +28,10 @@ profiles, template IDs, and denied IP/CIDR destinations, then keeps those
 values externally immutable. Its neutral runtime conventions use the `sandbox`
 metadata prefix, `sandbox-terminal-` process-tag prefix,
 `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
+The default workload account is the non-root `user`; deployments can select a
+different validated non-root account when their compatible templates require
+one. Envd requests explicitly authenticate that account instead of inheriting
+an unknown template default.
 Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
@@ -40,13 +44,18 @@ recovery uses bounded, cursor-safe inventory traversal. Terminal identities
 combine an E2B PID with the consumer terminal ID; reads verify both values,
 while input and close operations use envd's atomic tag selector so PID reuse
 cannot retarget them. File reads use one descriptor-relative, non-following
-helper; writes stage
-their payload, bind it to the caller-computed SHA-256 digest, perform one
+helper; writes stage their payload, bind it to the caller-computed SHA-256
+digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
-without relying on a timing delay. Both the writer and cleanup path verify the
-requested bytes before replacement. An unconfirmed revocation returns a
-fencing error instead of pretending the write safely failed. A writer removes
+without relying on a timing delay. The writer and reconciler run as the trusted
+account and keep markers below a private root-owned directory that workload
+processes cannot traverse or modify. Both paths verify the requested bytes
+before replacement. The temporary inode stays trusted through the atomic
+rename; the writer then assigns it to the configured workload account, and the
+commit marker lets reconciliation finish that ownership handoff after a crash.
+An unconfirmed revocation returns a fencing error instead of pretending the
+write safely failed. A writer removes
 its commit marker after the replacement and containing directory are durable;
 an uncertain writer retains a revocation or commit fence for reconciliation.
 Malformed or oversized trusted roots and relative paths fail before a file
@@ -89,18 +98,23 @@ source, configured image processes must exit after bounded TERM/KILL
 escalation. Size traversal or I/O failure returns `ImageSizeUnavailable`
 instead of accepting a partial total. Restored-sandbox cleanup and image
 preparation apply the same bounded escalation to inherited drive helpers and
-fail unless those helpers are confirmed gone. Terminal log-directory creation
-and restored cleanup traverse from directory descriptors with non-following
+fail unless those helpers are confirmed gone. Home-directory cache cleanup
+uses non-following directory descriptors; a symlinked parent fails scrub and a
+child symlink is removed without traversing its target. Terminal log-directory
+creation and restored cleanup traverse from directory descriptors with non-following
 opens; an intermediate symlink makes the operation fail without touching its
 target. Image setup, verification, scrub, and size measurement use non-login
 shells, so a staged or setup-created profile cannot skip a later safety phase
-or forge its result. The terminal transcript
-wrapper opens the expected log through non-following directory descriptors,
-passes only that open descriptor to the recorder, and starts before the
-captured interactive shell loads the user's login profile. Reads require the
-exact terminal-derived log name and use the same descriptor-relative
-regular-file helper, so replacing a path cannot redirect captured or returned
-bytes.
+or forge its result. The terminal transcript wrapper runs the recorder as the
+trusted account and opens its log below
+private root-owned storage through non-following directory descriptors. The
+recorder keeps the only log descriptor; its child closes every inherited
+private descriptor, drops to the configured workload account, and only then
+starts the interactive login shell. Reads use the trusted account, require the
+exact terminal-derived log name, and use the same descriptor-relative
+regular-file helper. Recorder discovery, input, and shutdown also use the
+trusted account, so the workload cannot replace or forge stored output and
+provider-side user scoping cannot hide the recorder from lifecycle operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
@@ -164,6 +178,7 @@ deletable snapshot handle.
 - `src/runtime_conventions.rs` — validated deployment and cleanup names.
 - `src/backend/configured.rs` — backend construction and trait dispatch.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
+- `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.

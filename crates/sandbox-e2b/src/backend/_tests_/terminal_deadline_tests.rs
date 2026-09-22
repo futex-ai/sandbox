@@ -74,7 +74,7 @@ fn request(terminal_id: TerminalId, wait: Duration) -> BackendOutputRequest {
     BackendOutputRequest {
         sandbox_provider_ref: ProviderRef::new("sandbox"),
         terminal_provider_ref: TerminalIdentity::new(41, terminal_id).provider_ref(),
-        provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
+        provider_log_path: format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log"),
         offset: 0,
         max_bytes: 1024,
         provider_log_limit: 1024,

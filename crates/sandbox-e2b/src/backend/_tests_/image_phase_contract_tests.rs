@@ -33,6 +33,9 @@ async fn preparation_uses_only_the_caller_persisted_source() {
             .returns(Ok(success())),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
+            .returns(Ok(success())),
+        ProcessTransportMock::run
+            .next_call(matching!(_, _))
             .returns(Ok(size_output(4096))),
     ));
     let prepared = backend(control, processes)

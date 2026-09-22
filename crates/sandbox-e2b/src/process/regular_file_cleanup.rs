@@ -9,6 +9,8 @@ use super::{
     types::{ProcessCommand, ProcessConnection, ProcessOutputCapture},
 };
 
+const TRUSTED_PROCESS_USER: &str = "root";
+
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMITTED_EXIT_CODE: i32 = 51;
 const CLEANER: &str = include_str!("helpers/regular_file_cleanup.py");
@@ -26,6 +28,7 @@ pub(super) struct CleanupRequest {
     pub(super) path: String,
     pub(super) staging_path: String,
     pub(super) temporary_name: String,
+    pub(super) state_root: String,
     pub(super) state_path: String,
     pub(super) expected_size: usize,
     pub(super) expected_digest: String,
@@ -37,7 +40,11 @@ pub(super) async fn cleanup(
     request: CleanupRequest,
 ) -> CleanupOutcome {
     let result = transport
-        .run_helper(connection, command(request), CLEANUP_TIMEOUT)
+        .run_helper(
+            connection.with_user(TRUSTED_PROCESS_USER),
+            command(request),
+            CLEANUP_TIMEOUT,
+        )
         .await;
     let outcome = match result {
         Ok(output) if output.succeeded() => CleanupOutcome::Revoked,
@@ -60,6 +67,7 @@ fn command(request: CleanupRequest) -> ProcessCommand {
                 request.path,
                 request.staging_path,
                 request.temporary_name,
+                request.state_root,
                 request.state_path,
                 request.expected_size.to_string(),
                 request.expected_digest,

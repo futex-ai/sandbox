@@ -1,6 +1,11 @@
 //! Descriptor-relative write revocation and reconciliation coverage.
 
-use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
+use std::{
+    fs,
+    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
+    path::Path,
+    process::Command,
+};
 
 use tempfile::tempdir;
 
@@ -82,12 +87,9 @@ fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
     let target = root.path().join("src/lib.rs");
     let temporary = root.path().join("src/.sandbox-write-test");
     fs::write(&target, b"old").expect("old target");
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).expect("target mode");
     fs::write(&temporary, b"replacement").expect("complete temporary file");
-    symlink(
-        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
-        &state,
-    )
-    .expect("commit claim");
+    symlink(commit_claim(&target), &state).expect("commit claim");
 
     let output = run(
         root.path(),
@@ -100,6 +102,14 @@ fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
 
     assert_eq!(output.status.code(), Some(51));
     assert_eq!(fs::read(target).expect("reconciled target"), b"replacement");
+    assert_eq!(
+        fs::metadata(root.path().join("src/lib.rs"))
+            .expect("reconciled metadata")
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o640
+    );
     assert!(!temporary.exists());
 }
 
@@ -113,11 +123,7 @@ fn cleanup_rejects_a_commit_claim_for_different_same_size_bytes() {
     let temporary = root.path().join("src/.sandbox-write-test");
     fs::write(&target, b"old").expect("old target");
     fs::write(&temporary, b"corruptions").expect("altered temporary file");
-    symlink(
-        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
-        &state,
-    )
-    .expect("valid commit claim");
+    symlink(commit_claim(&target), &state).expect("valid commit claim");
 
     let output = run(
         root.path(),
@@ -163,11 +169,7 @@ fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
     let state = stage.path().join("state");
     let marker = stage.path().join("fsync-observed");
     fs::write(root.path().join("src/lib.rs"), b"replacement").expect("replacement target");
-    symlink(
-        "commit:95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47",
-        &state,
-    )
-    .expect("commit claim");
+    symlink(commit_claim(&root.path().join("src/lib.rs")), &state).expect("commit claim");
     let mut command = command(CleanupRequest {
         root: root.path().to_string_lossy().into_owned(),
         path: "src/lib.rs".to_owned(),
@@ -177,7 +179,8 @@ fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
             .to_string_lossy()
             .into_owned(),
         temporary_name: ".missing-temporary".to_owned(),
-        state_path: state.to_string_lossy().into_owned(),
+        state_root: stage.path().to_string_lossy().into_owned(),
+        state_path: "state".to_owned(),
         expected_size: b"replacement".len(),
         expected_digest: REPLACEMENT_DIGEST.to_owned(),
     });
@@ -210,7 +213,16 @@ fn run(
         path: path.to_owned(),
         staging_path: staged.to_string_lossy().into_owned(),
         temporary_name: temporary_name.to_owned(),
-        state_path: state.to_string_lossy().into_owned(),
+        state_root: state
+            .parent()
+            .expect("state parent")
+            .to_string_lossy()
+            .into_owned(),
+        state_path: state
+            .file_name()
+            .expect("state name")
+            .to_string_lossy()
+            .into_owned(),
         expected_size,
         expected_digest: REPLACEMENT_DIGEST.to_owned(),
     });
@@ -218,4 +230,14 @@ fn run(
         .args(command.args)
         .output()
         .expect("run write reconciler")
+}
+
+fn commit_claim(target: &Path) -> String {
+    let metadata = fs::metadata(target).expect("target metadata");
+    format!(
+        "commit:{REPLACEMENT_DIGEST}:{}:{}:{}",
+        metadata.uid(),
+        metadata.gid(),
+        metadata.permissions().mode() & 0o7777
+    )
 }

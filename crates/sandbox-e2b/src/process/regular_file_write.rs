@@ -17,6 +17,9 @@ use super::{
 
 const WRITE_TIMEOUT: Duration = Duration::from_secs(300);
 const WRITER: &str = include_str!("helpers/regular_file_write.py");
+const TRUSTED_PROCESS_USER: &str = "root";
+const WRITE_STATE_ROOT: &str = "/var/lib";
+const WRITE_STATE_DIRECTORY: &str = "sandbox-e2b/write-fences";
 
 /// One atomic replacement write below a trusted absolute root.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -40,47 +43,40 @@ pub(super) async fn write(
         });
     }
     let nonce = Uuid::new_v4().simple().to_string();
-    let staging_path = format!("/tmp/.sandbox-e2b-stage-{nonce}");
-    let temporary_name = format!(".sandbox-e2b-write-{nonce}");
-    let state_path = format!("/tmp/sandbox-e2b-write-state-{nonce}");
     let expected_size = request.bytes.len();
     let expected_digest = payload_digest(&request.bytes);
+    let workload_user = connection.user().unwrap_or_default().to_owned();
+    let attempt = WriteAttempt {
+        root: request.root,
+        path: request.path,
+        staging_path: format!("/tmp/.sandbox-e2b-stage-{nonce}"),
+        temporary_name: format!(".sandbox-e2b-write-{nonce}"),
+        state_root: WRITE_STATE_ROOT.to_owned(),
+        state_path: format!("{WRITE_STATE_DIRECTORY}/{nonce}"),
+        expected_size,
+        expected_digest,
+        workload_user,
+    };
     let upload = map_file_result(
         transport
             .http
-            .upload(connection.clone(), staging_path.clone(), request.bytes)
+            .upload(
+                connection.clone(),
+                attempt.staging_path.clone(),
+                request.bytes,
+            )
             .await,
         &transport.backend_id,
     );
     if let Err(error) = upload {
-        let _outcome = regular_file_cleanup::cleanup(
-            transport,
-            connection,
-            cleanup_request(
-                request.root,
-                request.path,
-                staging_path,
-                temporary_name,
-                state_path,
-                expected_size,
-                expected_digest,
-            ),
-        )
-        .await;
+        let _outcome =
+            regular_file_cleanup::cleanup(transport, connection, attempt.cleanup_request()).await;
         return Err(error);
     }
     let output = transport
         .run_helper(
-            connection.clone(),
-            command(
-                request.root.clone(),
-                request.path.clone(),
-                staging_path.clone(),
-                temporary_name.clone(),
-                state_path.clone(),
-                expected_size,
-                expected_digest.clone(),
-            ),
+            connection.clone().with_user(TRUSTED_PROCESS_USER),
+            command(&attempt),
             WRITE_TIMEOUT,
         )
         .await;
@@ -88,56 +84,17 @@ pub(super) async fn write(
         Ok(output) => match writer_outcome(transport, output.exit_code) {
             WriterOutcome::Succeeded => Ok(()),
             WriterOutcome::Rejected(error) => {
-                let _outcome = regular_file_cleanup::cleanup(
-                    transport,
-                    connection,
-                    cleanup_request(
-                        request.root,
-                        request.path,
-                        staging_path,
-                        temporary_name,
-                        state_path,
-                        expected_size,
-                        expected_digest,
-                    ),
-                )
-                .await;
+                let _outcome =
+                    regular_file_cleanup::cleanup(transport, connection, attempt.cleanup_request())
+                        .await;
                 Err(error)
             }
             WriterOutcome::Uncertain(error) => {
-                reconcile_failure(
-                    transport,
-                    connection,
-                    cleanup_request(
-                        request.root,
-                        request.path,
-                        staging_path,
-                        temporary_name,
-                        state_path,
-                        expected_size,
-                        expected_digest,
-                    ),
-                    error,
-                )
-                .await
+                reconcile_failure(transport, connection, attempt.cleanup_request(), error).await
             }
         },
         Err(error) => {
-            reconcile_failure(
-                transport,
-                connection,
-                cleanup_request(
-                    request.root,
-                    request.path,
-                    staging_path,
-                    temporary_name,
-                    state_path,
-                    expected_size,
-                    expected_digest,
-                ),
-                error,
-            )
-            .await
+            reconcile_failure(transport, connection, attempt.cleanup_request(), error).await
         }
     }
 }
@@ -155,23 +112,32 @@ async fn reconcile_failure(
     }
 }
 
-fn cleanup_request(
+/// Shared immutable identity for one writer and every reconciliation attempt.
+#[derive(Clone)]
+struct WriteAttempt {
     root: String,
     path: String,
     staging_path: String,
     temporary_name: String,
+    state_root: String,
     state_path: String,
     expected_size: usize,
     expected_digest: String,
-) -> CleanupRequest {
-    CleanupRequest {
-        root,
-        path,
-        staging_path,
-        temporary_name,
-        state_path,
-        expected_size,
-        expected_digest,
+    workload_user: String,
+}
+
+impl WriteAttempt {
+    fn cleanup_request(&self) -> CleanupRequest {
+        CleanupRequest {
+            root: self.root.clone(),
+            path: self.path.clone(),
+            staging_path: self.staging_path.clone(),
+            temporary_name: self.temporary_name.clone(),
+            state_root: self.state_root.clone(),
+            state_path: self.state_path.clone(),
+            expected_size: self.expected_size,
+            expected_digest: self.expected_digest.clone(),
+        }
     }
 }
 
@@ -203,27 +169,21 @@ enum WriterOutcome {
     Uncertain(Error),
 }
 
-fn command(
-    root: String,
-    path: String,
-    staging_path: String,
-    temporary_name: String,
-    state_path: String,
-    expected_size: usize,
-    expected_digest: String,
-) -> ProcessCommand {
+fn command(attempt: &WriteAttempt) -> ProcessCommand {
     ProcessCommand {
         command: trusted_python::EXECUTABLE.to_owned(),
         args: trusted_python::command_args(
             WRITER,
             [
-                root,
-                path,
-                staging_path,
-                temporary_name,
-                state_path,
-                expected_size.to_string(),
-                expected_digest,
+                attempt.root.clone(),
+                attempt.path.clone(),
+                attempt.staging_path.clone(),
+                attempt.temporary_name.clone(),
+                attempt.state_root.clone(),
+                attempt.state_path.clone(),
+                attempt.expected_size.to_string(),
+                attempt.expected_digest.clone(),
+                attempt.workload_user.clone(),
                 FILE_TRANSFER_MAX_BYTES.to_string(),
             ],
         ),
@@ -248,6 +208,10 @@ fn payload_digest(bytes: &[u8]) -> String {
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_tests.rs"]
 mod regular_file_write_tests;
+
+#[cfg(test)]
+#[path = "_tests_/regular_file_writer_helper_tests.rs"]
+mod regular_file_writer_helper_tests;
 
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_outcome_tests.rs"]

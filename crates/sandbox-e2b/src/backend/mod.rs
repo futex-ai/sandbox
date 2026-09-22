@@ -2,6 +2,7 @@
 
 pub(crate) mod configured;
 mod files;
+mod image_cache_cleanup;
 mod image_command_diagnostic;
 mod image_realization;
 mod mapping;
@@ -55,6 +56,10 @@ mod image_phase_contract_tests;
 #[cfg(test)]
 #[path = "_tests_/image_command_diagnostic_tests.rs"]
 mod image_command_diagnostic_tests;
+
+#[cfg(test)]
+#[path = "_tests_/image_cache_cleanup_tests.rs"]
+mod image_cache_cleanup_tests;
 
 #[cfg(test)]
 #[path = "_tests_/managed_sandbox_tests.rs"]

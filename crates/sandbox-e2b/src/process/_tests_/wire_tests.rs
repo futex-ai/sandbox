@@ -105,9 +105,22 @@ fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
         .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", TERMINAL_WRAPPER])
         .arg(path)
         .arg(limit.to_string())
+        .arg(current_username())
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .expect("start terminal wrapper")
+}
+
+fn current_username() -> String {
+    let output = Command::new("/usr/bin/id")
+        .arg("-un")
+        .output()
+        .expect("resolve current username");
+    assert!(output.status.success());
+    String::from_utf8(output.stdout)
+        .expect("UTF-8 username")
+        .trim()
+        .to_owned()
 }

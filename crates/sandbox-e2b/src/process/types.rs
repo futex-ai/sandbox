@@ -1,59 +1,12 @@
 //! Provider-process types and swappable transport trait.
 
-use std::{fmt, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use sandbox_interface::Result;
 
+pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
-
-/// Call-local E2B envd connection details.
-#[derive(Clone, Eq, PartialEq)]
-pub struct ProcessConnection {
-    pub(crate) sandbox_id: String,
-    pub(crate) sandbox_domain: String,
-    pub(crate) access_token: String,
-}
-
-impl ProcessConnection {
-    /// Creates call-local routing details that are redacted from debug output.
-    pub fn new(sandbox_id: String, sandbox_domain: String, access_token: String) -> Self {
-        Self {
-            sandbox_id,
-            sandbox_domain,
-            access_token,
-        }
-    }
-
-    /// Borrows the opaque provider sandbox identifier.
-    #[must_use]
-    pub fn sandbox_id(&self) -> &str {
-        &self.sandbox_id
-    }
-
-    /// Borrows the provider shared routing domain.
-    #[must_use]
-    pub fn sandbox_domain(&self) -> &str {
-        &self.sandbox_domain
-    }
-
-    /// Borrows the call-local envd token for an outbound request.
-    #[must_use]
-    pub fn access_token(&self) -> &str {
-        &self.access_token
-    }
-}
-
-impl fmt::Debug for ProcessConnection {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("ProcessConnection")
-            .field("sandbox_id", &"[redacted]")
-            .field("sandbox_domain", &self.sandbox_domain)
-            .field("access_token", &"[redacted]")
-            .finish()
-    }
-}
 
 /// Request for one persistent PTY wrapped by a bounded transcript helper.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,6 +17,8 @@ pub struct ProcessPtyRequest {
     pub log_path: String,
     /// Provider-side transcript hard cap.
     pub log_limit: usize,
+    /// Unprivileged account used for the interactive login shell.
+    pub workload_user: String,
     /// Optional initial working directory.
     pub cwd: Option<String>,
 }

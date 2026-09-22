@@ -29,22 +29,38 @@ async fn terminal_create_and_durable_read_map_process_state() {
     let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
+            .answers(&|_, connection| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(Vec::new())
+            }),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
-            .returns(Ok(successful_run())),
+            .answers(&|_, connection, _| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(successful_run())
+            }),
         ProcessTransportMock::start_pty
             .next_call(matching!(_, _))
-            .returns(Ok(process(terminal_id))),
+            .answers_arc(Arc::new(move |_, connection, request| {
+                assert_eq!(connection.user(), Some("root"));
+                assert_eq!(request.workload_user, "user");
+                Ok(process(terminal_id))
+            })),
         ProcessTransportMock::list
             .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
+            .answers(&|_, connection| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(Vec::new())
+            }),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
-            .returns(Ok(ProcessFileChunk {
-                bytes: b"output".to_vec(),
-                total_size: 64,
-            })),
+            .answers(&|_, connection, _| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(ProcessFileChunk {
+                    bytes: b"output".to_vec(),
+                    total_size: 64,
+                })
+            }),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -124,7 +140,7 @@ async fn terminal_read_waits_for_delayed_durable_output() {
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
+            provider_log_path: format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,
@@ -172,7 +188,7 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
+            provider_log_path: format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,
@@ -216,7 +232,7 @@ async fn terminal_read_treats_a_missing_log_as_empty_while_the_process_is_alive(
         .read_terminal(BackendOutputRequest {
             sandbox_provider_ref: ProviderRef::new("sandbox"),
             terminal_provider_ref: provider_ref(terminal_id),
-            provider_log_path: format!("/tmp/sandbox/terminals/{terminal_id}.log"),
+            provider_log_path: format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log"),
             offset: 0,
             max_bytes: 1024,
             provider_log_limit: 1024,

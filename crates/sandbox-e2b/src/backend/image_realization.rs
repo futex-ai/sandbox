@@ -11,8 +11,8 @@ use crate::process::{ProcessCommand, ProcessConnection, ProcessOutputCapture, Pr
 
 use super::{
     configured::E2bSandboxBackend,
-    files,
-    image_command_diagnostic::{ImagePhase, run_phase},
+    files, image_cache_cleanup,
+    image_command_diagnostic::{ImagePhase, run_phase, run_process_phase},
     mapping,
 };
 
@@ -62,7 +62,6 @@ rm -rf /tmp/sandbox-drive
 sandbox_uid="$(id -u)"
 sandbox_home="${HOME:?runtime home is required}"
 find /tmp /var/tmp -mindepth 1 -maxdepth 1 ! -name '.*' -user "$sandbox_uid" -exec rm -rf -- {} +
-rm -rf -- "$sandbox_home/.cache" "$sandbox_home/.npm/_cacache" "$sandbox_home/.cargo/registry/cache"
 test ! -e "$sandbox_home/.git-credentials"
 test ! -e "$sandbox_home/.netrc"
 test ! -e "$sandbox_home/.ssh/id_rsa"
@@ -147,6 +146,13 @@ async fn prepare_source(
         backend,
         connection.clone(),
         scrub_command(backend),
+        ImagePhase::Scrub,
+    )
+    .await?;
+    run_process_phase(
+        backend,
+        connection.clone(),
+        image_cache_cleanup::command(),
         ImagePhase::Scrub,
     )
     .await?;

@@ -23,24 +23,33 @@ pub(super) async fn run_phase(
     command: String,
     phase: ImagePhase,
 ) -> Result<()> {
+    run_process_phase(
+        backend,
+        connection,
+        ProcessCommand {
+            command: "/bin/sh".to_owned(),
+            args: vec!["-c".to_owned(), command],
+            cwd: None,
+            output_capture: phase.output_capture(),
+            timeout: IMAGE_COMMAND_TIMEOUT,
+            read_only: false,
+        },
+        phase,
+    )
+    .await
+}
+
+pub(super) async fn run_process_phase(
+    backend: &E2bSandboxBackend,
+    connection: ProcessConnection,
+    command: ProcessCommand,
+    phase: ImagePhase,
+) -> Result<()> {
     let sensitive_values = [
         connection.sandbox_id().to_owned(),
         connection.access_token().to_owned(),
     ];
-    let output = backend
-        .processes
-        .run(
-            connection,
-            ProcessCommand {
-                command: "/bin/sh".to_owned(),
-                args: vec!["-c".to_owned(), command],
-                cwd: None,
-                output_capture: phase.output_capture(),
-                timeout: IMAGE_COMMAND_TIMEOUT,
-                read_only: false,
-            },
-        )
-        .await?;
+    let output = backend.processes.run(connection, command).await?;
     if output.succeeded() {
         return Ok(());
     }

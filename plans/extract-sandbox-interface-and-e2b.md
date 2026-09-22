@@ -640,3 +640,39 @@ and incremental file-length checks inspect only relevant Rust files.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 20: Workload Isolation And Safe Cache Cleanup
+
+Resolve every finding from the final resource review. At the end of this
+milestone, sandbox workloads cannot remove uncertain-write fences or replace
+terminal transcript storage, and image cleanup cannot traverse a
+setup-created symlink outside the intended cache paths.
+
+- [x] Record the three review findings for workload-controlled write markers,
+      workload-controlled transcript files, and symlinked image-cache parents.
+- [x] Add failing regressions first for trusted process authentication,
+      private write-fence placement, privilege-separated transcript capture,
+      and descriptor-relative cache deletion.
+- [x] Run replacement writers and reconcilers as the trusted sandbox account
+      and keep their atomic state markers in a private trusted directory.
+- [x] Preserve workload ownership on replacement files even though the writer
+      uses the trusted account for private fence access.
+- [x] Keep the verified temporary inode trusted until its atomic rename and
+      make reconciliation repair workload ownership after an interrupted commit.
+- [x] Run the terminal recorder as the trusted account, drop only the
+      interactive login shell to the configured workload account, and keep
+      transcript creation and reads inside private trusted storage.
+- [x] Authenticate recorder discovery, input, and shutdown as the same trusted
+      account that owns the recorder process.
+- [x] Replace shell cache deletion with a descriptor-relative helper that
+      refuses symlinked parents and never follows child symlinks.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the new account, storage, and cache-cleanup guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

@@ -55,7 +55,11 @@ provider-specific transport and failure tests.
 Trusted image safety phases must run without user-controlled login startup
 files. Durable terminal capture must likewise be installed before the one
 intended interactive login shell loads a user profile, so a profile cannot
-skip bookkeeping or place output outside the bounded transcript.
+skip bookkeeping or place output outside the bounded transcript. Provider
+adapters must keep write-revocation state and terminal transcript storage
+outside workload control, and a trusted recorder must not expose its storage
+descriptor to the interactive shell. Image cleanup must refuse symlinked
+parents instead of traversing them.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only
@@ -70,6 +74,8 @@ scripts, or dispatching another snapshot.
 Replacement-file failures are safe to retry only after the backend confirms
 that the remote writer was revoked. `FileWriteUnconfirmed` means the caller
 must keep the sandbox fenced and reconcile or destroy it before another write.
+The revocation marker itself must be owned by a trusted identity and stored
+where the workload cannot unlink or replace it.
 
 ## Quick Start
 

@@ -35,7 +35,10 @@ cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch. Image preparation validates every input path and size before it
-connects, and incomplete filesystem-size measurements fail closed.
+connects, incomplete filesystem-size measurements fail closed, and cache
+cleanup cannot follow setup-created symlink parents. Trusted provider helpers
+keep uncertain-write fences and terminal logs in root-owned storage while the
+interactive shell runs as an explicitly configured non-root account.
 
 ## Developer Setup
 

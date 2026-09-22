@@ -47,6 +47,31 @@ fn connect_requests_use_the_sandbox_specific_envd_host() {
 }
 
 #[test]
+fn process_and_file_requests_authenticate_an_explicit_process_user() {
+    let transport = ReqwestConnectHttpTransport::new().expect("transport");
+    let connection = ProcessConnection::new(
+        "sandbox-id".to_owned(),
+        "e2b.app".to_owned(),
+        "access-token".to_owned(),
+    )
+    .with_user("root");
+
+    let process_request = transport
+        .request(&connection, "Start", "application/connect+json")
+        .expect("validated envd URL")
+        .build()
+        .expect("request");
+    let file_request = transport
+        .file_request(&connection, reqwest::Method::GET, "/tmp/file")
+        .expect("validated envd URL")
+        .build()
+        .expect("file request");
+
+    assert_eq!(process_request.headers()["Authorization"], "Basic cm9vdDo=");
+    assert_eq!(file_request.headers()["Authorization"], "Basic cm9vdDo=");
+}
+
+#[test]
 fn connect_requests_reject_authority_injection_before_adding_a_token() {
     let transport = ReqwestConnectHttpTransport::new().expect("transport");
     for sandbox_id in [

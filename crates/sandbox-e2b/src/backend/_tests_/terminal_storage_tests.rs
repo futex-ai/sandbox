@@ -12,9 +12,9 @@ fn directory_creation_rejects_an_intermediate_symlink() {
     let root = tempdir().expect("temporary path root");
     let outside = tempdir().expect("outside directory");
     symlink(outside.path(), root.path().join("sandbox")).expect("intermediate symlink");
-    let target = root.path().join("sandbox/terminals");
+    let relative = "sandbox/terminals";
 
-    let output = run(directory_command(&target.to_string_lossy()));
+    let output = run(directory_command(&root.path().to_string_lossy(), relative));
 
     assert!(!output.status.success());
     assert!(!outside.path().join("terminals").exists());
@@ -23,9 +23,10 @@ fn directory_creation_rejects_an_intermediate_symlink() {
 #[test]
 fn directory_creation_builds_a_normal_nested_path() {
     let root = tempdir().expect("temporary path root");
-    let target = root.path().join("sandbox/terminals");
+    let relative = "sandbox/terminals";
+    let target = root.path().join(relative);
 
-    let output = run(directory_command(&target.to_string_lossy()));
+    let output = run(directory_command(&root.path().to_string_lossy(), relative));
 
     assert!(output.status.success());
     assert!(target.is_dir());

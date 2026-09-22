@@ -28,7 +28,11 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
             cmd: trusted_python::EXECUTABLE.to_owned(),
             args: trusted_python::command_args(
                 TERMINAL_WRAPPER,
-                [request.log_path, request.log_limit.to_string()],
+                [
+                    request.log_path,
+                    request.log_limit.to_string(),
+                    request.workload_user,
+                ],
             ),
             envs,
             cwd: request.cwd,

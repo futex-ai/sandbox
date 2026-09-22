@@ -207,7 +207,7 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                         total_size: 13,
                     })
                 } else {
-                    assert_eq!(request.root, "/tmp/sandbox/terminals");
+                    assert_eq!(request.root, "/var/lib/sandbox-e2b/terminals");
                     assert!(request.path.ends_with(".log"));
                     assert_eq!(request.offset, 0);
                     assert_eq!(request.max_bytes, 4096);

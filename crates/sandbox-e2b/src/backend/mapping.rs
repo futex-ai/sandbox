@@ -87,7 +87,8 @@ pub(super) async fn connection(
         sandbox_ref.as_str().to_owned(),
         access.domain,
         access.envd_access_token,
-    ))
+    )
+    .with_user(backend.config.runtime_conventions().workload_user()))
 }
 
 /// Acquires envd credentials with `GET /sandboxes/{sandboxID}` only. E2B's
@@ -112,5 +113,6 @@ pub(super) async fn read_only_connection(
         sandbox_ref.as_str().to_owned(),
         access.domain,
         access.envd_access_token,
-    ))
+    )
+    .with_user(backend.config.runtime_conventions().workload_user()))
 }

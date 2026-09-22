@@ -9,6 +9,7 @@ const DEFAULT_TERMINAL_TAG_PREFIX: &str = "sandbox-terminal-";
 const DEFAULT_SCREEN_HELPER_PATH: &str = "/usr/local/bin/sandbox-screen";
 const DEFAULT_IMAGE_HELPER_PROCESS_NAME: &str = "sandbox-helper";
 const DEFAULT_IMAGE_AGENT_PROCESS_NAME: &str = "sandbox-agent";
+const DEFAULT_WORKLOAD_USER: &str = "user";
 const CONVENTION_MAX_BYTES: usize = 255;
 const PROCESS_NAME_MAX_BYTES: usize = 15;
 
@@ -20,6 +21,7 @@ pub struct E2bRuntimeConventions {
     screen_helper_path: String,
     image_helper_process_name: String,
     image_agent_process_name: String,
+    workload_user: String,
 }
 
 impl E2bRuntimeConventions {
@@ -35,6 +37,7 @@ impl E2bRuntimeConventions {
             screen_helper_path: screen_helper_path.into(),
             image_helper_process_name: DEFAULT_IMAGE_HELPER_PROCESS_NAME.to_owned(),
             image_agent_process_name: DEFAULT_IMAGE_AGENT_PROCESS_NAME.to_owned(),
+            workload_user: DEFAULT_WORKLOAD_USER.to_owned(),
         };
         if !valid_metadata_prefix(&conventions.metadata_prefix)
             || !valid_terminal_tag_prefix(&conventions.terminal_tag_prefix)
@@ -56,6 +59,15 @@ impl E2bRuntimeConventions {
         if !valid_process_name(&self.image_helper_process_name)
             || !valid_process_name(&self.image_agent_process_name)
         {
+            return Err(Error::InvalidRequest);
+        }
+        Ok(self)
+    }
+
+    /// Replaces the default unprivileged account used for workload processes.
+    pub fn with_workload_user(mut self, user: impl Into<String>) -> Result<Self> {
+        self.workload_user = user.into();
+        if !valid_workload_user(&self.workload_user) {
             return Err(Error::InvalidRequest);
         }
         Ok(self)
@@ -91,6 +103,12 @@ impl E2bRuntimeConventions {
         &self.image_agent_process_name
     }
 
+    /// Account used for untrusted commands and interactive login shells.
+    #[must_use]
+    pub fn workload_user(&self) -> &str {
+        &self.workload_user
+    }
+
     pub(crate) fn metadata_key(&self, suffix: &str) -> String {
         format!("{}_{suffix}", self.metadata_prefix)
     }
@@ -104,6 +122,7 @@ impl Default for E2bRuntimeConventions {
             screen_helper_path: DEFAULT_SCREEN_HELPER_PATH.to_owned(),
             image_helper_process_name: DEFAULT_IMAGE_HELPER_PROCESS_NAME.to_owned(),
             image_agent_process_name: DEFAULT_IMAGE_AGENT_PROCESS_NAME.to_owned(),
+            workload_user: DEFAULT_WORKLOAD_USER.to_owned(),
         }
     }
 }
@@ -151,6 +170,19 @@ fn valid_process_name(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn valid_workload_user(value: &str) -> bool {
+    nonempty_canonical(value)
+        && value != "root"
+        && value.len() <= 32
+        && value
+            .bytes()
+            .next()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte == b'_')
+        && value.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'_' | b'-')
+        })
 }
 
 fn nonempty_canonical(value: &str) -> bool {

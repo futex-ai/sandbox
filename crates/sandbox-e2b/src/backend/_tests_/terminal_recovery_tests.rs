@@ -145,7 +145,7 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 assert!(command.args[3].contains("os.O_NOFOLLOW"));
                 assert!(
                     !command.args[1].lines().any(|line| {
-                        line.contains("rm -rf") && line.contains("/tmp/sandbox/terminals")
+                        line.contains("rm -rf") && line.contains("/var/lib/sandbox-e2b/terminals")
                     }),
                     "terminal cleanup must not traverse an intermediate symlink"
                 );

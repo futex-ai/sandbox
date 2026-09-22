@@ -81,6 +81,13 @@ returns
 `FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
 reconciled or destroyed. A normally completed replacement removes its resolved
 state marker, while an uncertain writer retains an atomic marker as its fence.
+The writer and reconciler must create that marker as a trusted identity in
+storage the workload cannot traverse, unlink, or replace; a marker in a shared
+temporary directory is not a valid fence. Using a trusted writer for that
+private marker must not leave the replaced workload file owned by the trusted
+identity. The verified temporary inode must remain outside workload control
+until its atomic rename, and an interrupted commit must retain enough trusted
+state to finish the intended ownership and mode handoff during reconciliation.
 File transfers are capped at 256 MiB. Every file in a multi-file
 image-preparation request must pass its path and size checks before the backend
 acquires provider access or writes any earlier file. Provider response and
@@ -109,7 +116,10 @@ and maintenance or image preparation fails unless their exit is confirmed.
 Provider-owned image verification, scrub, and measurement must not load a
 user-controlled login profile before executing; such a profile could otherwise
 skip a safety command or forge its result. Image-size traversal and I/O errors
-must fail the measurement rather than return a partial total.
+must fail the measurement rather than return a partial total. Image cache
+cleanup must open every parent without following symlinks and fail if an
+intermediate component is a symlink; child symlinks may be unlinked but their
+targets must never be traversed.
 Provider terminal storage creation and restored cleanup must traverse absolute
 paths through non-following directory descriptors. An intermediate symlink
 must fail closed without creating or removing anything through its target.
@@ -122,11 +132,15 @@ sufficient identity fence because a numeric process ID can be reused between
 the two calls. The same rule applies when killing terminals inherited by a
 restored sandbox. Provider-side transcripts enforce the requested byte count
 exactly, including limits that are smaller than or not aligned to 1 KiB. The
-provider must create and retain the transcript through non-following directory
-descriptors, and reads must derive and verify the same terminal-owned path
-before provider access. Transcript capture starts before the one intended
-interactive login shell, so login-profile output and exits remain captured and
-cannot bypass terminal setup or redirect storage by replacing a path.
+provider must create, retain, and read the transcript as a trusted identity in
+storage inaccessible to the workload. The recorder keeps the storage
+descriptor while its child closes every copy, drops to a validated non-root
+workload identity, and only then starts the interactive login shell. Reads must
+derive and verify the same terminal-owned path before provider access. Process
+discovery, input, and shutdown must use the trusted recorder identity as well.
+Transcript capture starts before that shell, so login-profile output and exits
+remain captured without allowing the shell to replace, truncate, or forge the
+stored transcript.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact

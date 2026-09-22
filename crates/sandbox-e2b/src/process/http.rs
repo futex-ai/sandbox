@@ -73,7 +73,7 @@ impl ReqwestConnectHttpTransport {
         url.path_segments_mut()
             .map_err(|_| Error::InvalidRequest)?
             .extend(["process.Process", method]);
-        Ok(self
+        let request = self
             .client
             .post(url)
             .header("Content-Type", content_type)
@@ -82,7 +82,11 @@ impl ReqwestConnectHttpTransport {
             .header(
                 "User-Agent",
                 concat!("sandbox-e2b/", env!("CARGO_PKG_VERSION")),
-            ))
+            );
+        Ok(match connection.user() {
+            Some(user) => request.basic_auth(user, Some("")),
+            None => request,
+        })
     }
 
     fn file_request(
@@ -94,14 +98,18 @@ impl ReqwestConnectHttpTransport {
         let mut url = envd_base_url(connection)?;
         url.set_path("/files");
         url.query_pairs_mut().append_pair("path", path);
-        Ok(self
+        let request = self
             .client
             .request(method, url)
             .header("X-Access-Token", &connection.access_token)
             .header(
                 "User-Agent",
                 concat!("sandbox-e2b/", env!("CARGO_PKG_VERSION")),
-            ))
+            );
+        Ok(match connection.user() {
+            Some(user) => request.basic_auth(user, Some("")),
+            None => request,
+        })
     }
 }
 

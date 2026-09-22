@@ -4,7 +4,7 @@ use std::{fs, process::Command};
 
 use tempfile::tempdir;
 
-use super::command;
+use super::{WriteAttempt, command};
 
 #[test]
 fn writer_rejects_same_size_staging_tampering() {
@@ -13,19 +13,22 @@ fn writer_rejects_same_size_staging_tampering() {
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let target = root.path().join("src/lib.rs");
     let staged = stage.path().join("upload");
-    let state = stage.path().join("state");
     fs::write(&target, b"old").expect("old target");
     fs::write(&staged, b"corruptions").expect("same-size altered upload");
 
-    let command = command(
-        root.path().to_string_lossy().into_owned(),
-        "src/lib.rs".to_owned(),
-        staged.to_string_lossy().into_owned(),
-        ".sandbox-write-test".to_owned(),
-        state.to_string_lossy().into_owned(),
-        b"replacement".len(),
-        "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47".to_owned(),
-    );
+    let attempt = WriteAttempt {
+        root: root.path().to_string_lossy().into_owned(),
+        path: "src/lib.rs".to_owned(),
+        staging_path: staged.to_string_lossy().into_owned(),
+        temporary_name: ".sandbox-write-test".to_owned(),
+        state_root: stage.path().to_string_lossy().into_owned(),
+        state_path: "state".to_owned(),
+        expected_size: b"replacement".len(),
+        expected_digest: "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d6631f4f7c97b89dc47"
+            .to_owned(),
+        workload_user: String::new(),
+    };
+    let command = command(&attempt);
     let output = Command::new(command.command)
         .args(command.args)
         .output()

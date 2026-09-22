@@ -28,14 +28,17 @@ async fn terminal_output_uses_a_non_following_root_relative_read() {
             .returns(Ok(vec![process(terminal_id)])),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
-            .answers_arc(Arc::new(move |_, _, request: ProcessRegularFileRequest| {
-                assert_eq!(request.root, "/tmp/sandbox/terminals");
-                assert_eq!(request.path, format!("{terminal_id}.log"));
-                Ok(ProcessFileChunk {
-                    bytes: b"captured".to_vec(),
-                    total_size: 8,
-                })
-            })),
+            .answers_arc(Arc::new(
+                move |_, connection, request: ProcessRegularFileRequest| {
+                    assert_eq!(connection.user(), Some("root"));
+                    assert_eq!(request.root, "/var/lib/sandbox-e2b/terminals");
+                    assert_eq!(request.path, format!("{terminal_id}.log"));
+                    Ok(ProcessFileChunk {
+                        bytes: b"captured".to_vec(),
+                        total_size: 8,
+                    })
+                },
+            )),
     ));
     let backend = backend(control, processes);
 
@@ -78,7 +81,7 @@ fn request(terminal_id: TerminalId, provider_log_path: String) -> BackendOutputR
 }
 
 fn expected_log_path(terminal_id: TerminalId) -> String {
-    format!("/tmp/sandbox/terminals/{terminal_id}.log")
+    format!("/var/lib/sandbox-e2b/terminals/{terminal_id}.log")
 }
 
 fn process(terminal_id: TerminalId) -> ProcessInfo {

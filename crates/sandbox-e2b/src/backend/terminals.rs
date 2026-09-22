@@ -14,11 +14,15 @@ use super::{
     terminal_storage::{TERMINAL_LOG_DIRECTORY, create_directory_command, restore_cleanup_command},
 };
 
+const TRUSTED_PROCESS_USER: &str = "root";
+
 pub(super) async fn clean_restored(
     backend: &E2bSandboxBackend,
     sandbox_ref: ProviderRef,
 ) -> Result<()> {
-    let connection = mapping::connection(backend, &sandbox_ref).await?;
+    let connection = mapping::connection(backend, &sandbox_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     let processes = backend.processes.list(connection.clone()).await?;
     let terminal_tag_prefix = backend.config.runtime_conventions().terminal_tag_prefix();
     for process in processes {
@@ -49,7 +53,9 @@ pub(super) async fn create(
     backend: &E2bSandboxBackend,
     request: BackendTerminalCreateRequest,
 ) -> Result<BackendTerminal> {
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
+    let connection = mapping::connection(backend, &request.sandbox_provider_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     if let Some(terminal) = recover_connected(backend, &connection, request.terminal_id).await? {
         return Ok(terminal);
     }
@@ -75,6 +81,11 @@ pub(super) async fn create(
                 tag,
                 log_path: log_path.clone(),
                 log_limit: request.provider_log_limit,
+                workload_user: backend
+                    .config
+                    .runtime_conventions()
+                    .workload_user()
+                    .to_owned(),
                 cwd: request.cwd,
             },
         )
@@ -90,7 +101,9 @@ pub(super) async fn recover(
     backend: &E2bSandboxBackend,
     request: BackendTerminalCreateRequest,
 ) -> Result<Option<BackendTerminal>> {
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
+    let connection = mapping::connection(backend, &request.sandbox_provider_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     recover_connected(backend, &connection, request.terminal_id).await
 }
 
@@ -129,7 +142,9 @@ pub(super) async fn inspect(
     terminal_ref: ProviderRef,
 ) -> Result<BackendTerminal> {
     let identity = TerminalIdentity::parse(&terminal_ref)?;
-    let connection = mapping::connection(backend, &sandbox_ref).await?;
+    let connection = mapping::connection(backend, &sandbox_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     if identity
         .resolve(
             backend.processes.list(connection).await?,
@@ -150,7 +165,9 @@ pub(super) async fn inspect(
 
 pub(super) async fn write(backend: &E2bSandboxBackend, request: BackendInputRequest) -> Result<()> {
     let identity = TerminalIdentity::parse(&request.terminal_provider_ref)?;
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
+    let connection = mapping::connection(backend, &request.sandbox_provider_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     let tag = terminal_tag(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         identity.terminal_id(),
@@ -167,7 +184,9 @@ pub(super) async fn close(
     terminal_ref: ProviderRef,
 ) -> Result<()> {
     let identity = TerminalIdentity::parse(&terminal_ref)?;
-    let connection = mapping::connection(backend, &sandbox_ref).await?;
+    let connection = mapping::connection(backend, &sandbox_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     let tag = terminal_tag(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         identity.terminal_id(),

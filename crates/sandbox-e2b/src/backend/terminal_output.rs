@@ -14,6 +14,7 @@ use super::{
 };
 
 const PROVIDER_READ_ALLOWANCE: Duration = Duration::from_secs(5);
+const TRUSTED_PROCESS_USER: &str = "root";
 
 pub(super) async fn read(
     backend: &E2bSandboxBackend,
@@ -36,7 +37,9 @@ pub(super) async fn read(
             field: "provider_log_path",
         });
     }
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref).await?;
+    let connection = mapping::connection(backend, &request.sandbox_provider_ref)
+        .await?
+        .with_user(TRUSTED_PROCESS_USER);
     let started = tokio::time::Instant::now();
     let provider_deadline = started + request.wait + PROVIDER_READ_ALLOWANCE;
     let mut retry_post_read_growth = true;

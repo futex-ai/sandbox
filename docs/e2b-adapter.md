@@ -22,12 +22,13 @@ non-secret values through read-only accessors and can replace runtime
 conventions only with an already validated value.
 
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
-prefix, absolute screen-helper path, and exact helper and agent process names
-stopped before an image snapshot. Neutral defaults are suitable for new
-deployments. Existing deployments should explicitly supply their current
-values so recovery and snapshot cleanup find the right resources. Unsafe
-prefixes, paths, shell characters, whitespace, and process names longer than
-Linux's 15-byte task-name limit are rejected.
+prefix, absolute screen-helper path, exact helper and agent process names
+stopped before an image snapshot, and the non-root workload account. Neutral
+defaults use the `user` account. Existing deployments should explicitly supply
+their current values so recovery and snapshot cleanup find the right resources
+and commands use the account present in their templates. Root, unsafe account
+names, unsafe prefixes or paths, shell characters, whitespace, and process
+names longer than Linux's 15-byte task-name limit are rejected.
 
 ## Transport And Reconciliation
 
@@ -64,6 +65,9 @@ Envd routing is derived from adapter configuration, not a response-provided
 host. The complete HTTPS URL must parse to the exact configured envd hostname
 before the access-token header is added. Access tokens and private-traffic
 credentials stay inside call-local types and are redacted from debug output.
+Process and file requests explicitly authenticate the configured workload
+account. Only storage and reconciliation helpers override that identity with
+the trusted root account.
 Failed setup and verification diagnostics also redact the active opaque
 sandbox ID and envd access token before the final 4 KiB tail is selected. A
 known value split by the streaming tail boundary has its visible suffix
@@ -89,9 +93,17 @@ can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. After a
 durable replacement, a normally completing writer removes its commit marker;
 an uncertain writer leaves its atomic fence available for cleanup
-reconciliation. Process
-execution is direct-argv and keeps stdout, stderr, deadlines, and overflow
-outcomes separate. Each decoded process-data event must contain exactly one of
+reconciliation. Both helpers run as root and create the marker below
+`/var/lib/sandbox-e2b/write-fences`, whose descriptor-relative parent creation
+requires root ownership and denies group or other access. A workload process
+therefore cannot remove a revocation and let an older writer commit later. The
+root writer keeps the verified temporary inode trusted through its atomic
+rename, then assigns the replacement to the configured workload account. Its
+commit marker records the expected ownership and mode so reconciliation can
+finish that handoff after an interrupted commit without exposing the temporary
+bytes to workload tampering.
+Process execution is direct-argv and keeps stdout, stderr, deadlines, and
+overflow outcomes separate. Each decoded process-data event must contain exactly one of
 PTY, stdout, or stderr; multiple populated channels fail as malformed instead
 of silently dropping output. Before acquiring sandbox access, the adapter
 rejects an empty command, more than 128 KiB across the command and arguments,
@@ -122,14 +134,18 @@ then requires its maintenance command to exit normally. Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the
 operation without creating or deleting content through its target. The
-transcript wrapper traverses the absolute log parent through non-following
-directory descriptors, creates a new regular leaf exclusively, and gives the
-recorder only the already-open descriptor. Reads first require the exact
-terminal-derived log path, then open and read the leaf through one
-descriptor-relative helper. Durable reads share one absolute provider deadline
-and coherent cursor/size reporting. Transcript writers use the request's exact
-byte limit rather than a rounded filesystem block limit. Oversized replacement
-writes fail before acquiring mutating sandbox access.
+root-authenticated transcript wrapper traverses
+`/var/lib/sandbox-e2b/terminals` through non-following directory descriptors,
+creates a root-owned regular leaf exclusively, and gives that descriptor only
+to the root recorder. The recorder's child closes all private descriptors,
+initializes supplementary groups, and drops its UID and GID to the configured
+workload account before starting Bash. Root-authenticated reads first require
+the exact terminal-derived log path, then open and read the leaf through one
+descriptor-relative helper. Recorder discovery, input, and shutdown use the
+same root-authenticated process identity. Durable reads share one absolute
+provider deadline and coherent cursor/size reporting. Transcript writers use
+the request's exact byte limit rather than a rounded filesystem block limit.
+Oversized replacement writes fail before acquiring mutating sandbox access.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
@@ -146,6 +162,10 @@ process names, waits for bounded disappearance, escalates to KILL, and fails
 unless both names are gone before size measurement. Both image scrub and
 restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
 helpers with bounded TERM/KILL polling and fail unless their exit is confirmed.
+Cache removal opens every parent and child through non-following directory
+descriptors. A setup-created symlink in the home or cache-parent path fails the
+scrub, while a symlink at or below a cache leaf is unlinked without deleting
+its target.
 Setup, verification, scrub, and size measurement run through non-login shells,
 so staged files or setup commands cannot install a login profile that skips a
 later safety phase or fabricates the measured size. The measurement propagates
@@ -153,10 +173,11 @@ filesystem traversal and I/O failures rather than accepting `du`'s partial
 output.
 
 The terminal transcript descriptor and byte limit are installed by the trusted
-non-login wrapper. Only after capture is active does the one intended
-interactive login shell load the user's profile, which keeps profile output
-and early exits inside terminal bookkeeping and avoids running login side
-effects twice.
+root recorder. Only its child drops to the configured workload account, closes
+the storage descriptor, and starts the one intended interactive login shell.
+This keeps profile output and early exits inside terminal bookkeeping without
+giving the shell any way to replace, truncate, or forge earlier transcript
+bytes.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and
