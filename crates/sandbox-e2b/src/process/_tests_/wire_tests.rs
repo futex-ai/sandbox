@@ -5,6 +5,8 @@ use std::{
     io::Write,
     os::unix::fs::symlink,
     process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 use tempfile::tempdir;
@@ -19,18 +21,33 @@ fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
         let mut child = start_wrapper(&transcript, limit);
         let mut input = child.stdin.take().expect("terminal wrapper stdin");
         input
-            .write_all(b"printf '%010000d' 0\nexit\n")
+            .write_all(b"printf '%010000d' 0\n")
             .expect("write terminal command");
+        let observed_size = wait_for_transcript_size(&transcript, limit);
+        input.write_all(b"exit\n").expect("exit terminal shell");
 
         let status = child.wait().expect("wait for bounded terminal wrapper");
 
         assert_ne!(status.code(), Some(124), "terminal wrapper timed out");
+        assert_eq!(observed_size, u64::try_from(limit).expect("test limit"));
         assert_eq!(
             std::fs::metadata(&transcript)
                 .expect("bounded transcript")
                 .len(),
             u64::try_from(limit).expect("test limit")
         );
+    }
+}
+
+fn wait_for_transcript_size(path: &std::path::Path, expected: usize) -> u64 {
+    let deadline = Instant::now() + Duration::from_secs(4);
+    let expected = u64::try_from(expected).expect("test limit");
+    loop {
+        let observed = fs::metadata(path).map_or(0, |metadata| metadata.len());
+        if observed >= expected || Instant::now() >= deadline {
+            return observed;
+        }
+        thread::sleep(Duration::from_millis(10));
     }
 }
 
