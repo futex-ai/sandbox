@@ -271,19 +271,18 @@ tests passed in the full workspace check.
    idle resets. Option B: add a consumer-lag outcome that ends a stream when
    its queue fills, changing the public contract and slow-consumer behavior.
    **Recommendation: A**, preserving queued output while keeping the idle
-   budget independent of consumer speed. This finding remains unfixed pending
-   the maintainer's decision.
+   budget independent of consumer speed. The maintainer chose A for Milestone 7.
 
 ## Milestone 7: Resolve Buffered-Output Idle Timing
 
-Pending maintainer decision. At completion, delayed consumption of output that
-has already arrived cannot refresh the process idle deadline.
+Delayed consumption of output that has already arrived cannot refresh the
+process idle deadline.
 
-- [ ] Confirm the chosen follow-up for the new review finding.
-- [ ] Add a regression with a coalesced output batch, a full queue, and a slow
+- [x] Confirm the chosen follow-up for the new review finding.
+- [x] Add a regression with a coalesced output batch, a full queue, and a slow
       consumer; verify that old output cannot postpone idle expiry or cleanup.
-- [ ] Implement the chosen idle-timing correction and align affected docs.
-- [ ] Run focused tests and `cargo xtask check`, then audit the diff.
+- [x] Implement the chosen idle-timing correction and align affected docs.
+- [x] Run focused tests and `cargo xtask check`, then audit the diff.
 - [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
 - [ ] Run `cargo xtask review` after the push and report new findings without
       automatically fixing them.

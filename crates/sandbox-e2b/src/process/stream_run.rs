@@ -147,6 +147,7 @@ impl ConnectProcessTransport {
                     }
                 },
             };
+            let arrived_at = tokio::time::Instant::now();
             let decoded = decoder.push(&fragment);
             let mut batch_outcome = None;
             for frame in decoded.frames {
@@ -169,7 +170,10 @@ impl ConnectProcessTransport {
                         break;
                     }
                 };
-                match self.handle_event(event, settings, sender, state).await {
+                match self
+                    .handle_event(event, arrived_at, settings, sender, state)
+                    .await
+                {
                     EventResult::Continue => {}
                     EventResult::Complete(completion) => return completion,
                     EventResult::Outcome(outcome) => {
@@ -190,6 +194,7 @@ impl ConnectProcessTransport {
     async fn handle_event(
         &self,
         event: ProcessEvent,
+        arrived_at: tokio::time::Instant,
         settings: &StreamSettings,
         sender: &Sender<ProcessStreamEvent>,
         state: &mut StreamState,
@@ -208,9 +213,7 @@ impl ConnectProcessTransport {
                         ProcessDataChannel::Stdout | ProcessDataChannel::Stderr
                     )
                 {
-                    let Some(deadline) =
-                        tokio::time::Instant::now().checked_add(settings.idle_timeout)
-                    else {
+                    let Some(deadline) = arrived_at.checked_add(settings.idle_timeout) else {
                         return EventResult::transport_failure();
                     };
                     state.idle_deadline = deadline;

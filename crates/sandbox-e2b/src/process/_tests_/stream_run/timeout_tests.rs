@@ -4,6 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use futures_util::StreamExt;
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
+use tokio::sync::Notify;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::ProcessTransport;
@@ -52,6 +53,63 @@ async fn keepalives_do_not_reset_the_idle_timeout() {
             ProcessStreamEvent::Started { pid: 29 },
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::IdleTimeout),
         ]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn buffered_output_does_not_extend_idle_timeout_when_the_consumer_is_slow() {
+    let killed = Arc::new(Notify::new());
+    let mut frames = vec![event_frame(r#"{"event":{"start":{"pid":43}}}"#)];
+    frames.extend((0..18).map(|_| data_frame("stdout", "x")));
+    let batch = frames.concat();
+    let transport = transport(Unimock::new((
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers_arc(Arc::new(move |_, _, _, _, _| {
+                Ok(byte_stream(vec![batch.clone()]))
+            })),
+        unary_call
+            .next_call(matching!(_, "SendSignal", _, false))
+            .answers_arc({
+                let killed = killed.clone();
+                Arc::new(move |_, _, _, _, _| {
+                    killed.notify_one();
+                    Ok(Vec::new())
+                })
+            }),
+    )));
+    let mut events = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_secs(1), Duration::from_millis(20)),
+        )
+        .await
+        .expect("stream should start");
+
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_millis(10)).await;
+    assert_eq!(
+        events.next().await,
+        Some(ProcessStreamEvent::Started { pid: 43 })
+    );
+    tokio::task::yield_now().await;
+    tokio::time::advance(Duration::from_millis(11)).await;
+    tokio::time::timeout(Duration::from_millis(1), killed.notified())
+        .await
+        .expect("old buffered output must not postpone idle cleanup");
+
+    let remaining = events.collect::<Vec<_>>().await;
+    assert_eq!(
+        remaining.last(),
+        Some(&ProcessStreamEvent::Outcome(
+            ProcessStreamOutcome::IdleTimeout
+        ))
+    );
+    assert_eq!(remaining.len(), EVENT_CHANNEL_CAPACITY + 1);
+    assert!(
+        remaining[..EVENT_CHANNEL_CAPACITY]
+            .iter()
+            .all(|event| matches!(event, ProcessStreamEvent::Stdout(bytes) if bytes == b"x"))
     );
 }
 

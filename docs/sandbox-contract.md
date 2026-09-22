@@ -158,8 +158,10 @@ also a `TransportFailure`, including expiry while delivery of `Exited` is blocke
 may be emitted before either. Before process end, an absolute deadline produces
 `DeadlineExpired`; an idle timer produces `IdleTimeout` and resets only when
 stdout or stderr data arrives, not for start, keep-alive, process-end, or
-transport frames. Every stream consumed to its end contains exactly one
-`Outcome` as its last item. The absolute budget begins before backend sandbox
+transport frames. For a coalesced HTTP fragment, all output uses the fragment's
+receipt time, not the later time when queue capacity allows its delivery. Every
+stream consumed to its end contains exactly one `Outcome` as its last item.
+The absolute budget begins before backend sandbox
 connection; setup consumes that same budget and cannot extend the process run.
 The idle timer begins before opening the process transport.
 

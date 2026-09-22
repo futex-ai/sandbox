@@ -172,8 +172,9 @@ budget starts before sandbox connection; `StreamProcessCommand::requested_at`
 preserves that origin through envd setup. Connection is bounded by the same
 deadline and returns a single `DeadlineExpired` without starting a process if
 setup exhausts it. The idle timer starts before the envd stream is opened;
-only a nonempty stdout or stderr data frame resets idle time. Start, keep-alive,
-PTY, process-end, and Connect trailer
+only a nonempty stdout or stderr data frame resets idle time, anchored to its
+HTTP fragment's receipt rather than delayed delivery to a slow consumer.
+Start, keep-alive, PTY, process-end, and Connect trailer
 frames do not reset it. Before provider access, the adapter rounds a fractional
 stream deadline up to whole seconds and connects with the greater of that value
 and the configured sandbox timeout. Connection latency consumes the requested

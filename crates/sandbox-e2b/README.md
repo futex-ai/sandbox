@@ -109,10 +109,12 @@ errors, or timeout before EOF, including across HTTP chunks.
 Incremental execution emits ordered start, stdout, stderr, exit, and final
 outcome events. Exit events retain envd's normal-exit flag, and a successful
 trailer and HTTP EOF are required for `Completed`; that outcome does not by
-itself mean the command succeeded. Timer expiry after exit but before HTTP EOF is a transport
-failure, including while exit-event delivery is blocked. Only stdout or stderr
-bytes reset the idle timer. The terminal outcome and any final bounded overflow
-prefix are published through a slot independent from the bounded data queue.
+itself mean the command succeeded. Timer expiry after exit but before HTTP EOF
+is a transport failure, including while exit-event delivery is blocked. Only
+stdout or stderr bytes reset the idle timer, using their HTTP fragment's receipt
+time even when the output queue delays delivery. The terminal outcome and any
+final bounded overflow prefix are published through a slot independent from the
+bounded data queue.
 Queued data drains in order before that optional prefix, outcome, and EOF,
 while cleanup starts without waiting for consumer capacity.
 Direct process, streaming, and stateless read-only requests are
