@@ -82,7 +82,17 @@ without changing the completed implementation milestones above.
 - [x] Align the contract and crate documentation with canonical address rules.
 - [x] Run focused tests, formatting, Clippy, smoke coverage, and
       `cargo xtask check` with a 100% passing result.
-- [ ] Stage every change, commit with a Conventional Commit, and push the
+- [x] Stage every change, commit with a Conventional Commit, and push the
       current branch.
-- [ ] Run `cargo xtask review` after the push and report every finding without
+- [x] Run `cargo xtask review` after the push and report every finding without
       automatically changing it.
+- [ ] Decide whether to update the public `exercise_backend` rustdoc to declare
+      `curl` as a mandatory target-image prerequisite.
+
+### Remediation Review Outcome
+
+The remediation review found the implementation functionally correct and
+retained one low-severity documentation finding for maintainer choice: the
+public `exercise_backend` rustdoc still names only `/bin/sh`, while the
+mandatory network probe also invokes `curl`. No review finding was changed
+automatically.
