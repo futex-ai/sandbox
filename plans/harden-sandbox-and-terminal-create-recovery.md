@@ -156,3 +156,40 @@ an identity record until its contents have been synced.
       automatically fixing it.
 - [x] After a clean review, mark all milestones complete and move this plan
       from Active to Completed in `plans/README.md`.
+
+## Milestone 5: Preserve Transcript Reads After PID Reuse
+
+At the end of this milestone, an exited terminal's durable transcript remains
+readable even after an unrelated process reuses its numeric PID, without
+weakening terminal identity fencing.
+
+### Review Finding
+
+5. **Severity: medium — allow durable reads after PID reuse.** In
+   `crates/sandbox-e2b/src/backend/terminal_output.rs:72`, terminal output calls
+   the live-process identity resolver before opening the retained transcript.
+   When an exited recorded terminal's numeric PID has been reused by an
+   unrelated process, that resolver returns `NotFound`. Recovery and inspection
+   already validate the durable identity record and correctly classify the
+   terminal as `Exited`, but output returns early and never reads its log. Doing
+   nothing makes final shell output inaccessible in long-lived sandboxes even
+   though the trusted transcript and matching identity record remain. Option A:
+   on this `NotFound` path, validate the durable identity record and continue
+   only when it proves the exited terminal. Option B: centralize record-aware
+   identity resolution and share it between inspection and output.
+   **Recommendation: B**, because one resolution path keeps PID-reuse fencing
+   and exited-terminal state consistent across both operations.
+
+- [x] Record the finding with severity, location, context, impact, options, and
+      recommendation.
+- [ ] Add a failing regression for reading a retained exited-terminal
+      transcript after unrelated PID reuse.
+- [ ] Centralize record-aware terminal identity resolution and use it for
+      inspection and output reads.
+- [ ] Align protocol and adapter documentation with the final read behavior.
+- [ ] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [ ] Audit the final diff, commit and push the fix, confirm GitHub CI, and run
+      a clean post-push `cargo xtask review` against `origin/main`.
+- [ ] After a clean review, mark this milestone complete and move the plan back
+      to Completed in `plans/README.md`.
