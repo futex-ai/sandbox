@@ -2,6 +2,7 @@
 
 use std::{collections::BTreeMap, fmt};
 
+use sandbox_interface::EgressDestination;
 use serde::{Deserialize, Serialize};
 
 /// Opaque, non-secret consumer metadata attached to E2B sandboxes.
@@ -18,8 +19,11 @@ pub struct ControlCreateSandbox {
     pub allow_public_egress: bool,
     /// Additional deployment-owned denied destinations.
     pub denied_destinations: Vec<String>,
-    /// Canonical per-session allow destinations, absent for open policy.
-    pub allowed_destinations: Option<Vec<String>>,
+    /// Typed per-session allow destinations, absent for open policy.
+    ///
+    /// The concrete client revalidates and canonicalizes these values before
+    /// transport.
+    pub allowed_destinations: Option<Vec<EgressDestination>>,
     /// Auto-pause timeout in seconds.
     pub idle_timeout_seconds: u32,
 }

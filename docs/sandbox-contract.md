@@ -270,7 +270,9 @@ The separate `exercise_network_allowlist` capability probe applies only to
 adapters that support domain destinations. It creates a sandbox that permits
 only `example.com`, uses `/bin/sh -c` and `curl` to require an application
 response from that host, and requires a fetch from a different host to exit
-unsuccessfully. It also proves that recovery rejects a different policy.
+unsuccessfully. Both curl commands put `--disable` first so user or system
+startup configuration cannot redirect a request or fabricate a policy result.
+The probe also proves that recovery rejects a different policy.
 The main harness retains the exact request for every sandbox and snapshot
 create before dispatch. After every create result, including synchronous
 success, it proves the correlated provider identity through recover-only

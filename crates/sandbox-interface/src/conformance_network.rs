@@ -8,8 +8,8 @@ use crate::{
     SandboxNetworkPolicy, SandboxProcessOutput, conformance_resources::ConformanceResources,
 };
 
-const ALLOWED_FETCH: &str = "curl --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://example.com/";
-const DISALLOWED_FETCH: &str = "curl --noproxy '*' --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://www.google.com/";
+const ALLOWED_FETCH: &str = "curl --disable --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://example.com/";
+const DISALLOWED_FETCH: &str = "curl --disable --noproxy '*' --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://www.google.com/";
 
 pub(crate) async fn exercise(
     backend: &dyn SandboxBackend,

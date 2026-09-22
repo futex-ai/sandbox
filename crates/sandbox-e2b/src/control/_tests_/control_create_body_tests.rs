@@ -2,9 +2,11 @@
 
 use std::{
     collections::VecDeque,
+    net::{IpAddr, Ipv4Addr},
     sync::{Arc, Mutex},
 };
 
+use sandbox_interface::EgressDestination;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -28,7 +30,7 @@ async fn open_create_body_is_encoded_byte_for_byte() {
             template_id: "template".to_owned(),
             metadata: SandboxMetadata::from([("sandbox_agent_id".to_owned(), "agent".to_owned())]),
             allow_public_egress: false,
-            denied_destinations: vec!["203.0.113.0/24".to_owned()],
+            denied_destinations: vec!["203.0.113.42/24".to_owned()],
             allowed_destinations: None,
             idle_timeout_seconds: 600,
         })
@@ -53,13 +55,87 @@ async fn allowlist_create_body_is_encoded_byte_for_byte() {
             metadata: SandboxMetadata::new(),
             allow_public_egress: false,
             denied_destinations: vec!["203.0.113.0/24".to_owned()],
-            allowed_destinations: Some(vec!["192.0.2.10".to_owned(), "198.51.100.0/24".to_owned()]),
+            allowed_destinations: Some(vec![
+                EgressDestination::Ip("::ffff:192.0.2.10".parse().expect("mapped public IP")),
+                EgressDestination::Cidr {
+                    address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 42)),
+                    prefix: 24,
+                },
+            ]),
             idle_timeout_seconds: 600,
         })
         .await
         .expect("allowlist create should decode");
 
     assert_eq!(only_body(&requests), ALLOWLIST_BODY);
+}
+
+#[tokio::test]
+async fn unsafe_direct_allowlists_fail_before_transport() {
+    let cases = vec![
+        (
+            false,
+            vec![EgressDestination::Domain("api.example.com".to_owned())],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            false,
+            vec![EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(
+                127, 0, 0, 1,
+            )))],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            false,
+            vec![EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(
+                203, 0, 113, 10,
+            )))],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            false,
+            vec![EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 1))); 65],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            false,
+            vec![EgressDestination::Cidr {
+                address: IpAddr::V4(Ipv4Addr::new(192, 0, 2, 0)),
+                prefix: 33,
+            }],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            true,
+            vec![EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(
+                192, 0, 2, 10,
+            )))],
+            vec!["203.0.113.0/24".to_owned()],
+        ),
+        (
+            false,
+            vec![EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(
+                192, 0, 2, 10,
+            )))],
+            vec!["not-an-ip".to_owned()],
+        ),
+    ];
+
+    for (allow_public_egress, allowed_destinations, denied_destinations) in cases {
+        let client = client_without_transport();
+        let result = client
+            .create_sandbox(ControlCreateSandbox {
+                template_id: "template".to_owned(),
+                metadata: SandboxMetadata::new(),
+                allow_public_egress,
+                denied_destinations,
+                allowed_destinations: Some(allowed_destinations),
+                idle_timeout_seconds: 600,
+            })
+            .await;
+
+        assert!(matches!(result, Err(crate::error::Error::InvalidRequest)));
+    }
 }
 
 fn recording_client() -> (ReqwestE2bControlApi, RecordedRequests) {
@@ -90,6 +166,14 @@ fn recording_client() -> (ReqwestE2bControlApi, RecordedRequests) {
         },
         requests,
     )
+}
+
+fn client_without_transport() -> ReqwestE2bControlApi {
+    ReqwestE2bControlApi {
+        transport: Arc::new(Unimock::new(())),
+        sandbox_domain: "e2b.app".to_owned(),
+        idle_timeout_seconds: 600,
+    }
 }
 
 fn only_body(requests: &RecordedRequests) -> Vec<u8> {

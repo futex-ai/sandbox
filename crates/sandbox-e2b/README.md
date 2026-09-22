@@ -30,7 +30,11 @@ profiles, template IDs, and denied IP/CIDR destinations, then keeps those
 values externally immutable. The public concrete control-client constructor
 independently requires an HTTPS root origin, a nonempty canonical API key, a
 valid sandbox routing domain, and a nonzero idle timeout before it creates a
-credentialed transport. Its neutral runtime conventions use the `sandbox`
+credentialed transport. Its public create request carries typed allow
+destinations, and the concrete client independently canonicalizes IP/CIDR
+rules, rejects domains, enforces the 64-entry bound, checks every private and
+deployment deny overlap, and rejects an allowlist paired with ordinary internet
+access before transport. Its neutral runtime conventions use the `sandbox`
 metadata prefix, `sandbox-terminal-` process-tag prefix,
 `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
 The default workload account is the non-root `user`; deployments can select a
@@ -52,11 +56,13 @@ IPv6 forms. Representable mapped values canonicalize to IPv4.
 E2B domain rules trust the sandbox-controlled HTTP `Host` header or TLS SNI,
 and E2B allow rules outrank IP denies. The adapter therefore rejects the
 complete policy with `UnsupportedNetworkPolicy` whenever it contains a domain,
-before any E2B request. Use an IP/CIDR rule, another adapter that jointly
-verifies hostnames and destination IPs, or a trusted enforcing proxy. Allowlist
-policy identity is hashed into provider metadata so recovery returns a typed
-mismatch instead of adopting a sandbox created with different egress access.
-Open bodies remain unchanged.
+before any E2B request. A direct request through the public concrete control
+client repeats the safety checks and returns `E2bAdapterError::InvalidRequest`
+before transport. Use an IP/CIDR rule, another adapter that jointly verifies
+hostnames and destination IPs, or a trusted enforcing proxy. Allowlist policy
+identity is hashed into provider metadata so recovery returns a typed mismatch
+instead of adopting a sandbox created with different egress access. Open bodies
+remain unchanged.
 
 Creates use exact stable correlation metadata, including the typed sandbox
 consumer class, to recover ambiguous delivery. Allowlist policy identity is

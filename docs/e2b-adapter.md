@@ -24,7 +24,11 @@ conventions only with an already validated value.
 `ReqwestE2bControlApi::new` applies the same safety checks at its public
 boundary: it rejects a non-HTTPS or non-root API origin, an empty or padded API
 key, an invalid sandbox routing domain, and a zero idle timeout before building
-the authenticated transport.
+the authenticated transport. Its public create request accepts typed allow
+destinations. The concrete client independently canonicalizes IP/CIDR allow and
+deny rules, enforces the 64-entry pre-deduplication bound, rejects domains and
+deny overlaps, and rejects an allowlist paired with ordinary internet access
+before sending an authenticated request.
 
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
 prefix, absolute screen-helper path, exact helper and agent process names
@@ -58,8 +62,10 @@ to a denied address while presenting an allowed hostname. Rejecting the whole
 policy prevents domain rules from bypassing the adapter's private and
 deployment deny guarantees. Callers that require named destinations must use
 an adapter that can jointly verify the hostname and destination IP, or route
-through a trusted enforcing proxy represented by an allowed IP/CIDR. See
-E2B's current
+through a trusted enforcing proxy represented by an allowed IP/CIDR. A caller
+using the public concrete control client directly receives
+`E2bAdapterError::InvalidRequest` for the same unsafe values before transport.
+See E2B's current
 [internet-access documentation](https://docs.e2b.dev/network/internet-access)
 for the underlying provider semantics.
 

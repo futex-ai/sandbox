@@ -148,3 +148,32 @@ hostname allow rule and deployment-owned denied IP ranges.
       current branch.
 - [x] Run `cargo xtask review` after the push and report every finding without
       automatically changing it.
+
+### Domain Safety Review Outcome
+
+The post-push review retained two findings for maintainer choice. The public
+concrete E2B control client can receive raw allow destinations without the
+backend's validation, and the domain conformance probe can load curl startup
+configuration that changes which host it reaches. No review finding was
+changed automatically.
+
+## Milestone 9: Public Boundary And Probe Hardening (Completed)
+
+Resolve both domain-safety review findings after explicit maintainer approval.
+Make the concrete E2B control client independently enforce the same allowlist
+invariants, and make both curl probes deterministic across target images.
+
+- [x] Add failing regressions for unsafe direct control-client allowlists and
+      curl startup-configuration loading.
+- [x] Type and validate public control-client allow destinations, including
+      bounds, canonicalization, domain rejection, deny overlap, and the
+      deny-by-default internet setting, before transport.
+- [x] Preserve byte-exact Open and supported IP/CIDR create bodies.
+- [x] Put curl's `--disable` option first in both domain probe commands.
+- [x] Align the adapter, contract, crate, and plan documentation.
+- [x] Run focused tests, formatting, Clippy, smoke coverage, and
+      `cargo xtask check` with a 100% passing result.
+- [x] Stage every change, commit with a Conventional Commit, and push the
+      current branch.
+- [x] Run `cargo xtask review` after the push and report every finding without
+      automatically changing it.

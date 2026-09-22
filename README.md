@@ -23,9 +23,11 @@ Sandbox create requests carry their runtime-or-browser consumer class through
 provider metadata; managed inventory returns that class when present and leaves
 it absent for resources created before the metadata existed.
 Creates can also select a typed deny-by-default egress allowlist of canonical
-IP, CIDR, and DNS destinations. The E2B adapter preserves private and
-deployment deny ranges, and recovery refuses to adopt a sandbox created with a
-different policy.
+IP, CIDR, and DNS destinations. E2B supports the IP and CIDR forms, rejects DNS
+policies before provider access, preserves private and deployment deny ranges,
+and refuses to recover a sandbox created with a different policy. Its public
+control client independently revalidates typed allow destinations before
+transport.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently

@@ -2,8 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::error::{Error, Result};
-use crate::network::PRIVATE_NETWORK_DENIES;
+use crate::{
+    error::{Error, Result},
+    network,
+};
 
 use super::{
     E2bControlApi,
@@ -21,6 +23,8 @@ use super::{
 };
 
 /// Reqwest-backed E2B control API implementation.
+///
+/// Sandbox creates revalidate typed network input before transport.
 pub struct ReqwestE2bControlApi {
     pub(super) transport: std::sync::Arc<dyn E2bHttpTransport>,
     pub(super) sandbox_domain: String,
@@ -34,13 +38,11 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess> {
-        let mut denies = PRIVATE_NETWORK_DENIES
-            .iter()
-            .map(|value| (*value).to_owned())
-            .collect::<Vec<_>>();
-        denies.extend(request.denied_destinations);
-        denies.sort();
-        denies.dedup();
+        let network = network::validate_control_create(
+            request.allow_public_egress,
+            request.allowed_destinations,
+            request.denied_destinations,
+        )?;
         let body = encode(&CreateSandboxBody {
             template_id: request.template_id,
             metadata: request.metadata,
@@ -48,8 +50,8 @@ impl E2bControlApi for ReqwestE2bControlApi {
             allow_internet_access: request.allow_public_egress,
             network: NetworkBody {
                 allow_public_traffic: false,
-                deny_out: denies,
-                allow_out: request.allowed_destinations,
+                deny_out: network.deny_out,
+                allow_out: network.allow_out,
             },
             auto_pause: true,
             auto_pause_memory: true,

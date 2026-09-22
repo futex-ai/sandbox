@@ -15,3 +15,13 @@ fn disallowed_fetch_does_not_turn_http_errors_into_denial_success() {
             .any(|arg| arg == "--fail")
     );
 }
+
+#[test]
+fn fetches_disable_curl_startup_configuration() {
+    for command in [ALLOWED_FETCH, DISALLOWED_FETCH] {
+        assert_eq!(
+            command.split_ascii_whitespace().take(2).collect::<Vec<_>>(),
+            ["curl", "--disable"]
+        );
+    }
+}

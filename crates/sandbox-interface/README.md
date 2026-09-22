@@ -66,8 +66,9 @@ terminal identity. Its process probe invokes `/bin/sh` with a self-contained
 script that emits exact stdout and stderr bytes, so a normal backend image
 needs no test-only executable. The separate `exercise_network_allowlist`
 capability probe is for adapters that support domain destinations. It requires
-`/bin/sh` and `curl`, allows one exact domain, and verifies that another domain
-cannot return an application response.
+`/bin/sh` and `curl`, disables curl startup configuration before any other
+option, allows one exact domain, and verifies that another domain cannot return
+an application response.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so

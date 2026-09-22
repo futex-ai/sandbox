@@ -5,10 +5,14 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use sandbox_interface::{EgressDestination, Error, Result, SandboxNetworkPolicy};
+use sandbox_interface::{
+    EgressDestination, Error as InterfaceError, Result as InterfaceResult, SandboxNetworkPolicy,
+};
 use sha2::{Digest, Sha256};
 
-pub(crate) const PRIVATE_NETWORK_DENIES: &[&str] = &[
+use crate::error::{Error as AdapterError, Result as AdapterResult};
+
+const PRIVATE_NETWORK_DENIES: &[&str] = &[
     "10.0.0.0/8",
     "100.64.0.0/10",
     "127.0.0.0/8",
@@ -24,7 +28,7 @@ pub(crate) const PRIVATE_NETWORK_DENIES: &[&str] = &[
 pub(crate) fn validate(
     policy: &SandboxNetworkPolicy,
     deployment_denies: &[String],
-) -> Result<SandboxNetworkPolicy> {
+) -> InterfaceResult<SandboxNetworkPolicy> {
     let policy = policy.validated()?;
     match &policy {
         SandboxNetworkPolicy::Open => Ok(policy),
@@ -33,27 +37,94 @@ pub(crate) fn validate(
                 .iter()
                 .any(|destination| matches!(destination, EgressDestination::Domain(_)))
             {
-                return Err(Error::UnsupportedNetworkPolicy {
+                return Err(InterfaceError::UnsupportedNetworkPolicy {
                     policy: policy.clone(),
                 });
             }
             validate_deny_overlap(destinations, deployment_denies)?;
             Ok(policy)
         }
-        unsupported => Err(Error::UnsupportedNetworkPolicy {
+        unsupported => Err(InterfaceError::UnsupportedNetworkPolicy {
             policy: unsupported.clone(),
         }),
     }
 }
 
-pub(crate) fn allow_out(policy: &SandboxNetworkPolicy) -> Option<Vec<String>> {
+/// Clones canonical destinations for the independently validated control seam.
+pub(crate) fn destinations(policy: &SandboxNetworkPolicy) -> Option<Vec<EgressDestination>> {
     match policy {
         SandboxNetworkPolicy::Open => None,
-        SandboxNetworkPolicy::Allowlist { destinations } => {
-            Some(destinations.iter().map(ToString::to_string).collect())
-        }
+        SandboxNetworkPolicy::Allowlist { destinations } => Some(destinations.clone()),
         _ => None,
     }
+}
+
+/// Canonical E2B create-body fields after direct-client safety validation.
+pub(crate) struct ValidatedControlNetwork {
+    /// Merged private and deployment deny rules.
+    pub(crate) deny_out: Vec<String>,
+    /// Canonical IP/CIDR allow rules, absent for an Open policy.
+    pub(crate) allow_out: Option<Vec<String>>,
+}
+
+/// Revalidates public control-client network input before transport.
+pub(crate) fn validate_control_create(
+    allow_public_egress: bool,
+    allowed_destinations: Option<Vec<EgressDestination>>,
+    deployment_denies: Vec<String>,
+) -> AdapterResult<ValidatedControlNetwork> {
+    let mut canonical_denies = Vec::with_capacity(deployment_denies.len());
+    for destination in deployment_denies {
+        let Some(destination) = canonical_ip_destination(&destination) else {
+            return Err(AdapterError::InvalidRequest);
+        };
+        canonical_denies.push(destination);
+    }
+    canonical_denies.sort();
+    canonical_denies.dedup();
+
+    let allow_out = match allowed_destinations {
+        None => None,
+        Some(destinations) => {
+            if allow_public_egress {
+                return Err(AdapterError::InvalidRequest);
+            }
+            let policy = match SandboxNetworkPolicy::allowlist(destinations) {
+                Ok(policy) => policy,
+                Err(_) => return Err(AdapterError::InvalidRequest),
+            };
+            let policy = match validate(&policy, &canonical_denies) {
+                Ok(policy) => policy,
+                Err(_) => return Err(AdapterError::InvalidRequest),
+            };
+            policy_destinations(&policy)
+        }
+    };
+
+    let mut deny_out = PRIVATE_NETWORK_DENIES
+        .iter()
+        .map(|destination| (*destination).to_owned())
+        .collect::<Vec<_>>();
+    deny_out.extend(canonical_denies);
+    deny_out.sort();
+    deny_out.dedup();
+    Ok(ValidatedControlNetwork {
+        deny_out,
+        allow_out,
+    })
+}
+
+/// Canonicalizes one strict bare IP or CIDR rule.
+pub(crate) fn canonical_ip_destination(destination: &str) -> Option<String> {
+    let destination = destination.trim();
+    let value = match destination.split_once('/') {
+        Some((address, prefix)) => EgressDestination::Cidr {
+            address: address.parse().ok()?,
+            prefix: prefix.parse().ok()?,
+        },
+        None => EgressDestination::Ip(destination.parse().ok()?),
+    };
+    Some(value.validated().ok()?.to_string())
 }
 
 pub(crate) fn allow_public_egress(policy: &SandboxNetworkPolicy, configured: bool) -> bool {
@@ -82,26 +153,40 @@ pub(crate) fn fingerprint(policy: &SandboxNetworkPolicy) -> Option<String> {
     ))
 }
 
+fn policy_destinations(policy: &SandboxNetworkPolicy) -> Option<Vec<String>> {
+    match policy {
+        SandboxNetworkPolicy::Allowlist { destinations } => {
+            Some(destinations.iter().map(ToString::to_string).collect())
+        }
+        SandboxNetworkPolicy::Open => None,
+        _ => None,
+    }
+}
+
 fn validate_deny_overlap(
     destinations: &[EgressDestination],
     deployment_denies: &[String],
-) -> Result<()> {
+) -> InterfaceResult<()> {
     let mut denies = PRIVATE_NETWORK_DENIES
         .iter()
         .map(|value| parse_range(value))
         .collect::<Option<Vec<_>>>()
-        .ok_or_else(|| Error::internal_message("invalid built-in E2B private deny range"))?;
+        .ok_or_else(|| {
+            InterfaceError::internal_message("invalid built-in E2B private deny range")
+        })?;
     denies.extend(
         deployment_denies
             .iter()
             .map(|value| parse_range(value))
             .collect::<Option<Vec<_>>>()
-            .ok_or_else(|| Error::internal_message("invalid validated E2B profile deny range"))?,
+            .ok_or_else(|| {
+                InterfaceError::internal_message("invalid validated E2B profile deny range")
+            })?,
     );
     for destination in destinations {
         let allowed = destination_range(destination);
         if allowed.is_some_and(|allowed| denies.iter().any(|denied| denied.overlaps(allowed))) {
-            return Err(Error::EgressDestinationDenied);
+            return Err(InterfaceError::EgressDestinationDenied);
         }
     }
     Ok(())

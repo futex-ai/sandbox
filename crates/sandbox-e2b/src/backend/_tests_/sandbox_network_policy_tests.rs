@@ -55,7 +55,13 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
                 assert!(!request.allow_public_egress);
                 assert_eq!(
                     request.allowed_destinations,
-                    Some(vec!["192.0.2.10".to_owned(), "198.51.100.0/24".to_owned(),])
+                    Some(vec![
+                        EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))),
+                        EgressDestination::Cidr {
+                            address: IpAddr::V4(Ipv4Addr::new(198, 51, 100, 0)),
+                            prefix: 24,
+                        },
+                    ])
                 );
                 assert_eq!(request.denied_destinations, ["203.0.113.10/32".to_owned()]);
                 assert!(

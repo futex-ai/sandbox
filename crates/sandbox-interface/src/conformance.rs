@@ -31,7 +31,8 @@ pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Re
 /// prevents an application response from a different HTTPS destination.
 ///
 /// The target image must provide `/bin/sh` and `curl`. The helper tracks and
-/// destroys its sandbox even when either fetch probe fails.
+/// destroys its sandbox even when either fetch probe fails. Both curl commands
+/// disable startup configuration before processing any other option.
 pub async fn exercise_network_allowlist(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);

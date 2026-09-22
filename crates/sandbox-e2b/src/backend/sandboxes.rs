@@ -82,7 +82,7 @@ pub(super) async fn create(
                 profile.allow_public_egress,
             ),
             denied_destinations: profile.denied_destinations.clone(),
-            allowed_destinations: network::allow_out(&network),
+            allowed_destinations: network::destinations(&network),
             idle_timeout_seconds: backend.config.idle_timeout_seconds(),
         })
         .await;
