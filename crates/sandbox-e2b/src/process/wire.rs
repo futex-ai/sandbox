@@ -31,8 +31,12 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
                 TERMINAL_WRAPPER,
                 [
                     request.log_path,
+                    request.identity_path,
                     request.log_limit.to_string(),
                     request.workload_user,
+                    request.terminal_id.to_string(),
+                    request.operation_id.to_string(),
+                    request.tag.clone(),
                 ],
             ),
             envs,
@@ -212,3 +216,7 @@ mod selector_tests;
 #[cfg(test)]
 #[path = "_tests_/wire_tests.rs"]
 mod wire_tests;
+
+#[cfg(test)]
+#[path = "_tests_/wire_context_tests.rs"]
+mod wire_context_tests;

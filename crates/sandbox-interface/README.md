@@ -30,6 +30,9 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
+After local validation, sandbox creation dispatches its one provider mutation
+without a fallible inventory preflight. Once that call starts, only recovery
+reads may follow; ambiguous delivery never permits a second create.
 Creation also carries `SandboxLifetime`. `IdleAutoPause` is the default for
 resumable interactive sessions. `OneShot { max_lifetime }` never pauses or
 resumes and must use a whole-second duration from 1 through 3600 seconds; the
@@ -97,6 +100,21 @@ adapters must keep write-revocation state and terminal transcript storage
 outside workload control, and a trusted recorder must not expose its storage
 descriptor to the interactive shell. Image cleanup must refuse symlinked
 parents instead of traversing them.
+The adapter must persist a trusted, versioned terminal identity before the
+shell can exit. Recovery and inspection return the same provider reference as
+`Exited` when only that identity and transcript remain; input rejects that
+state, close retains the identity for final output reads, and unknown record
+versions fail closed. Restored cleanup removes retained identity state. Storage
+initialization precedes identity lookup, and the final record name becomes
+visible only after its contents are synced and atomically published without
+replacement. Inspection and output use the same record-aware resolution and
+validate any present record even while the process is live.
+Selector-only fallback applies only to a record-free live legacy terminal,
+keeping an exited terminal's transcript readable after unrelated PID reuse
+without accepting a conflicting terminal tag. Only confirmed identity-file
+absence permits that fallback. Bounded output reads carry an earlier absolute
+completion deadline so provider-side identity helpers reserve both termination
+and return time before the outer deadline.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only

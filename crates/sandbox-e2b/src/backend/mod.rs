@@ -15,7 +15,9 @@ mod screen_resize;
 mod screen_stack;
 mod snapshots;
 mod terminal_identity;
+mod terminal_operations;
 mod terminal_output;
+mod terminal_record;
 mod terminal_storage;
 mod terminals;
 
@@ -32,7 +34,7 @@ mod sandbox_create_tests;
 mod sandbox_lifetime_access_tests;
 
 #[cfg(test)]
-#[path = "_tests_/backend_conformance_tests.rs"]
+#[path = "_tests_/backend_conformance/mod.rs"]
 mod backend_conformance_tests;
 
 #[cfg(test)]
@@ -81,6 +83,14 @@ mod snapshot_delete_tests;
 #[cfg(test)]
 #[path = "_tests_/terminal_recovery_tests.rs"]
 mod terminal_recovery_tests;
+
+#[cfg(test)]
+#[path = "_tests_/terminal_exit_recovery_tests.rs"]
+mod terminal_exit_recovery_tests;
+
+#[cfg(test)]
+#[path = "_tests_/terminal_exit_operations_tests.rs"]
+mod terminal_exit_operations_tests;
 
 #[cfg(test)]
 #[path = "_tests_/terminal_limit_tests.rs"]

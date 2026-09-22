@@ -39,22 +39,26 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata, including the typed sandbox consumer and lifetime,
-to recover ambiguous delivery. Idle-auto-pause creation preserves the existing
+Sandbox creates dispatch directly after local validation, without a provider
+inventory preflight, and carry exact metadata including the typed consumer and
+lifetime. Ambiguous delivery uses only metadata-filtered recovery reads and
+never sends a second create. Idle-auto-pause creation preserves the existing
 resumable request body. A one-shot create disables pause and resume and uses
 its validated 1-to-3600-second maximum as E2B's destruction timeout. Create and
 recovery reject invalid lifetimes before provider access. A sandbox ID must be
 a lowercase DNS-label fragment that fits every envd hostname. An accepted
-create with an unusable ID remains delivery-ambiguous; managed inventory rejects the same ID as provider
-unavailability, maps recognized consumer and lifetime metadata, and leaves
+create with an unusable ID remains delivery-ambiguous; managed inventory
+rejects the same ID as provider unavailability, maps recognized consumer and
+lifetime metadata, and leaves
 missing or malformed values absent for older resources. Before connect or
 pause, the concrete client reads that metadata. Running one-shot envd access
 uses the non-mutating detail response; paused one-shot sandboxes are not resumed
 and their original timeout is never extended. Because detail does not return a
 private-traffic token, one-shot port ingress fails safely. Create and recover
 validate the same profile and network-policy rules before any control request.
-Snapshot creation and recovery require a nonempty source sandbox and correlation name before an
-authenticated request. Bounded, cursor-safe snapshot inventory rejects an
+Snapshot creation and recovery require a nonempty source sandbox and
+correlation name before an authenticated request. Bounded, cursor-safe snapshot
+inventory rejects an
 empty or dot-segment identity as provider unavailability; an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
 inspection also rejects a response whose ID differs from the requested ID.
@@ -65,8 +69,25 @@ Terminal identities combine an E2B PID with the consumer terminal ID; start
 and inventory responses reject PID zero before exposing a process. Reads
 verify both identity values,
 while input and close operations use envd's atomic tag selector so PID reuse
-cannot retarget them. File reads use one descriptor-relative, non-following
-helper; writes stage their payload, bind it to the caller-computed SHA-256
+cannot retarget them. Before the login shell can run, the trusted supervisor
+initializes its private storage, fsyncs a root-owned `0600` versioned identity
+record containing the PID, terminal ID, operation ID, and exact tag under a
+temporary name, then atomically publishes the final name without replacement.
+Recovery and inspection use it to return the same provider reference as
+`Exited` after an immediate shell exit. Live terminals without a record remain
+compatible; exited legacy terminals and unknown record versions fail closed.
+Inspection and output validate every present record, including for a live
+terminal, before using selector-only fallback for a record-free legacy
+terminal. This record-aware resolution means unrelated PID reuse cannot hide
+an exited terminal's retained transcript while same-tag conflicts fail closed.
+Only typed file absence enables legacy fallback; provider terminal absence
+propagates. Output reads carry an earlier absolute completion deadline into the
+identity helper; the process transport derives its execution cutoff by
+reserving the full termination window and return time. Input rejects exited
+terminals. Explicit close retains the record so final output remains readable,
+and restored cleanup removes all terminal identity state. File
+reads use one descriptor-relative, non-following helper; writes stage their
+payload, bind it to the caller-computed SHA-256
 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
@@ -258,7 +279,9 @@ deletable snapshot handle.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
 - `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
+- `src/backend/terminal_record.rs` — strict durable terminal identity records.
 - `src/control/` — E2B control API boundary.
+- `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.
