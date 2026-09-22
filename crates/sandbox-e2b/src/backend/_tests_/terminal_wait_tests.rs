@@ -59,7 +59,7 @@ async fn terminal_create_and_durable_read_map_process_state() {
             .answers(&|_, connection, _| {
                 assert_eq!(connection.user(), Some("root"));
                 Ok(ProcessFileChunk {
-                    bytes: b"output".to_vec(),
+                    bytes: b"call-local-token\r\n\x1b[31m\xff".to_vec(),
                     total_size: 64,
                 })
             }),
@@ -83,7 +83,7 @@ async fn terminal_create_and_durable_read_map_process_state() {
             terminal_provider_ref: terminal.provider_ref.clone(),
             provider_log_path: terminal.provider_log_path.clone(),
             offset: 5,
-            max_bytes: 16,
+            max_bytes: 64,
             provider_log_limit: 64,
             wait: Duration::ZERO,
         })
@@ -96,8 +96,8 @@ async fn terminal_create_and_durable_read_map_process_state() {
             .provider_log_path
             .contains(&terminal_id.to_string())
     );
-    assert_eq!(output.bytes, b"output");
-    assert_eq!(output.next_offset, 11);
+    assert_eq!(output.bytes, b"call-local-token\r\n\x1b[31m\xff");
+    assert_eq!(output.next_offset, 5 + output.bytes.len() as u64);
     assert_eq!(output.state, TerminalState::Ready);
     assert!(output.overflowed);
 }

@@ -1,5 +1,7 @@
 //! Alternate-backend bounded process behavior.
 
+use std::collections::BTreeMap;
+
 use sandbox_interface::{BackendRunProcessRequest, Result, SandboxProcessOutput};
 
 pub(super) fn run(request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
@@ -8,11 +10,16 @@ pub(super) fn run(request: BackendRunProcessRequest) -> Result<SandboxProcessOut
         request.args,
         [
             "-c",
-            "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2"
+            "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2"
         ]
     );
+    assert_eq!(request.cwd.as_deref(), Some("/workspace"));
+    assert_eq!(
+        request.envs,
+        BTreeMap::from([("SANDBOX_PROBE".to_owned(), "environment-map".to_owned())])
+    );
     Ok(SandboxProcessOutput {
-        stdout: b"argv-direct".to_vec(),
+        stdout: b"/workspace\nenvironment-map".to_vec(),
         stderr: b"separate-stderr".to_vec(),
         exit_code: Some(0),
         exited: true,

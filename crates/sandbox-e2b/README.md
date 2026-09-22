@@ -137,11 +137,25 @@ combined stateless output cap is at most 64 MiB. Caller-controlled process,
 read-only execution, and regular-file durations cannot exceed 300 seconds.
 Terminal output waits cannot exceed 30 seconds. Every bound is checked before
 provider access, and absolute Tokio deadlines use checked arithmetic. Failed
-image-command diagnostics redact the call-local
-opaque sandbox ID and envd access token before returning bounded output,
-including a sensitive suffix split by the streaming tail boundary. Malformed
-process data with zero or multiple output channels is rejected instead of
+image-command diagnostics contain only exit and capture metadata. Captured
+text never enters the handled error, so credentials and provider identities
+need no output matching or normalization. Malformed process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
+Direct process starts also forward an optional validated absolute working
+directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
+NUL or control characters. Environment names follow
+`[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and requests allow at most 256
+entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
+`DYLD_*` are rejected as template-owned. Execution-request and captured-output `Debug` contain
+only selected metadata, with no command text, paths, environment names or
+values, or captured contents. Validation errors never echo a rejected name or
+value. Process and terminal bytes remain unmasked in returned results and
+saved transcripts; only their automatic diagnostic representations omit
+content. Tracing uses static events and selected metadata. Read-only execution
+keeps its existing explicit cwd and passes no environment entries; PTY startup keeps its
+fixed locale and terminal map.
+The shared conformance probe verifies the selected cwd and environment on
+stdout while independently asserting a deterministic stderr token.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Process, read-only, and private-port hosts use the adapter's validated
@@ -277,4 +291,5 @@ deletable snapshot handle.
 
 - [Sandbox contract](../../docs/sandbox-contract.md)
 - [E2B adapter guarantees](../../docs/e2b-adapter.md)
+- [Process data and diagnostics](../../docs/process-diagnostics.md)
 - [E2B snapshot documentation](https://e2b.dev/docs/sandbox/snapshots)

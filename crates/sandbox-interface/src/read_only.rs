@@ -25,7 +25,7 @@ pub struct ReadOnlySandbox {
 }
 
 /// Stateless, non-interactive command executed in an already-live sandbox.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ReadOnlyExecRequest {
     /// Caller resource owner.
     pub owner: ResourceOwner,
@@ -44,7 +44,7 @@ pub struct ReadOnlyExecRequest {
 }
 
 /// Bounded combined output from a stateless read-only command.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ReadOnlyExecOutput {
     /// Combined stdout and stderr bytes in provider order.
     pub bytes: Vec<u8>,
@@ -86,7 +86,7 @@ pub struct ReadOnlyFileOutput {
 /// [`PROCESS_RUN_MAX_STREAM_BYTES`](crate::PROCESS_RUN_MAX_STREAM_BYTES), and a
 /// timeout above [`PROCESS_RUN_MAX_DEADLINE`](crate::PROCESS_RUN_MAX_DEADLINE)
 /// before acquiring provider access.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendReadOnlyExecRequest {
     /// Source provider sandbox reference.
     pub sandbox_provider_ref: ProviderRef,

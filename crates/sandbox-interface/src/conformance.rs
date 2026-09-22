@@ -1,6 +1,6 @@
 //! Reusable backend conformance harness for provider implementations.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use uuid::Uuid;
 
@@ -13,7 +13,10 @@ use crate::{
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
-const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2";
+const PROCESS_CWD: &str = "/workspace";
+const PROCESS_ENV_VALUE: &str = "environment-map";
+const PROCESS_SCRIPT: &str = "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2";
+const PROCESS_STDERR: &[u8] = b"separate-stderr";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
@@ -129,13 +132,15 @@ async fn exercise_backend_with_resources(
             sandbox_provider_ref: source.provider_ref.clone(),
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), PROCESS_SCRIPT.to_owned()],
+            cwd: Some(PROCESS_CWD.to_owned()),
+            envs: BTreeMap::from([("SANDBOX_PROBE".to_owned(), PROCESS_ENV_VALUE.to_owned())]),
             stdout_limit: 4096,
             stderr_limit: 1024,
             deadline: Duration::from_secs(60),
         })
         .await?;
-    if process.stdout != b"argv-direct"
-        || process.stderr != b"separate-stderr"
+    if process.stdout != b"/workspace\nenvironment-map"
+        || process.stderr != PROCESS_STDERR
         || process.exit_code != Some(0)
         || !process.exited
         || process.stdout_overflowed

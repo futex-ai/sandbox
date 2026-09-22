@@ -34,7 +34,7 @@ mod sandbox_create_tests;
 mod sandbox_lifetime_access_tests;
 
 #[cfg(test)]
-#[path = "_tests_/backend_conformance_tests.rs"]
+#[path = "_tests_/backend_conformance/mod.rs"]
 mod backend_conformance_tests;
 
 #[cfg(test)]
@@ -44,6 +44,10 @@ mod port_ingress_tests;
 #[cfg(test)]
 #[path = "_tests_/process_run_tests.rs"]
 mod process_run_tests;
+
+#[cfg(test)]
+#[path = "_tests_/process_environment_redaction_tests.rs"]
+mod process_environment_redaction_tests;
 
 #[cfg(test)]
 #[path = "_tests_/read_only_exec_tests.rs"]

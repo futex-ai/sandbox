@@ -168,6 +168,15 @@ deadlines must use checked arithmetic so no caller duration can panic. In
 particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
+Trusted direct-process callers may select an optional working directory and
+environment map. A working directory must be absolute, at most 4,096 UTF-8
+bytes, and contain no NUL or control character. Environment names must match
+`[A-Za-z_][A-Za-z0-9_]*`; values may contain arbitrary UTF-8 except NUL. A map
+contains at most 256 entries and at most 64 KiB across the UTF-8 bytes of every
+name and value. `PATH`, `HOME`, every `LD_*` name, and every `DYLD_*` name are
+template-owned and cannot be overridden. The same interface-owned validation
+must run before provider access. Stateless read-only execution retains its
+required explicit working directory and does not accept an environment map.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
@@ -265,12 +274,17 @@ normal helper exit. An adapter that cannot confirm resize process termination
 returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
 fence and arrange cleanup.
 
-Provider diagnostics returned through handled errors must not contain secret
-values or opaque backend handles. Image-command failures must redact every
-provider identifier and credential known to the adapter before applying the
-final output bound. If streaming capture already omitted earlier bytes, a
-leading fragment that can be the suffix of a known sensitive value must also
-be redacted. Unknown profile errors do not echo an untrusted profile name.
+[Process diagnostics](process-diagnostics.md) define the boundary between
+sensitive process data and automatic diagnostics. Process and terminal `Debug`,
+tracing, and handled image errors expose selected metadata only. They omit
+caller-controlled command text, paths, environment entries, input, and output
+contents instead of matching known secrets. Image failures retain exit and
+capture facts without output snippets; nested provider references hide their
+contents in `Debug`. Environment validation reports typed reasons without
+echoing a name or value. Unknown profile errors do not echo an untrusted name.
+Raw stdout/stderr, PTY output, and saved terminal transcripts remain unmasked
+within their existing bounds. Their explicit data access and transcript
+serialization must preserve content, even when it contains a secret.
 
 ## Conformance
 
@@ -278,9 +292,10 @@ The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
 It includes `exercise_one_shot_lifetime`, which creates, recovers, explicitly
 destroys, and idempotently cleans up a bounded one-shot sandbox.
-The process probe uses `/bin/sh` plus a self-contained script that emits exact
-stdout and stderr bytes; conforming images therefore need a standard shell but
-no harness-only executable.
+The process probe runs one `/bin/sh` command with `/workspace` as its working
+directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
+environment bytes on stdout plus an independent deterministic token on stderr,
+so conforming images need a standard shell but no harness-only executable.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never

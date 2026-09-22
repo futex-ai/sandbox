@@ -12,13 +12,13 @@ use sandbox_interface::{Error, ResourceKind, conformance::exercise_backend};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
-    ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
-    ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
-    ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
-    ProcessSelector, ProcessSplitOutput, ProcessTransportMock, SandboxMetadata,
+    ControlSandbox, ControlSandboxReadAccess, ControlSandboxState, ControlSnapshot,
+    E2bControlApiMock, ProcessFileChunk, ProcessInfo, ProcessRegularFileRequest,
+    ProcessRegularFileWriteRequest, ProcessRunOutput, ProcessSelector, ProcessSplitOutput,
+    ProcessTransportMock, SandboxMetadata, backend::configured::E2bSandboxBackend,
 };
 
-use super::configured::E2bSandboxBackend;
+use super::fixtures::{access, config};
 
 #[tokio::test]
 async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
@@ -242,11 +242,16 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                     command.args,
                     [
                         "-c",
-                        "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2"
+                        "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2"
                     ]
                 );
+                assert_eq!(command.cwd.as_deref(), Some("/workspace"));
+                assert_eq!(
+                    command.envs.get("SANDBOX_PROBE").map(String::as_str),
+                    Some("environment-map")
+                );
                 Ok(ProcessSplitOutput {
-                    stdout: b"argv-direct".to_vec(),
+                    stdout: b"/workspace\nenvironment-map".to_vec(),
                     stderr: b"separate-stderr".to_vec(),
                     exit_code: Some(0),
                     exited: true,
@@ -266,31 +271,4 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
     exercise_backend(&backend, "general")
         .await
         .expect("E2B adapter should conform");
-}
-
-fn config() -> E2bAdapterConfig {
-    E2bAdapterConfig::new(
-        "configured-e2b",
-        "https://api.e2b.app",
-        "api-key",
-        HashMap::from([(
-            "general".to_owned(),
-            E2bProfile {
-                template: "base".to_owned(),
-                allow_public_egress: false,
-                denied_destinations: vec!["203.0.113.10/32".to_owned()],
-            },
-        )]),
-        600,
-    )
-    .expect("valid adapter config")
-}
-
-fn access(sandbox_id: &str) -> ControlSandboxAccess {
-    ControlSandboxAccess {
-        sandbox_id: sandbox_id.to_owned(),
-        domain: "e2b.app".to_owned(),
-        envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: Some("traffic-token".to_owned()),
-    }
 }

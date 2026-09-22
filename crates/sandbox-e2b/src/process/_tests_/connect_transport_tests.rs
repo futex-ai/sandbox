@@ -234,6 +234,7 @@ async fn run_and_list_decode_typed_unary_and_stream_responses() {
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
                 cwd: Some("/workspace".to_owned()),
+                envs: Default::default(),
                 output_capture: ProcessOutputCapture::HardLimit { max_bytes: 16 },
                 timeout: Duration::from_secs(10),
                 read_only: false,

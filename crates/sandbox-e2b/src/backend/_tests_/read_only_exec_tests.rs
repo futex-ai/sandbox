@@ -35,6 +35,7 @@ async fn read_only_exec_forwards_exact_argv_cwd_and_bounds_without_a_pty() {
                 assert_eq!(command.command, "/usr/bin/git");
                 assert_eq!(command.args, ["status", "--short"]);
                 assert_eq!(command.cwd.as_deref(), Some("/tmp/sandbox/repo"));
+                assert!(command.envs.is_empty());
                 assert_eq!(
                     command.output_capture,
                     ProcessOutputCapture::HardLimit { max_bytes: 4096 }

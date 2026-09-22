@@ -148,6 +148,7 @@ fn command(request: ProcessRegularFileRequest) -> ProcessCommand {
             ],
         ),
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit {
             max_bytes: request.max_bytes.saturating_add(SIZE_HEADER_BYTES),
         },

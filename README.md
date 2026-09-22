@@ -34,11 +34,12 @@ adapter proves exactly one completed snapshot. Both snapshot probes in the
 shared conformance harness accept immediate or asynchronous completion. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
-runs its split-output check through a self-contained `/bin/sh` command available
-in normal backend images. Cleanup always attempts every tracked terminal,
-snapshot, and sandbox; an operation error remains the reported error even if a
-cleanup step also fails. Trusted adapter helpers isolate their interpreter
-startup from sandbox-owned modules and Python environment customization.
+runs its cwd, environment, and split-output check through one self-contained
+`/bin/sh` command available in normal backend images. Cleanup always attempts
+every tracked terminal, snapshot, and sandbox; an operation error remains the
+reported error even if a cleanup step also fails. Trusted adapter helpers
+isolate their interpreter startup from sandbox-owned modules and Python
+environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
 credentials before construction. Sandbox creation and inventory require a
@@ -73,9 +74,14 @@ including 30-second terminal output waits and 300-second process operations.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
-output before credentials are acquired. Image preparation validates every input
-path and size before it
-connects, incomplete filesystem-size measurements fail closed, and cache
+output before credentials are acquired. Trusted direct process calls may select
+a validated absolute working directory and bounded environment map, while
+template-owned resolution variables remain protected. Process and terminal
+diagnostics expose selected metadata only; command text, environment entries,
+and output contents are omitted. Terminal output, saved transcripts, and
+returned stdout/stderr remain unmasked. Image failures report exit and capture
+facts without output snippets. Image preparation validates every input path
+and size before it connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A
 replacement payload remains inside a root-owned private directory on the
@@ -173,6 +179,8 @@ copy application orchestration or provider template infrastructure.
   protocol.
 - [`docs/e2b-adapter.md`](docs/e2b-adapter.md) documents adapter guarantees and
   configuration.
+- [`docs/process-diagnostics.md`](docs/process-diagnostics.md) separates exact
+  sensitive process data from metadata-only diagnostics.
 - [`docs/juno-adoption.md`](docs/juno-adoption.md) describes the separate
   consumer cutover.
 - [`plans/README.md`](plans/README.md) indexes implementation plans.
