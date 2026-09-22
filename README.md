@@ -19,9 +19,12 @@ application -> sandbox-interface <- sandbox-e2b
 Consumers should depend on `sandbox-interface`. Only the process that selects
 and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
 credentials, payloads, access tokens, and errors out of higher-level services.
-Sandbox create requests carry their runtime-or-browser consumer class through
-provider metadata; managed inventory returns that class when present and leaves
-it absent for resources created before the metadata existed.
+Sandbox create requests carry their runtime-or-browser consumer class and typed
+lifetime through provider metadata. Interactive sandboxes keep idle auto-pause
+by default; bounded one-shot sandboxes remain running until explicit destroy or
+their maximum 3600-second provider timeout and are never resumed. Managed
+inventory returns recognized metadata and leaves missing or malformed values
+unknown.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
@@ -45,10 +48,11 @@ inventory reject IDs that later control routes cannot use, and snapshot
 inspection verifies that the provider returned the requested ID. Accepted
 creates remain delivery-ambiguous, while malformed inventory remains
 retryable. Snapshot operations also require one nonempty source and correlation
-value. Sandbox create and connect responses require nonblank process and
-private-traffic credentials. Provider mutations accept only their exact
-acknowledgment, including an exact versioned screen-resize object; process
-start and inventory responses must contain a nonzero PID. Connect streaming
+value. Sandbox create and ordinary connect responses require nonblank process
+and private-traffic credentials; one-shot reconnect uses GET-only envd access
+so it cannot refresh the destruction deadline. Provider mutations accept only
+their exact acknowledgment, including an exact versioned screen-resize object;
+process start and inventory responses must contain a nonzero PID. Connect streaming
 collectors keep reading after a process end until they validate the required
 success trailer; a missing, malformed, or unsuccessful trailer cannot look like
 ordinary completion. Envd and private-port hosts always use the configured

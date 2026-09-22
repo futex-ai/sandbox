@@ -1,10 +1,10 @@
 //! Sandbox creation validation regressions.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendCreateSandboxRequest, Error, OperationId, ResourceOwner, SandboxBackend,
-    SandboxConsumer, SandboxId, SandboxNetworkPolicy,
+    BackendCreateSandboxRequest, Error, OperationId, ResourceOwner, SANDBOX_ONE_SHOT_MAX_LIFETIME,
+    SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -22,16 +22,11 @@ async fn unknown_profile_is_rejected_before_provider_dispatch() {
     );
 
     let result = backend
-        .create_sandbox(BackendCreateSandboxRequest {
-            sandbox_id: SandboxId::new(),
-            operation_id: OperationId::new(),
-            owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),
-            consumer: SandboxConsumer::Runtime,
-            deployment_id: "deployment".to_owned(),
-            profile: "missing".to_owned(),
-            network: SandboxNetworkPolicy::Open,
-            snapshot_provider_ref: None,
-        })
+        .create_sandbox(request(
+            "missing",
+            SandboxConsumer::Runtime,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await;
 
     assert!(matches!(result, Err(Error::UnknownProfile)));
@@ -46,23 +41,70 @@ async fn unknown_profile_recovery_is_rejected_before_provider_dispatch() {
     );
 
     let result = backend
-        .recover_sandbox_create(BackendCreateSandboxRequest {
-            sandbox_id: SandboxId::new(),
-            operation_id: OperationId::new(),
-            owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),
-            consumer: SandboxConsumer::Runtime,
-            deployment_id: "deployment".to_owned(),
-            profile: "missing".to_owned(),
-            network: SandboxNetworkPolicy::Open,
-            snapshot_provider_ref: None,
-        })
+        .recover_sandbox_create(request(
+            "missing",
+            SandboxConsumer::Runtime,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await;
 
     assert!(matches!(result, Err(Error::UnknownProfile)));
 }
 
 #[tokio::test]
-async fn sandbox_consumer_is_included_in_provider_correlation_metadata() {
+async fn invalid_one_shot_bounds_are_rejected_before_create_provider_access() {
+    let backend = E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    );
+
+    for max_lifetime in [
+        Duration::ZERO,
+        SANDBOX_ONE_SHOT_MAX_LIFETIME + Duration::from_secs(1),
+    ] {
+        let result = backend
+            .create_sandbox(request(
+                "general",
+                SandboxConsumer::Runtime,
+                SandboxLifetime::OneShot { max_lifetime },
+            ))
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(Error::InvalidSeconds {
+                field: "max_lifetime",
+                minimum: 1,
+                maximum: 3600,
+            })
+        ));
+    }
+}
+
+#[tokio::test]
+async fn recovery_revalidates_one_shot_lifetime_before_provider_access() {
+    let backend = E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    );
+
+    let result = backend
+        .recover_sandbox_create(request(
+            "general",
+            SandboxConsumer::Runtime,
+            SandboxLifetime::OneShot {
+                max_lifetime: SANDBOX_ONE_SHOT_MAX_LIFETIME + Duration::from_secs(1),
+            },
+        ))
+        .await;
+
+    assert!(matches!(result, Err(Error::InvalidSeconds { .. })));
+}
+
+#[tokio::test]
+async fn idle_lifetime_and_consumer_are_included_in_correlation_metadata() {
     let control = Unimock::new(
         E2bControlApiMock::list_sandboxes
             .next_call(matching!(_))
@@ -71,6 +113,11 @@ async fn sandbox_consumer_is_included_in_provider_correlation_metadata() {
                     metadata.get("sandbox_consumer").map(String::as_str),
                     Some("browser")
                 );
+                assert_eq!(
+                    metadata.get("sandbox_lifetime").map(String::as_str),
+                    Some("idle_auto_pause")
+                );
+                assert!(!metadata.contains_key("sandbox_one_shot_max_lifetime_seconds"));
                 Ok(vec![ControlSandbox {
                     sandbox_id: "existing".to_owned(),
                     state: ControlSandboxState::Running,
@@ -82,18 +129,69 @@ async fn sandbox_consumer_is_included_in_provider_correlation_metadata() {
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(Unimock::new(())));
 
     backend
-        .create_sandbox(BackendCreateSandboxRequest {
-            sandbox_id: SandboxId::new(),
-            operation_id: OperationId::new(),
-            owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),
-            consumer: SandboxConsumer::Browser,
-            deployment_id: "deployment".to_owned(),
-            profile: "general".to_owned(),
-            network: SandboxNetworkPolicy::Open,
-            snapshot_provider_ref: None,
-        })
+        .create_sandbox(request(
+            "general",
+            SandboxConsumer::Browser,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await
         .expect("browser sandbox metadata should be recoverable");
+}
+
+#[tokio::test]
+async fn one_shot_duration_is_included_in_correlation_metadata() {
+    let control = Unimock::new(
+        E2bControlApiMock::list_sandboxes
+            .next_call(matching!(_))
+            .answers(&|_, metadata| {
+                assert_eq!(
+                    metadata.get("sandbox_lifetime").map(String::as_str),
+                    Some("one_shot")
+                );
+                assert_eq!(
+                    metadata
+                        .get("sandbox_one_shot_max_lifetime_seconds")
+                        .map(String::as_str),
+                    Some("90")
+                );
+                Ok(vec![ControlSandbox {
+                    sandbox_id: "existing".to_owned(),
+                    state: ControlSandboxState::Running,
+                    metadata: metadata.clone(),
+                }])
+            }),
+    );
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(Unimock::new(())));
+
+    backend
+        .create_sandbox(request(
+            "general",
+            SandboxConsumer::Runtime,
+            SandboxLifetime::OneShot {
+                max_lifetime: Duration::from_secs(90),
+            },
+        ))
+        .await
+        .expect("one-shot metadata should be recoverable");
+}
+
+fn request(
+    profile: &str,
+    consumer: SandboxConsumer,
+    lifetime: SandboxLifetime,
+) -> BackendCreateSandboxRequest {
+    BackendCreateSandboxRequest {
+        sandbox_id: SandboxId::new(),
+        operation_id: OperationId::new(),
+        owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),
+        consumer,
+        lifetime,
+        deployment_id: "deployment".to_owned(),
+        profile: profile.to_owned(),
+        network: SandboxNetworkPolicy::Open,
+        snapshot_provider_ref: None,
+    }
 }
 
 fn config() -> E2bAdapterConfig {

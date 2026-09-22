@@ -125,7 +125,7 @@ async fn valid_execution_context_is_forwarded_to_the_process_transport() {
                 sandbox_id: "provider".to_owned(),
                 domain: "untrusted.example".to_owned(),
                 envd_access_token: "access-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     ));
     let processes = Arc::new(Unimock::new(

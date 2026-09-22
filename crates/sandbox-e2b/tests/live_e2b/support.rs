@@ -195,6 +195,7 @@ pub(super) fn sandbox_request(
         operation_id: OperationId::new(),
         owner,
         consumer: SandboxConsumer::Runtime,
+        lifetime: sandbox_interface::SandboxLifetime::IdleAutoPause,
         deployment_id: "live-test".to_owned(),
         profile: "live".to_owned(),
         snapshot_provider_ref,

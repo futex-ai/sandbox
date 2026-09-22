@@ -9,7 +9,7 @@ use crate::{
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
     BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
     BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend,
-    SandboxConsumer, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy, SnapshotId, TerminalId,
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
@@ -23,9 +23,32 @@ const PROCESS_STDERR: &[u8] = b"separate-stderr";
 /// The target image must provide `/bin/sh`; the process probe supplies its own
 /// script and requires exact stdout and stderr bytes.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    exercise_one_shot_lifetime(backend, profile).await?;
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
     let outcome = exercise_backend_with_resources(backend, &mut resources, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
+/// Proves that a backend can create, recover, and explicitly destroy a bounded
+/// one-shot sandbox without relying on idle pause or resume behavior.
+pub async fn exercise_one_shot_lifetime(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let request = sandbox_request(
+        owner,
+        profile,
+        None,
+        SandboxLifetime::OneShot {
+            max_lifetime: Duration::from_secs(60),
+        },
+    );
+    let outcome = match resources.create_sandbox(request).await {
+        Ok(sandbox) => backend.destroy_sandbox(sandbox.provider_ref).await,
+        Err(error) => Err(error),
+    };
     let cleanup = resources.cleanup().await;
     finish(outcome, cleanup)
 }
@@ -41,7 +64,12 @@ async fn exercise_backend_with_resources(
     let workspace_id = Uuid::now_v7();
     let owner = ResourceOwner::agent(workspace_id, Uuid::now_v7());
     let source = resources
-        .create_sandbox(sandbox_request(owner, profile, None))
+        .create_sandbox(sandbox_request(
+            owner,
+            profile,
+            None,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await?;
     backend.inspect_sandbox(source.provider_ref.clone()).await?;
     let paused = backend.pause_sandbox(source.provider_ref.clone()).await?;
@@ -128,6 +156,7 @@ async fn exercise_backend_with_resources(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -138,6 +167,7 @@ async fn exercise_backend_with_resources(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -196,12 +226,14 @@ fn sandbox_request(
     owner: ResourceOwner,
     profile: &str,
     snapshot_provider_ref: Option<crate::ProviderRef>,
+    lifetime: SandboxLifetime,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
         consumer: SandboxConsumer::Runtime,
+        lifetime,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

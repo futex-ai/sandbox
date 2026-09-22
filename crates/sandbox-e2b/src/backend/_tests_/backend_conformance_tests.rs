@@ -52,10 +52,11 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 let created_sandboxes = created_sandboxes.clone();
                 Arc::new(move |_, request| {
                     let sandbox_id = match create_index.fetch_add(1, Ordering::Relaxed) {
-                        0 => "source",
-                        1 => "restore-one",
-                        2 => "restore-two",
-                        3 => "image-source",
+                        0 => "one-shot",
+                        1 => "source",
+                        2 => "restore-one",
+                        3 => "restore-two",
+                        4 => "image-source",
                         _ => "failed-image-source",
                     };
                     created_sandboxes
@@ -290,6 +291,6 @@ fn access(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
