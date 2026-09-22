@@ -128,8 +128,10 @@ cleanup can extend its deadline.
 - [x] Resolve the terminal-outcome backpressure finding below after the
       maintainer chooses a solution.
 - [x] Re-run focused and full checks, then audit the backpressure fix diff.
-- [ ] Commit and push the backpressure fix, then run `cargo xtask review` on the
+- [x] Commit and push the backpressure fix, then run `cargo xtask review` on the
       clean branch and record every new finding without automatically fixing it.
+- [ ] Resolve the post-exit timer classification finding below after the
+      maintainer chooses a solution.
 - [ ] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md` after the review workflow finishes.
 
@@ -151,3 +153,16 @@ cleanup can extend its deadline.
    **Resolution:** Option A now uses an independent one-shot terminal slot. A
    regression fills the bounded queue, pauses the consumer, proves cleanup
    starts, then verifies queued output still precedes the outcome.
+
+2. **Severity: medium — classify post-exit timer expiry as transport
+   failure.** In `crates/sandbox-e2b/src/process/stream_run.rs:125`, the
+   deadline and idle timer branches emit their timeout outcomes even after an
+   `Exited` event has been observed but before the required success trailer.
+   Doing nothing reports an unverified completion sequence as a routine timeout,
+   while collected execution and the documented trailer contract treat a
+   missing final marker as malformed transport completion. Option A: once exit
+   is observed, map deadline or idle expiry—including expiry while delivering
+   `Exited`—to `TransportFailure`. Option B: change the shared contract and
+   collected behavior so timeout outcomes take precedence after exit.
+   **Recommendation: A**, because it preserves the existing final-trailer
+   invariant consistently across collected and streaming execution.
