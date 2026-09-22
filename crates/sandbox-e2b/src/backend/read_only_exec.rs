@@ -1,0 +1,50 @@
+//! Stateless read-only command execution through E2B envd.
+
+use sandbox_interface::{BackendReadOnlyExecRequest, Error, ReadOnlyExecOutput, Result};
+
+use crate::process::{ProcessCommand, ProcessOutputCapture};
+
+use super::{configured::E2bSandboxBackend, mapping, process_run};
+
+pub(super) async fn execute(
+    backend: &E2bSandboxBackend,
+    request: BackendReadOnlyExecRequest,
+) -> Result<ReadOnlyExecOutput> {
+    process_run::validate_argv("executable", &request.executable, &request.args)?;
+    process_run::validate_stream_limit("output_limit", request.output_limit)?;
+    process_run::validate_duration("timeout", request.timeout)?;
+    let connection = mapping::read_only_connection(backend, &request.sandbox_provider_ref).await?;
+    let output = backend
+        .processes
+        .run(
+            connection,
+            ProcessCommand {
+                command: request.executable,
+                args: request.args,
+                cwd: Some(request.cwd),
+                output_capture: ProcessOutputCapture::HardLimit {
+                    max_bytes: request.output_limit,
+                },
+                timeout: request.timeout,
+                read_only: true,
+            },
+        )
+        .await?;
+    if output.output_truncated {
+        return Err(Error::ReadOnlyOutputTooLarge);
+    }
+    let Some(exit_code) = output.exit_code else {
+        return Err(Error::BackendUnavailable {
+            backend_id: backend.config.backend_id().to_owned(),
+        });
+    };
+    if !output.exited {
+        return Err(Error::BackendUnavailable {
+            backend_id: backend.config.backend_id().to_owned(),
+        });
+    }
+    Ok(ReadOnlyExecOutput {
+        bytes: output.bytes,
+        exit_code,
+    })
+}
