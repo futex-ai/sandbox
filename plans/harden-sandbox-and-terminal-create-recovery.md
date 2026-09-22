@@ -189,9 +189,9 @@ weakening terminal identity fencing.
 - [x] Align protocol and adapter documentation with the final read behavior.
 - [x] Run focused regressions, formatting, Clippy, the full workspace test
       suite, file-length lint, smoke coverage, and `cargo xtask check`.
-- [ ] Audit the final diff, commit and push the fix, confirm GitHub CI, and run
+- [x] Audit the final diff, commit and push the fix, confirm GitHub CI, and run
       a clean post-push `cargo xtask review` against `origin/main`.
-- [ ] After a clean review, mark this milestone complete and move the plan back
+- [x] After a clean review, mark this milestone complete and move the plan back
       to Completed in `plans/README.md`.
 
 ## Milestone 6: Validate Live Terminal Identity Records
@@ -228,9 +228,9 @@ while record-free legacy terminals retain their selector-only fallback.
 - [x] Audit the final diff, run `git add -A`, commit all work with a
       Conventional Commit, push the branch, and confirm GitHub CI passes on
       that exact commit.
-- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+- [x] Run a clean post-push `cargo xtask review` against `origin/main` and
       record any findings without automatically fixing them.
-- [ ] After a clean review, mark the remaining milestones complete and move
+- [x] After a clean review, mark the remaining milestones complete and move
       this plan back to Completed in `plans/README.md`.
 
 ## Milestone 7: Bound And Type Identity Record Reads
@@ -287,9 +287,9 @@ selector fallback.
 - [x] Audit the final diff, run `git add -A`, commit all work with a
       Conventional Commit, push the branch, and confirm GitHub CI passes on
       that exact commit.
-- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+- [x] Run a clean post-push `cargo xtask review` against `origin/main` and
       record any findings without automatically fixing them.
-- [ ] After a clean review, mark the remaining milestones complete and move
+- [x] After a clean review, mark the remaining milestones complete and move
       this plan back to Completed in `plans/README.md`.
 
 ## Milestone 8: Preserve Post-Close Output And Absolute Cleanup Bounds
@@ -338,10 +338,10 @@ their termination attempt before an earlier absolute helper deadline.
       and absolute helper cleanup bounds.
 - [x] Run focused regressions, formatting, Clippy, the full workspace test
       suite, file-length lint, smoke coverage, and `cargo xtask check`.
-- [ ] Audit the final diff, run `git add -A`, commit all work with a
+- [x] Audit the final diff, run `git add -A`, commit all work with a
       Conventional Commit, push the branch, and confirm GitHub CI passes on
       that exact commit.
-- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+- [x] Run a clean post-push `cargo xtask review` against `origin/main` and
       record any findings without automatically fixing them.
-- [ ] After a clean review, mark the remaining milestones complete and move
+- [x] After a clean review, mark the remaining milestones complete and move
       this plan back to Completed in `plans/README.md`.
