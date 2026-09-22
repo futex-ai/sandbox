@@ -1,14 +1,21 @@
 //! Pre-dispatch validation coverage for bounded process execution.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+    time::Duration,
+};
 
 use sandbox_interface::{
     BackendRunProcessRequest, Error, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_DEADLINE,
-    PROCESS_RUN_MAX_STREAM_BYTES, ProviderRef, SandboxBackend,
+    PROCESS_RUN_MAX_STREAM_BYTES, ProcessRunContextError, ProviderRef, SandboxBackend,
 };
-use unimock::Unimock;
+use unimock::{MockFn, Unimock, matching};
 
-use crate::{E2bAdapterConfig, E2bProfile};
+use crate::{
+    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessSplitOutput,
+    ProcessTransportMock,
+};
 
 use super::configured::E2bSandboxBackend;
 
@@ -83,6 +90,75 @@ async fn unbounded_deadline_is_rejected_without_panicking_or_dispatching() {
     ));
 }
 
+#[tokio::test]
+async fn invalid_execution_context_is_rejected_before_provider_dispatch() {
+    let mut cwd_request = valid_request();
+    cwd_request.cwd = Some("relative".to_owned());
+    let cwd_error = rejected(cwd_request).await;
+    assert!(matches!(
+        cwd_error,
+        Error::InvalidProcessRunContext {
+            reason: ProcessRunContextError::InvalidWorkingDirectory
+        }
+    ));
+
+    let mut env_request = valid_request();
+    env_request
+        .envs
+        .insert("PATH".to_owned(), "secret-path".to_owned());
+    let env_error = rejected(env_request).await;
+    assert!(matches!(
+        env_error,
+        Error::InvalidProcessRunContext {
+            reason: ProcessRunContextError::TemplateOwnedEnvironmentName { ref name }
+        } if name == "PATH"
+    ));
+    assert!(!env_error.to_string().contains("secret-path"));
+}
+
+#[tokio::test]
+async fn valid_execution_context_is_forwarded_to_the_process_transport() {
+    let control = Arc::new(Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("provider"))
+            .returns(Ok(ControlSandboxAccess {
+                sandbox_id: "provider".to_owned(),
+                domain: "untrusted.example".to_owned(),
+                envd_access_token: "access-token".to_owned(),
+                traffic_access_token: "traffic-token".to_owned(),
+            })),
+    ));
+    let processes = Arc::new(Unimock::new(
+        ProcessTransportMock::run_split
+            .next_call(matching!(_, _))
+            .answers(&|_, connection, command| {
+                assert_eq!(connection.sandbox_domain(), "e2b.app");
+                assert_eq!(command.cwd.as_deref(), Some("/workspace/repo"));
+                assert_eq!(
+                    command.envs,
+                    BTreeMap::from([("SANDBOX_PROBE".to_owned(), "adapter-value".to_owned())])
+                );
+                Ok(ProcessSplitOutput {
+                    exit_code: Some(0),
+                    exited: true,
+                    ..ProcessSplitOutput::default()
+                })
+            }),
+    ));
+    let backend = E2bSandboxBackend::with_transports(config(), control, processes);
+    let mut request = valid_request();
+    request.cwd = Some("/workspace/repo".to_owned());
+    request.envs = BTreeMap::from([("SANDBOX_PROBE".to_owned(), "adapter-value".to_owned())]);
+
+    let output = backend
+        .run_process(request)
+        .await
+        .expect("valid process context should run");
+
+    assert_eq!(output.exit_code, Some(0));
+    assert!(output.exited);
+}
+
 async fn rejected(request: BackendRunProcessRequest) -> Error {
     backend()
         .run_process(request)
@@ -95,6 +171,8 @@ fn valid_request() -> BackendRunProcessRequest {
         sandbox_provider_ref: ProviderRef::new("provider"),
         command: "printf".to_owned(),
         args: vec!["ok".to_owned()],
+        cwd: None,
+        envs: Default::default(),
         stdout_limit: 4096,
         stderr_limit: 4096,
         deadline: PROCESS_RUN_MAX_DEADLINE,

@@ -50,19 +50,29 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
 }
 
 pub(super) fn command_start(command: ProcessCommand) -> StartRequestWire {
-    process_start(command.command, command.args, command.cwd)
+    process_start(command.command, command.args, command.cwd, command.envs)
 }
 
-pub(super) fn argv_start(command: String, args: Vec<String>) -> StartRequestWire {
-    process_start(command, args, None)
+pub(super) fn argv_start(
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    envs: BTreeMap<String, String>,
+) -> StartRequestWire {
+    process_start(command, args, cwd, envs)
 }
 
-fn process_start(command: String, args: Vec<String>, cwd: Option<String>) -> StartRequestWire {
+fn process_start(
+    command: String,
+    args: Vec<String>,
+    cwd: Option<String>,
+    envs: BTreeMap<String, String>,
+) -> StartRequestWire {
     StartRequestWire {
         process: ProcessConfigWire {
             cmd: command,
             args,
-            envs: BTreeMap::new(),
+            envs,
             cwd,
         },
         pty: None,

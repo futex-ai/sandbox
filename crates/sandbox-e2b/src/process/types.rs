@@ -1,6 +1,6 @@
 //! Provider-process types and swappable transport trait.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use sandbox_interface::Result;
@@ -24,7 +24,7 @@ pub struct ProcessPtyRequest {
 }
 
 /// Non-interactive process command used for maintenance and file ingestion.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessCommand {
     /// Executable path.
     pub command: String,
@@ -32,6 +32,8 @@ pub struct ProcessCommand {
     pub args: Vec<String>,
     /// Optional initial working directory.
     pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Explicit output overflow behavior for this command.
     pub output_capture: ProcessOutputCapture,
     /// Maximum command execution duration, capped at 300 seconds.
@@ -56,12 +58,16 @@ pub enum ProcessOutputCapture {
 }
 
 /// Non-interactive process command with separate stream capture bounds.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct SplitProcessCommand {
     /// Executable path or `PATH`-resolved command name.
     pub command: String,
     /// Exact argument vector.
     pub args: Vec<String>,
+    /// Optional initial working directory.
+    pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Maximum captured stdout bytes before overflow is reported.
     pub stdout_limit: usize,
     /// Maximum captured stderr bytes before overflow is reported.

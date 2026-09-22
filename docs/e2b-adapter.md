@@ -171,6 +171,19 @@ overflows, or fails decoding is killed with a bounded cleanup call once its PID
 has been observed; persistent terminal connections are left running
 intentionally.
 
+Direct-process requests pass their validated optional `cwd` and `envs` to
+envd's `Start` request. The working directory must be absolute, no longer than
+4,096 UTF-8 bytes, and free of NUL and control characters. Environment names
+use `[A-Za-z_][A-Za-z0-9_]*`; values reject NUL. At most 256 entries and 64 KiB
+across every name and value are accepted. The adapter rejects `PATH`, `HOME`,
+all `LD_*`, and all `DYLD_*` names so the template remains responsible for
+executable and loader resolution. Validation happens before the control API is
+asked for sandbox access. Environment values are redacted from request and
+command debug output and are included in image-failure output redaction. The
+stateless read-only path still supplies only its existing explicit `cwd` and an
+empty environment map. PTY startup remains separate and keeps its fixed
+`LANG`, `LC_ALL`, and `TERM` values plus its existing optional `cwd`.
+
 The adapter starts every trusted Python file and terminal helper with isolated
 module lookup and without Python site initialization. Sandbox files in the
 working directory, `PYTHONPATH`, user-site packages, and startup customization
@@ -209,9 +222,10 @@ Terminal creation and recovery reject a provider log limit above the shared
 cannot grow beyond what that reader accepts.
 Oversized replacement writes fail before acquiring mutating sandbox access.
 
-The public backend conformance process uses `/bin/sh` with a self-contained
-script that emits exact stdout and stderr bytes, so a normal E2B image does not
-need a test-only executable.
+The public backend conformance process runs
+`/bin/sh -c 'pwd; printf %s "$SANDBOX_PROBE"'` with `/workspace` and one
+environment entry, then checks the exact output bytes. A normal E2B image does
+not need a test-only executable.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the

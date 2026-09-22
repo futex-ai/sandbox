@@ -38,6 +38,15 @@ seconds. Terminal create and recovery requests cap the durable transcript at
 the same 256 MiB ceiling as readable regular files. Backends reject every
 command, output, duration, and transcript bound before acquiring provider
 access.
+Trusted direct-process requests may also carry an optional absolute working
+directory and an ordered environment map. The working directory is capped at
+4,096 bytes and rejects NUL or control characters. Environment names use
+`[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and the map is capped at 256
+entries and 64 KiB across name and value bytes. `PATH`, `HOME`, `LD_*`, and
+`DYLD_*` remain template-owned. `ProcessRunContextError` preserves the typed
+rejection reason, while request `Debug` output redacts every environment value.
+Stateless read-only execution keeps its explicit working directory and exposes
+no environment map.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is
@@ -49,9 +58,9 @@ final status instead of accepting an absent or unsuccessful completion marker.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
-Its process probe invokes `/bin/sh` with a self-contained script that emits
-exact stdout and stderr bytes, so a normal backend image needs no test-only
-executable.
+Its process probe invokes `/bin/sh` with a self-contained `pwd` and environment
+script, a selected working directory, and one environment entry, so a normal
+backend image needs no test-only executable.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so

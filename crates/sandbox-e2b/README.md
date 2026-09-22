@@ -114,6 +114,15 @@ opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
 process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
+Direct process starts also forward an optional validated absolute working
+directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
+NUL or control characters. Environment names follow
+`[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and requests allow at most 256
+entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
+`DYLD_*` are rejected as template-owned. Environment values are redacted from
+request and transport debugging, tracing, handled errors, and image-command
+failure output. Read-only execution keeps its existing explicit cwd and passes
+no environment entries; PTY startup keeps its fixed locale and terminal map.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Process, read-only, and private-port hosts use the adapter's validated

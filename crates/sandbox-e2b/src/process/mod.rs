@@ -1,5 +1,6 @@
 //! E2B envd Process/PTY Connect transport.
 
+mod command_debug;
 mod connect;
 mod connect_helpers;
 mod connection;

@@ -158,6 +158,7 @@ fn command(output_capture: ProcessOutputCapture) -> ProcessCommand {
         command: "/bin/false".to_owned(),
         args: Vec::new(),
         cwd: None,
+        envs: Default::default(),
         output_capture,
         timeout: Duration::from_secs(10),
         read_only: false,

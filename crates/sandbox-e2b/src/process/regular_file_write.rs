@@ -194,6 +194,7 @@ fn command(attempt: &WriteAttempt) -> ProcessCommand {
             ],
         ),
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: WRITE_TIMEOUT,
         read_only: false,

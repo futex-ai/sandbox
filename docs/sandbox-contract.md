@@ -145,6 +145,15 @@ deadlines must use checked arithmetic so no caller duration can panic. In
 particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
+Trusted direct-process callers may select an optional working directory and
+environment map. A working directory must be absolute, at most 4,096 UTF-8
+bytes, and contain no NUL or control character. Environment names must match
+`[A-Za-z_][A-Za-z0-9_]*`; values may contain arbitrary UTF-8 except NUL. A map
+contains at most 256 entries and at most 64 KiB across the UTF-8 bytes of every
+name and value. `PATH`, `HOME`, every `LD_*` name, and every `DYLD_*` name are
+template-owned and cannot be overridden. The same interface-owned validation
+must run before provider access. Stateless read-only execution retains its
+required explicit working directory and does not accept an environment map.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
@@ -215,15 +224,19 @@ values or opaque backend handles. Image-command failures must redact every
 provider identifier and credential known to the adapter before applying the
 final output bound. If streaming capture already omitted earlier bytes, a
 leading fragment that can be the suffix of a known sensitive value must also
-be redacted. Unknown profile errors do not echo an untrusted profile name.
+be redacted. Direct-process environment values are secrets: request and
+transport debug output, tracing, handled errors, and image-command diagnostics
+must never expose them. Unknown profile errors do not echo an untrusted profile
+name.
 
 ## Conformance
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-The process probe uses `/bin/sh` plus a self-contained script that emits exact
-stdout and stderr bytes; conforming images therefore need a standard shell but
-no harness-only executable.
+The process probe runs `/bin/sh -c 'pwd; printf %s "$SANDBOX_PROBE"'` with
+`/workspace` as its working directory and one `SANDBOX_PROBE` entry, then
+checks the exact combined working-directory and environment bytes. Conforming
+images therefore need a standard shell but no harness-only executable.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never

@@ -39,6 +39,10 @@ mod port_ingress_tests;
 mod process_run_tests;
 
 #[cfg(test)]
+#[path = "_tests_/process_environment_redaction_tests.rs"]
+mod process_environment_redaction_tests;
+
+#[cfg(test)]
 #[path = "_tests_/read_only_exec_tests.rs"]
 mod read_only_exec_tests;
 #[cfg(test)]

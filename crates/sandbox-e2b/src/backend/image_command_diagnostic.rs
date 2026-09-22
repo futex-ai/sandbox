@@ -30,6 +30,7 @@ pub(super) async fn run_phase(
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), command],
             cwd: None,
+            envs: Default::default(),
             output_capture: phase.output_capture(),
             timeout: IMAGE_COMMAND_TIMEOUT,
             read_only: false,
@@ -45,10 +46,11 @@ pub(super) async fn run_process_phase(
     command: ProcessCommand,
     phase: ImagePhase,
 ) -> Result<()> {
-    let sensitive_values = [
+    let mut sensitive_values = vec![
         connection.sandbox_id().to_owned(),
         connection.access_token().to_owned(),
     ];
+    sensitive_values.extend(command.envs.values().cloned());
     let output = backend.processes.run(connection, command).await?;
     if output.succeeded() {
         return Ok(());

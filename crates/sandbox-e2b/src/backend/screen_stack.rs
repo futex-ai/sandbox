@@ -108,6 +108,8 @@ async fn run(
                     .screen_helper_path()
                     .to_owned(),
                 args,
+                cwd: None,
+                envs: Default::default(),
                 stdout_limit: SCREEN_STDOUT_LIMIT,
                 stderr_limit: SCREEN_STDERR_LIMIT,
                 deadline: timeout,
