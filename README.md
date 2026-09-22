@@ -53,6 +53,12 @@ success trailer; a missing, malformed, or unsuccessful trailer cannot look like
 ordinary completion. Envd and private-port hosts always use the configured
 routing domain, never a domain supplied by an injected control response.
 Missing read credentials stay retryable.
+Sandbox creation sends its one provider mutation without an inventory
+preflight; ambiguous delivery can only use recovery reads. Terminal supervisors
+persist a root-owned versioned PID, operation, terminal, and tag record before
+the login shell can exit, allowing recovery and inspection to return the same
+provider reference as `Exited`. Input rejects exited terminals, while close and
+restored cleanup remove the trusted identity state idempotently.
 Caller-controlled process durations are capped before provider access,
 including 30-second terminal output waits and 300-second process operations.
 Terminal creation and recovery also reject transcript limits above the shared

@@ -3,12 +3,13 @@
 use std::{
     fs,
     io::Write,
-    os::unix::fs::symlink,
+    os::unix::fs::{PermissionsExt, symlink},
     process::{Command, Stdio},
     thread,
     time::{Duration, Instant},
 };
 
+use sandbox_interface::{OperationId, TerminalId};
 use tempfile::tempdir;
 
 use super::{ListResponseWire, TERMINAL_WRAPPER, decode};
@@ -122,13 +123,49 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
     assert!(!transcript.is_empty() && transcript.len() < 1024 * 1024);
 }
 
+#[test]
+fn terminal_wrapper_persists_a_private_versioned_identity() {
+    let directory = tempdir().expect("temporary transcript directory");
+    let transcript = directory.path().join("terminal.log");
+    let identity = transcript.with_extension("identity.json");
+    let mut child = start_wrapper(&transcript, 1024);
+    let mut input = child.stdin.take().expect("terminal wrapper stdin");
+    input.write_all(b"exit\n").expect("exit terminal shell");
+
+    let status = child.wait().expect("wait for terminal wrapper");
+    let metadata = fs::metadata(&identity).expect("durable terminal identity");
+    let record: serde_json::Value =
+        serde_json::from_slice(&fs::read(identity).expect("read durable terminal identity"))
+            .expect("versioned terminal identity JSON");
+
+    assert!(status.success(), "terminal wrapper did not exit normally");
+    assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
+    assert_eq!(record["schema"], "sandbox-e2b-terminal-identity-v1");
+    assert!(record["pid"].as_u64().is_some_and(|pid| pid > 0));
+}
+
 fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
     let wrapper = test_wrapper();
+    let identity_path = path.with_extension("identity.json");
+    let terminal_id = TerminalId::new();
+    let parent = path.parent().expect("terminal transcript parent");
+    if fs::symlink_metadata(parent)
+        .expect("terminal transcript parent metadata")
+        .file_type()
+        .is_dir()
+    {
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))
+            .expect("private terminal transcript parent");
+    }
     Command::new("/usr/bin/timeout")
         .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", &wrapper])
         .arg(path)
+        .arg(identity_path)
         .arg(limit.to_string())
         .arg(current_username())
+        .arg(terminal_id.to_string())
+        .arg(OperationId::new().to_string())
+        .arg(format!("sandbox-terminal-{terminal_id}"))
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

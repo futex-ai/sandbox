@@ -70,7 +70,7 @@ pub(super) async fn read(
             Err(_) => return Err(provider_read_timeout(backend)),
         };
         let process = identity.resolve(
-            listed,
+            &listed,
             backend.config.runtime_conventions().terminal_tag_prefix(),
         )?;
         let helper_timeout =

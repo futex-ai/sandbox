@@ -55,23 +55,30 @@ impl TerminalIdentity {
         self.terminal_id
     }
 
+    pub(super) const fn pid(self) -> u32 {
+        self.pid
+    }
+
     pub(super) fn resolve(
         self,
-        processes: Vec<ProcessInfo>,
+        processes: &[ProcessInfo],
         terminal_tag_prefix: &str,
     ) -> Result<Option<ProcessInfo>> {
         let expected_tag = terminal_tag(terminal_tag_prefix, self.terminal_id);
-        if let Some(process) = processes.iter().find(|process| {
-            process.pid == self.pid && process.tag.as_deref() == Some(expected_tag.as_str())
-        }) {
-            return Ok(Some(process.clone()));
-        }
-        if processes.iter().any(|process| process.pid == self.pid) {
-            return Err(Error::NotFound {
+        let tagged = processes
+            .iter()
+            .filter(|process| process.tag.as_deref() == Some(expected_tag.as_str()))
+            .collect::<Vec<_>>();
+        match tagged.as_slice() {
+            [process] if process.pid == self.pid => Ok(Some((*process).clone())),
+            [] if !processes.iter().any(|process| process.pid == self.pid) => Ok(None),
+            [] | [_] => Err(Error::NotFound {
                 resource: ResourceKind::Terminal,
-            });
+            }),
+            _ => Err(Error::internal_message(
+                "multiple E2B terminal processes used one consumer tag",
+            )),
         }
-        Ok(None)
     }
 }
 

@@ -9,7 +9,7 @@ use sandbox_interface::{
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
 
-use crate::{ControlSandbox, ControlSandboxState, E2bAdapterConfig, E2bControlApiMock, E2bProfile};
+use crate::{ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile};
 
 use super::configured::E2bSandboxBackend;
 
@@ -62,20 +62,21 @@ async fn unknown_profile_recovery_is_rejected_before_provider_dispatch() {
 }
 
 #[tokio::test]
-async fn sandbox_consumer_is_included_in_provider_correlation_metadata() {
+async fn sandbox_create_dispatches_without_an_inventory_preflight() {
     let control = Unimock::new(
-        E2bControlApiMock::list_sandboxes
+        E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
-            .answers(&|_, metadata| {
+            .answers(&|_, request| {
                 assert_eq!(
-                    metadata.get("sandbox_consumer").map(String::as_str),
+                    request.metadata.get("sandbox_consumer").map(String::as_str),
                     Some("browser")
                 );
-                Ok(vec![ControlSandbox {
+                Ok(ControlSandboxAccess {
                     sandbox_id: "existing".to_owned(),
-                    state: ControlSandboxState::Running,
-                    metadata: Default::default(),
-                }])
+                    domain: "e2b.app".to_owned(),
+                    envd_access_token: "call-local-token".to_owned(),
+                    traffic_access_token: "traffic-token".to_owned(),
+                })
             }),
     );
     let backend =

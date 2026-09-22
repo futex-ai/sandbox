@@ -149,6 +149,10 @@ pub trait SandboxBackend: Send + Sync {
     ) -> Result<Vec<BackendManagedSandbox>>;
     /// Dispatches a new sandbox create after the caller records create intent.
     ///
+    /// After local validation, the backend must send its one create mutation
+    /// without a fallible provider inventory preflight. Ambiguous delivery may
+    /// use recovery reads but must not dispatch a second mutation.
+    ///
     /// Once invocation starts, retries must call `recover_sandbox_create`
     /// instead of this method until the outcome is reconciled.
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox>;
@@ -230,20 +234,24 @@ pub trait SandboxBackend: Send + Sync {
     ///
     /// Durable transcript capture must be active before a user login profile
     /// can run so startup output and exits cannot bypass terminal bookkeeping.
+    /// The provider identity must also be durably recoverable before that shell
+    /// can exit.
     /// The transcript limit must be validated before provider access and cannot
     /// exceed [`crate::FILE_TRANSFER_MAX_BYTES`].
     async fn create_terminal(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<BackendTerminal>;
-    /// Recovers a correlated terminal create without allocating a new PTY.
+    /// Recovers a correlated terminal create without allocating a new PTY,
+    /// including the original provider reference in `Exited` state when only
+    /// trusted identity state remains.
     ///
     /// The transcript limit has the same pre-provider-access bound as create.
     async fn recover_terminal_create(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<Option<BackendTerminal>>;
-    /// Inspects one provider PTY.
+    /// Inspects one provider PTY, including a durably recorded exited PTY.
     async fn inspect_terminal(
         &self,
         sandbox_provider_ref: ProviderRef,
@@ -254,7 +262,7 @@ pub trait SandboxBackend: Send + Sync {
     /// Sends exact input once; success requires a decoded provider
     /// acknowledgment, and callers fail closed after ambiguous delivery.
     async fn write_terminal(&self, request: BackendInputRequest) -> Result<()>;
-    /// Idempotently closes one provider PTY.
+    /// Idempotently closes one provider PTY and cleans up its durable identity.
     async fn close_terminal(
         &self,
         sandbox_provider_ref: ProviderRef,

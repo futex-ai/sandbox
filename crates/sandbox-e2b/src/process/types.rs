@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sandbox_interface::Result;
+use sandbox_interface::{OperationId, Result, TerminalId};
 
 pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
@@ -15,10 +15,16 @@ pub struct ProcessPtyRequest {
     pub tag: String,
     /// Provider-side transcript path.
     pub log_path: String,
+    /// Trusted provider-side terminal identity record path.
+    pub identity_path: String,
     /// Provider-side transcript hard cap.
     pub log_limit: usize,
     /// Unprivileged account used for the interactive login shell.
     pub workload_user: String,
+    /// Stable consumer terminal correlation handle.
+    pub terminal_id: TerminalId,
+    /// Durable create-operation correlation handle.
+    pub operation_id: OperationId,
     /// Optional initial working directory.
     pub cwd: Option<String>,
 }

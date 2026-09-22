@@ -10,7 +10,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessInfo,
-    ProcessSelector, ProcessTransportMock,
+    ProcessRunOutput, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -35,20 +35,18 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
                     tag: Some(wrong_tag.clone()),
                 }])
             })),
-        ProcessTransportMock::send_input
-            .next_call(matching!(_, _, _))
-            .answers(&|_, connection, _, _| {
-                assert_eq!(connection.user(), Some("root"));
-                Err(Error::NotFound {
-                    resource: ResourceKind::Terminal,
-                })
-            }),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
         ProcessTransportMock::kill
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {
                 assert_eq!(connection.user(), Some("root"));
                 Ok(())
             }),
+        cleanup_success(),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -99,6 +97,12 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
     let write_tag = expected_tag.clone();
     let close_tag = expected_tag;
     let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(write_tag.clone()),
+            }])),
         ProcessTransportMock::send_input
             .next_call(matching!(_, _, _))
             .answers_arc(Arc::new(move |_, connection, selector, input| {
@@ -114,6 +118,7 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
                 assert_eq!(selector, ProcessSelector::Tag(close_tag.clone()));
                 Ok(())
             })),
+        cleanup_success(),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -130,6 +135,17 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
         .close_terminal(ProviderRef::new("sandbox"), terminal_ref)
         .await
         .expect("tag-addressed close");
+}
+
+fn cleanup_success() -> impl unimock::Clause {
+    ProcessTransportMock::run
+        .next_call(matching!(_, _))
+        .returns(Ok(ProcessRunOutput {
+            bytes: Vec::new(),
+            exit_code: Some(0),
+            exited: true,
+            output_truncated: false,
+        }))
 }
 
 fn assert_not_found<T>(result: sandbox_interface::Result<T>) {

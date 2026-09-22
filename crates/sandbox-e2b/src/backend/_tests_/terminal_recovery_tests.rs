@@ -1,7 +1,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendTerminalCreateRequest, Error, OperationId, ProviderRef, SandboxBackend, TerminalId,
+    BackendTerminalCreateRequest, Error, OperationId, ProviderRef, ResourceKind, SandboxBackend,
+    TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -26,14 +27,19 @@ async fn terminal_recovery_finds_the_tagged_process_without_restarting_it() {
                 traffic_access_token: "traffic-token".to_owned(),
             })),
     );
-    let processes = Unimock::new(
+    let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![ProcessInfo {
                 pid: 42,
                 tag: Some(tag),
             }])),
-    );
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
+    ));
     let config = config().with_runtime_conventions(
         E2bRuntimeConventions::new("tenant", "tenant-terminal-", "/opt/tenant/screen-helper")
             .unwrap(),
@@ -76,11 +82,16 @@ async fn terminal_recovery_does_not_allocate_when_the_tag_is_absent() {
                 traffic_access_token: "traffic-token".to_owned(),
             })),
     );
-    let processes = Unimock::new(
+    let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
-    );
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
+    ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
 

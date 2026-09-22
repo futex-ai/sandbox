@@ -39,8 +39,10 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. A sandbox ID must be a lowercase DNS-label
+Sandbox creates dispatch directly after local validation, without a provider
+inventory preflight, and carry exact metadata including the typed consumer
+class. Ambiguous delivery uses only metadata-filtered recovery reads and never
+sends a second create. A sandbox ID must be a lowercase DNS-label
 fragment that fits every envd hostname. An accepted create with an unusable ID
 remains delivery-ambiguous; managed inventory rejects the same ID as provider
 unavailability, maps recognized consumer metadata, and leaves that metadata
@@ -58,7 +60,14 @@ Terminal identities combine an E2B PID with the consumer terminal ID; start
 and inventory responses reject PID zero before exposing a process. Reads
 verify both identity values,
 while input and close operations use envd's atomic tag selector so PID reuse
-cannot retarget them. File reads use one descriptor-relative, non-following
+cannot retarget them. Before the login shell can run, the trusted supervisor
+fsyncs a root-owned `0600` versioned identity record containing the PID,
+terminal ID, operation ID, and exact tag. Recovery and inspection use it to
+return the same provider reference as `Exited` after an immediate shell exit.
+Live terminals without a record remain compatible; exited legacy terminals and
+unknown record versions fail closed. Input rejects exited terminals, explicit
+close removes the record idempotently, and restored cleanup removes all
+terminal identity state. File reads use one descriptor-relative, non-following
 helper; writes stage their payload, bind it to the caller-computed SHA-256
 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
@@ -233,6 +242,7 @@ deletable snapshot handle.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
 - `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
+- `src/backend/terminal_record.rs` — strict durable terminal identity records.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.

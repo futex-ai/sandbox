@@ -45,15 +45,8 @@ async fn ambiguous_sandbox_create_recovers_by_exact_metadata() {
             request.owner.workspace_id.to_string(),
         ),
     ]);
-    let listed_metadata = expected_metadata.clone();
     let created_metadata = expected_metadata.clone();
     let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .answers_arc(Arc::new(move |_, metadata| {
-                assert_eq!(metadata, listed_metadata);
-                Ok(Vec::new())
-            })),
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .answers_arc(Arc::new(move |_, create| {

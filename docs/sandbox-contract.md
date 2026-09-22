@@ -41,6 +41,11 @@ After that call begins, every retry uses the matching recovery method with the
 same request; an empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.
+Sandbox creation must dispatch its one provider mutation directly after local
+validation. It must not put a fallible inventory read before that dispatch,
+because the caller cannot safely replay a create after invocation starts.
+Ambiguous delivery may perform recover-only inventory reads but must never send
+a second provider create.
 Snapshot inventory requires a nonempty source provider reference and nonempty
 correlation value before an authenticated provider request is built. Snapshot
 creation requires the same nonempty values before its mutation is sent.
@@ -193,6 +198,19 @@ shutdown must use the trusted supervisor identity as well. Transcript capture
 starts before that shell, so login-profile output and exits remain captured
 without allowing the shell to replace, truncate, or forge the stored
 transcript.
+
+Before the interactive shell can run or exit, the provider must durably record
+the terminal's provider identity, consumer terminal ID, create-operation ID,
+and atomic process selector in the same trusted storage class as the
+transcript. Recovery validates that versioned record against the original
+request. If the process has already disappeared, recovery and inspection
+return the recorded provider reference and `Exited`; they never allocate a
+replacement. Unknown record versions, malformed records, identity conflicts,
+and duplicate selectors fail closed. A live legacy terminal without a record
+remains discoverable by its exact selector, but an exited legacy terminal has
+no recoverable provider identity. Input rejects an exited terminal. Explicit
+close stays idempotent and removes its identity record; restored-sandbox
+cleanup removes all retained terminal identity state.
 
 Sandbox create and connect access is valid only when the provider returns both
 a nonblank process credential and a nonblank private-traffic credential. An

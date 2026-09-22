@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use sandbox_interface::conformance::exercise_backend;
+use sandbox_interface::{Error, ResourceKind, conformance::exercise_backend};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -208,6 +208,11 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                     })
                 } else {
                     assert_eq!(request.root, "/var/lib/sandbox-e2b/terminals");
+                    if request.path.ends_with(".identity.json") {
+                        return Err(Error::NotFound {
+                            resource: ResourceKind::File,
+                        });
+                    }
                     assert!(request.path.ends_with(".log"));
                     assert_eq!(request.offset, 0);
                     assert_eq!(request.max_bytes, 4096);

@@ -30,6 +30,9 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
+After local validation, sandbox creation dispatches its one provider mutation
+without a fallible inventory preflight. Once that call starts, only recovery
+reads may follow; ambiguous delivery never permits a second create.
 Direct process and stateless read-only execution requests require a non-empty
 command, at most 128 KiB across the command and arguments, and a deadline no
 longer than 300 seconds. Each direct-process stream and the combined stateless
@@ -72,6 +75,11 @@ adapters must keep write-revocation state and terminal transcript storage
 outside workload control, and a trusted recorder must not expose its storage
 descriptor to the interactive shell. Image cleanup must refuse symlinked
 parents instead of traversing them.
+The adapter must persist a trusted, versioned terminal identity before the
+shell can exit. Recovery and inspection return the same provider reference as
+`Exited` when only that identity and transcript remain; input rejects that
+state, close removes the identity idempotently, and unknown record versions
+fail closed.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only

@@ -33,6 +33,11 @@ async fn terminal_create_and_durable_read_map_process_state() {
                 assert_eq!(connection.user(), Some("root"));
                 Ok(Vec::new())
             }),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {

@@ -37,13 +37,13 @@ move a sandbox create into recovery-only mode before any sandbox was requested.
 
 - [x] Record the finding with its exact location, context, impact, options, and
       recommendation in simple language that assumes no repository context.
-- [ ] Add a failing regression showing that a new sandbox create does not
+- [x] Add a failing regression showing that a new sandbox create does not
       depend on a successful inventory request before dispatch.
-- [ ] Remove the unnecessary preflight inventory request, or document and test
+- [x] Remove the unnecessary preflight inventory request, or document and test
       a different explicit pre-dispatch outcome if the interface must change.
-- [ ] Verify ambiguous create delivery still enters recover-only polling and
+- [x] Verify ambiguous create delivery still enters recover-only polling and
       cannot send a second provider create request.
-- [ ] Update the sandbox contract and both crate READMEs with the final
+- [x] Update the sandbox contract and both crate READMEs with the final
       pre-dispatch and recovery behavior.
 
 ## Milestone 2: Recover Terminals That Exit During Creation
@@ -73,17 +73,17 @@ the original create result is saved.
 
 - [x] Record the finding with its exact location, context, impact, options, and
       recommendation in simple language that assumes no repository context.
-- [ ] Define the trusted, versioned terminal-identity record and its ownership,
+- [x] Define the trusted, versioned terminal-identity record and its ownership,
       permissions, lifetime, and compatibility behavior in the protocol docs.
-- [ ] Add failing regressions for an immediate shell exit after a successful or
+- [x] Add failing regressions for an immediate shell exit after a successful or
       delivery-ambiguous terminal start.
-- [ ] Persist terminal identity before the terminal can exit, then make
+- [x] Persist terminal identity before the terminal can exit, then make
       recovery and inspection return the same provider reference and an
       `Exited` state when only the durable record and transcript remain.
-- [ ] Ensure input still rejects an exited terminal, close remains idempotent,
+- [x] Ensure input still rejects an exited terminal, close remains idempotent,
       cleanup removes trusted identity state, and PID reuse cannot target an
       unrelated process.
-- [ ] Update the adapter docs and both crate READMEs with exited-terminal
+- [x] Update the adapter docs and both crate READMEs with exited-terminal
       recovery and identity-record cleanup behavior.
 
 ## Milestone 3: Validate And Review The Recovery Changes
@@ -91,11 +91,11 @@ the original create result is saved.
 At the end of this milestone, both fixes are fully tested, documented,
 committed, pushed, and independently reviewed against `origin/main`.
 
-- [ ] Run focused sandbox-create and terminal-recovery regressions.
-- [ ] Run `cargo fmt --all -- --check`, Clippy, the full workspace test suite,
+- [x] Run focused sandbox-create and terminal-recovery regressions.
+- [x] Run `cargo fmt --all -- --check`, Clippy, the full workspace test suite,
       the file-length lint, smoke coverage, and `cargo xtask check`; fix every
       failure until the complete suite passes.
-- [ ] Audit tracked files for prohibited legacy terms, secrets, generated
+- [x] Audit tracked files for prohibited legacy terms, secrets, generated
       artifacts, whitespace errors, and unrelated edits.
 - [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
       push the branch, and confirm GitHub CI passes on that exact commit.

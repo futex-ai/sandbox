@@ -59,13 +59,6 @@ pub(super) async fn create(
 ) -> Result<BackendSandbox> {
     let profile = validate_request(backend, &request)?;
     let metadata = metadata(backend, &request);
-    let existing = control_result(
-        backend,
-        backend.control.list_sandboxes(metadata.clone()).await,
-    )?;
-    if let Some(existing) = exactly_one(existing)? {
-        return Ok(map_sandbox(existing));
-    }
     let template_id = request.snapshot_provider_ref.map_or_else(
         || profile.template.clone(),
         |reference| reference.as_str().to_owned(),
