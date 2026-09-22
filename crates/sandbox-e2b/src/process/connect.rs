@@ -167,7 +167,7 @@ impl ProcessTransport for ConnectProcessTransport {
             .processes
             .into_iter()
             .map(|process| ProcessInfo {
-                pid: process.pid,
+                pid: process.pid.get(),
                 tag: process.tag,
             })
             .collect())

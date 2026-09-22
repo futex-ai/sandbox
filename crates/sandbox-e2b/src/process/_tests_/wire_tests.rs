@@ -11,7 +11,14 @@ use std::{
 
 use tempfile::tempdir;
 
-use super::TERMINAL_WRAPPER;
+use super::{ListResponseWire, TERMINAL_WRAPPER, decode};
+
+#[test]
+fn list_response_rejects_a_zero_pid() {
+    let result = decode::<ListResponseWire>(br#"{"processes":[{"pid":0,"tag":"terminal"}]}"#);
+
+    assert!(result.is_err());
+}
 
 #[test]
 fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {

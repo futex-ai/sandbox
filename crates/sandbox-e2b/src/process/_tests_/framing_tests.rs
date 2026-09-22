@@ -147,6 +147,14 @@ fn malformed_compressed_base64_and_json_frames_fail_closed() {
 }
 
 #[test]
+fn zero_start_pid_is_malformed() {
+    assert!(matches!(
+        decode_event(br#"{"event":{"start":{"pid":0}}}"#),
+        Err(E2bAdapterError::MalformedFrame)
+    ));
+}
+
+#[test]
 fn complete_frames_are_preserved_before_a_terminal_decode_error() {
     let start = encode_frame(br#"{"event":{"start":{"pid":42}}}"#).expect("start frame");
     let mut decoder = FrameDecoder::new(1024);

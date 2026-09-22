@@ -75,15 +75,21 @@ upload; both the remote writer and cleanup reconciliation must validate that
 identity, not size alone, before replacing the destination. Failed replacement
 attempts must make a bounded cleanup attempt for all provider-side staging and
 destination-temporary files. An uncertain writer must be fenced by an atomic
-revocation or reconciled as an already committed exact replacement. A commit is
-reported only after syncing the destination directory, including when cleanup
-finds the exact replacement already visible. Any writer exit that could follow
-a commit claim uses the same reconciliation; definitive pre-commit validation
-failures preserve their typed errors. If no outcome can be proven, the backend
-returns
+revocation or reconciled as an already committed exact replacement. When
+cleanup finds the exact replacement already visible, it may report a commit
+only after resolving a validated non-root workload identity, preserving the
+opened target's mode, applying that owner, syncing the file, and syncing the
+destination directory. Without that usable workload identity, the outcome is
+unconfirmed. Any writer exit that could follow a commit claim uses the same
+reconciliation; definitive pre-commit validation failures preserve their typed
+errors. If no outcome can be proven, the backend returns
 `FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
 reconciled or destroyed. A normally completed replacement removes its resolved
-state marker, while an uncertain writer retains an atomic marker as its fence.
+state marker. Cleanup for an upload failure or definitive writer rejection must
+also remove and sync its marker after all cleanup succeeds, because no writer
+remains; cleanup failure must leave that marker in place. An uncertain writer
+retains an atomic marker as its fence even when reconciliation proves that the
+replacement committed.
 The writer and reconciler must create that marker as a trusted identity in
 storage the workload cannot traverse, unlink, or replace; a marker in a shared
 temporary directory is not a valid fence. Using a trusted writer for that
@@ -133,8 +139,10 @@ field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
 startup customization, and working-directory modules. User files and inherited
 language environment settings must not run code before the helper's own logic.
-Each provider process-data event must contain exactly one of PTY, stdout, or
-stderr output; an event with no channel or multiple channels is malformed.
+Each provider process start event and process inventory row must contain a
+nonzero operating-system PID. Each process-data event must contain exactly one
+of PTY, stdout, or stderr output; an event with no channel or multiple channels
+is malformed.
 Inherited credential or drive helpers must be stopped with bounded escalation,
 and maintenance or image preparation fails unless their exit is confirmed.
 Provider-owned image verification, scrub, and measurement must not load a

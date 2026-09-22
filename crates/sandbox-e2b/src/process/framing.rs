@@ -7,6 +7,8 @@ use serde::Deserialize;
 
 use crate::error::{Error, Result};
 
+use super::provider_pid::ProviderPid;
+
 const HEADER_BYTES: usize = 5;
 
 pub(super) struct FrameDecoder {
@@ -123,7 +125,7 @@ pub(super) fn decode_event(payload: &[u8]) -> Result<ProcessEvent> {
         return Err(Error::MalformedFrame);
     }
     if let Some(start) = event.start {
-        return Ok(ProcessEvent::Start(start.pid));
+        return Ok(ProcessEvent::Start(start.pid.get()));
     }
     if let Some(data) = event.data {
         let channel_count = usize::from(data.pty.is_some())
@@ -186,7 +188,7 @@ struct EventWire {
 
 #[derive(Deserialize)]
 struct StartWire {
-    pid: u32,
+    pid: ProviderPid,
 }
 
 #[derive(Deserialize)]

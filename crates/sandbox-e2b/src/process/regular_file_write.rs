@@ -70,7 +70,8 @@ pub(super) async fn write(
     );
     if let Err(error) = upload {
         let _outcome =
-            regular_file_cleanup::cleanup(transport, connection, attempt.cleanup_request()).await;
+            regular_file_cleanup::cleanup(transport, connection, attempt.cleanup_request(false))
+                .await;
         return Err(error);
     }
     let output = transport
@@ -84,17 +85,20 @@ pub(super) async fn write(
         Ok(output) => match writer_outcome(transport, output.exit_code) {
             WriterOutcome::Succeeded => Ok(()),
             WriterOutcome::Rejected(error) => {
-                let _outcome =
-                    regular_file_cleanup::cleanup(transport, connection, attempt.cleanup_request())
-                        .await;
+                let _outcome = regular_file_cleanup::cleanup(
+                    transport,
+                    connection,
+                    attempt.cleanup_request(false),
+                )
+                .await;
                 Err(error)
             }
             WriterOutcome::Uncertain(error) => {
-                reconcile_failure(transport, connection, attempt.cleanup_request(), error).await
+                reconcile_failure(transport, connection, attempt.cleanup_request(true), error).await
             }
         },
         Err(error) => {
-            reconcile_failure(transport, connection, attempt.cleanup_request(), error).await
+            reconcile_failure(transport, connection, attempt.cleanup_request(true), error).await
         }
     }
 }
@@ -127,7 +131,7 @@ struct WriteAttempt {
 }
 
 impl WriteAttempt {
-    fn cleanup_request(&self) -> CleanupRequest {
+    fn cleanup_request(&self, retain_fence: bool) -> CleanupRequest {
         CleanupRequest {
             root: self.root.clone(),
             path: self.path.clone(),
@@ -137,6 +141,8 @@ impl WriteAttempt {
             state_path: self.state_path.clone(),
             expected_size: self.expected_size,
             expected_digest: self.expected_digest.clone(),
+            workload_user: self.workload_user.clone(),
+            retain_fence,
         }
     }
 }
@@ -208,6 +214,10 @@ fn payload_digest(bytes: &[u8]) -> String {
 #[cfg(test)]
 #[path = "_tests_/regular_file_write_tests.rs"]
 mod regular_file_write_tests;
+
+#[cfg(test)]
+#[path = "_tests_/regular_file_write_cleanup_policy_tests.rs"]
+mod regular_file_write_cleanup_policy_tests;
 
 #[cfg(test)]
 #[path = "_tests_/regular_file_writer_helper_tests.rs"]

@@ -1003,3 +1003,71 @@ inspection cannot silently return a different provider resource.
 - [ ] After a clean review, resolve superseded closeout tasks, record plan
       completion, and move this plan from Active to Completed in
       `plans/README.md`.
+
+## Milestone 27: Complete Write Recovery And Process Identity Safety
+
+Resolve every finding from the completed request-and-identity review. At the
+end of this milestone, cleanup can report a recovered file commit only after
+the workload ownership and durability handoff is complete, resolved attempts
+do not leave permanent fence markers, and provider processes always have a
+real nonzero operating-system process ID.
+
+### Review Items
+
+1. **Severity: medium — complete the workload handoff before reporting a
+   recovered write.** A replacement write runs through a trusted helper so an
+   untrusted workload cannot swap the verified file before it is committed. If
+   the writer is interrupted after the exact file becomes visible, cleanup can
+   currently report success from its size and digest alone. It does not finish
+   changing the file back to the workload account, preserve its intended mode,
+   or sync the file after that handoff. Doing nothing can return success while
+   leaving the workload unable to use the file, and it can claim durability
+   before all metadata changes are durable. Option A: give cleanup the validated
+   workload identity, preserve the visible file's mode, reuse the normal target
+   finalization path, and sync the containing directory before reporting the
+   commit. Option B: never recover an already-visible target as committed and
+   always return an unconfirmed result. **Recommendation: A**, because it safely
+   completes the original write instead of losing a provable successful result.
+2. **Severity: medium — remove write fences when no writer remains.** A fence
+   marker prevents an uncertain writer from committing after cleanup has
+   revoked it. Upload failures and writer responses that definitively reject a
+   request already prove that no writer remains, but their cleanup currently
+   keeps the marker forever. Doing nothing causes trusted private state to grow
+   without a bound as these ordinary failures accumulate. Option A: make the
+   cleanup request state whether the fence must be retained, and remove and sync
+   it only after successful cleanup when no writer can still act. Option B: add
+   a separate periodic garbage collector for old markers. **Recommendation: A**,
+   because the request path knows exactly when deletion is safe and can reclaim
+   the marker immediately.
+3. **Severity: medium — reject provider process ID zero.** Start and list
+   responses deserialize provider process IDs as ordinary unsigned integers.
+   The value zero is not a usable operating-system process ID, but it currently
+   crosses the adapter boundary as if it were valid. Doing nothing can make
+   later inspection, collection, input, or shutdown target an invalid process
+   identity. Option A: deserialize both response shapes through one shared
+   nonzero process-ID type and convert to the existing public integer only after
+   validation. Option B: add separate manual zero checks in both decoders.
+   **Recommendation: A**, because one type keeps every provider response on the
+   same identity rule.
+
+- [x] Record all three review findings with severity, context, impact, options,
+      and recommendations in simple language that assumes no prior context.
+- [x] Add failing regressions first for recovered ownership and durability,
+      disposable and retained fence cleanup, and zero start/list process IDs.
+- [x] Complete a recovered exact-target write through the validated non-root
+      workload identity, preserved mode, file sync, and directory sync before
+      reporting it committed.
+- [x] Distinguish disposable from retained fences, removing and syncing only a
+      successfully cleaned disposable marker while preserving uncertain fences.
+- [x] Decode start and list process IDs through one shared nonzero wire type.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      recovered write finalization, fence lifetime, and nonzero process IDs.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, resolve superseded closeout tasks, record plan
+      completion, and move this plan from Active to Completed in
+      `plans/README.md`.

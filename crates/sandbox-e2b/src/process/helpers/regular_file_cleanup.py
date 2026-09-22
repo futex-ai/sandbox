@@ -1,6 +1,7 @@
 import errno
 import hashlib
 import os
+import pwd
 import stat
 import sys
 
@@ -161,6 +162,8 @@ def finish_target(directory, target, expected, digest, owner_uid, owner_gid, mod
             observed.update(chunk)
         if observed.hexdigest() != digest:
             return False
+        if mode is None:
+            mode = stat.S_IMODE(metadata.st_mode)
         if (metadata.st_uid, metadata.st_gid) != (owner_uid, owner_gid):
             os.fchown(opened, owner_uid, owner_gid)
         os.fchmod(opened, mode)
@@ -168,6 +171,30 @@ def finish_target(directory, target, expected, digest, owner_uid, owner_gid, mod
         return True
     finally:
         os.close(opened)
+
+
+def workload_identity(username):
+    if not username:
+        raise ValueError()
+    try:
+        account = pwd.getpwnam(username)
+    except KeyError:
+        raise ValueError()
+    if account.pw_uid == 0:
+        raise ValueError()
+    return account.pw_uid, account.pw_gid
+
+
+def remove_state_marker(directory, name, value):
+    os.unlink(name, dir_fd=directory)
+    try:
+        os.fsync(directory)
+    except OSError:
+        try:
+            os.symlink(value, name, dir_fd=directory)
+        except OSError:
+            pass
+        raise
 
 
 directory = None
@@ -184,6 +211,11 @@ try:
     state_path = sys.argv[6]
     expected = int(sys.argv[7])
     expected_digest = sys.argv[8]
+    workload_user = sys.argv[9]
+    retain_fence_text = sys.argv[10]
+    if retain_fence_text not in ('true', 'false'):
+        raise ValueError()
+    retain_fence = retain_fence_text == 'true'
     if len(expected_digest) != 64 or any(
         character not in '0123456789abcdef' for character in expected_digest
     ):
@@ -218,10 +250,21 @@ try:
                 pass
             os.fsync(temporary_directory)
             remove_private_temporary(directory, temporary_name, temporary_identity)
-        os.fsync(directory)
         if target_matches(directory, target, expected, expected_digest):
-            outcome = COMMITTED
+            owner_uid, owner_gid = workload_identity(workload_user)
+            if finish_target(
+                directory,
+                target,
+                expected,
+                expected_digest,
+                owner_uid,
+                owner_gid,
+                None,
+            ):
+                os.fsync(directory)
+                outcome = COMMITTED
         else:
+            os.fsync(directory)
             outcome = REVOKED
     elif state_value.startswith('commit:'):
         owner_uid, owner_gid, mode = committed_identity(state_value, expected_digest)
@@ -261,6 +304,8 @@ try:
         os.fsync(directory)
     else:
         raise ValueError()
+    if outcome != FAILED and not retain_fence:
+        remove_state_marker(state_directory, state_name, state_value)
 except (IndexError, OSError, ValueError):
     outcome = FAILED
 finally:

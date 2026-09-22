@@ -11,6 +11,7 @@ use crate::{
 };
 
 use super::{
+    provider_pid::ProviderPid,
     selector::ProcessSelector,
     types::{ProcessCommand, ProcessPtyRequest},
 };
@@ -190,7 +191,7 @@ pub(super) struct ListResponseWire {
 
 #[derive(Deserialize)]
 pub(super) struct ProcessInfoWire {
-    pub(super) pid: u32,
+    pub(super) pid: ProviderPid,
     pub(super) tag: Option<String>,
 }
 

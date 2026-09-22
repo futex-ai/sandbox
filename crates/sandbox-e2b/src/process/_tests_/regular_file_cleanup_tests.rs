@@ -214,6 +214,8 @@ fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
         state_path: "state".to_owned(),
         expected_size: b"replacement".len(),
         expected_digest: REPLACEMENT_DIGEST.to_owned(),
+        workload_user: current_username(),
+        retain_fence: true,
     });
     let helper = command.args.get_mut(3).expect("embedded cleanup helper");
     *helper = format!(
@@ -256,6 +258,8 @@ fn run(
             .into_owned(),
         expected_size,
         expected_digest: REPLACEMENT_DIGEST.to_owned(),
+        workload_user: current_username(),
+        retain_fence: true,
     });
     Command::new(command.command)
         .args(command.args)
@@ -278,4 +282,16 @@ fn private_temporary(path: &Path, bytes: &[u8]) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))
         .expect("private temporary permissions");
     fs::write(path.join("payload"), bytes).expect("private temporary payload");
+}
+
+fn current_username() -> String {
+    let output = Command::new("/usr/bin/id")
+        .arg("-un")
+        .output()
+        .expect("resolve current username");
+    assert!(output.status.success());
+    String::from_utf8(output.stdout)
+        .expect("UTF-8 username")
+        .trim()
+        .to_owned()
 }

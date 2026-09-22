@@ -51,8 +51,9 @@ authenticated request. Bounded, cursor-safe snapshot inventory rejects an
 empty or dot-segment identity as provider unavailability; an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
 inspection also rejects a response whose ID differs from the requested ID.
-Terminal identities combine an E2B PID with the consumer terminal ID; reads
-verify both values,
+Terminal identities combine an E2B PID with the consumer terminal ID; start
+and inventory responses reject PID zero before exposing a process. Reads
+verify both identity values,
 while input and close operations use envd's atomic tag selector so PID reuse
 cannot retarget them. File reads use one descriptor-relative, non-following
 helper; writes stage their payload, bind it to the caller-computed SHA-256
@@ -67,12 +68,17 @@ the destination so the prepared inode stays on the same filesystem, then keeps
 that directory descriptor open and renames its private payload through the
 descriptor. Renaming or replacing the private directory's visible name cannot
 substitute workload bytes. The writer then assigns the replacement to the
-configured workload account, and the commit marker lets reconciliation finish
-that ownership handoff after a crash.
+configured workload account. When reconciliation finds the exact target after
+a crash, it resolves the validated non-root workload account, preserves the
+target's current mode, and syncs the file and containing directory before
+reporting success.
 An unconfirmed revocation returns a fencing error instead of pretending the
-write safely failed. A writer removes
-its commit marker after the replacement and containing directory are durable;
-an uncertain writer retains a revocation or commit fence for reconciliation.
+write safely failed. A writer removes its commit marker after the replacement
+and containing directory are durable. Cleanup also removes and syncs a resolved
+marker after an upload failure or definitive writer rejection, because those
+paths prove that no writer remains. An uncertain writer retains a revocation or
+commit fence for reconciliation, including when cleanup can prove the target
+was committed.
 Malformed or oversized trusted roots and relative paths fail before a file
 operation acquires provider access. Oversized writes fail before sandbox
 connection. Every trusted Python helper uses isolated module lookup with site

@@ -32,6 +32,8 @@ pub(super) struct CleanupRequest {
     pub(super) state_path: String,
     pub(super) expected_size: usize,
     pub(super) expected_digest: String,
+    pub(super) workload_user: String,
+    pub(super) retain_fence: bool,
 }
 
 pub(super) async fn cleanup(
@@ -71,6 +73,8 @@ fn command(request: CleanupRequest) -> ProcessCommand {
                 request.state_path,
                 request.expected_size.to_string(),
                 request.expected_digest,
+                request.workload_user,
+                request.retain_fence.to_string(),
             ],
         ),
         cwd: None,
@@ -83,3 +87,7 @@ fn command(request: CleanupRequest) -> ProcessCommand {
 #[cfg(test)]
 #[path = "_tests_/regular_file_cleanup_tests.rs"]
 mod regular_file_cleanup_tests;
+
+#[cfg(test)]
+#[path = "_tests_/regular_file_cleanup_review_tests.rs"]
+mod regular_file_cleanup_review_tests;

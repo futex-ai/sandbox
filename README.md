@@ -42,9 +42,10 @@ inspection verifies that the provider returned the requested ID. Accepted
 creates remain delivery-ambiguous, while malformed inventory remains
 retryable. Snapshot operations also require one nonempty source and correlation
 value. Sandbox create and connect responses require nonblank process and
-private-traffic credentials. Provider mutations accept only their exact acknowledgment,
-including an exact versioned screen-resize object;
-missing read credentials stay retryable. Caller-controlled process durations
+private-traffic credentials. Provider mutations accept only their exact
+acknowledgment, including an exact versioned screen-resize object; process
+start and inventory responses must contain a nonzero PID. Missing read
+credentials stay retryable. Caller-controlled process durations
 are capped before provider access, including 30-second terminal output waits
 and 300-second process operations. Stateless commands also reject an empty
 executable, more than 128 KiB of argv, or more than 64 MiB of combined output
@@ -54,8 +55,11 @@ connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A
 replacement payload remains inside a root-owned private directory on the
-destination filesystem until it is renamed through held descriptors, while
-the interactive shell runs as an explicitly configured non-root account.
+destination filesystem until it is renamed through held descriptors. Recovery
+reapplies the validated non-root workload owner, preserves the visible file
+mode, and syncs the file and directory before success. Attempts with no possible
+live writer discard their resolved fence, while uncertain writers keep it. The
+interactive shell runs as an explicitly configured non-root account.
 
 ## Developer Setup
 

@@ -80,7 +80,12 @@ Replacement-file failures are safe to retry only after the backend confirms
 that the remote writer was revoked. `FileWriteUnconfirmed` means the caller
 must keep the sandbox fenced and reconcile or destroy it before another write.
 The revocation marker itself must be owned by a trusted identity and stored
-where the workload cannot unlink or replace it.
+where the workload cannot unlink or replace it. A reconciler may report an
+already-visible exact target as committed only after applying a validated
+non-root workload owner, preserving its mode, and syncing both the file and its
+directory. Resolved attempts with no possible live writer remove their marker;
+uncertain attempts retain it. Provider adapters must also reject process start
+or inventory responses whose operating-system PID is zero.
 
 ## Quick Start
 

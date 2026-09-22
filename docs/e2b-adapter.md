@@ -111,15 +111,21 @@ through non-following directory descriptors and atomically replace the leaf.
 The writer and bounded cleanup helper race for one atomic digest-bearing
 commit-or-revoke marker. A revocation winner prevents every later rename; a
 commit winner lets cleanup finish only after the temporary bytes match the
-requested size and digest, or verify an already visible exact replacement,
-then sync the containing directory before success. Writer exits that could
-follow a commit claim use this same reconciliation path;
+requested size and digest. If cleanup instead finds the exact replacement
+already visible behind a revocation marker, it resolves the configured
+non-root workload account, preserves the opened target's mode, reapplies that
+owner, and syncs both the file and containing directory before success. Without
+a usable workload identity, that recovery remains unconfirmed. Writer exits
+that could follow a commit claim use this same reconciliation path;
 definitive pre-commit rejections retain their typed errors. If neither outcome
 can be confirmed, `FileWriteUnconfirmed`
 requires the caller to keep the sandbox fenced rather than retry. After a
-durable replacement, a normally completing writer removes its commit marker;
-an uncertain writer leaves its atomic fence available for cleanup
-reconciliation. Both helpers run as root and create the marker below
+durable replacement, a normally completing writer removes its commit marker.
+Upload failures and definitive writer rejections also remove and sync their
+marker after cleanup succeeds, because no writer can act afterward. An
+uncertain writer leaves its atomic fence available for cleanup reconciliation,
+even when cleanup proves that the replacement committed. Cleanup failure never
+discards the fence. Both helpers run as root and create the marker below
 `/var/lib/sandbox-e2b/write-fences`, whose descriptor-relative parent creation
 requires root ownership and denies group or other access. A workload process
 therefore cannot remove a revocation and let an older writer commit later. The
@@ -135,7 +141,9 @@ the configured workload account. Its commit marker records the expected
 ownership and mode so reconciliation can finish that handoff after an
 interrupted commit without exposing the temporary bytes to workload tampering.
 Process execution is direct-argv and keeps stdout, stderr, deadlines, and
-overflow outcomes separate. Each decoded process-data event must contain
+overflow outcomes separate. Streaming start events and process inventory rows
+must decode a nonzero operating-system PID before the adapter exposes them.
+Each decoded process-data event must contain
 exactly one of PTY, stdout, or stderr; multiple populated channels fail as
 malformed instead of silently dropping output. Before acquiring sandbox
 access, both direct and stateless commands reject an empty executable and more
