@@ -25,6 +25,11 @@ pub(super) async fn resolve(
         Some(ResourceKind::Sandbox),
     )?;
     mapping::ensure_sandbox_identity(&request.sandbox_provider_ref, &access.sandbox_id)?;
+    let Some(traffic_access_token) = access.traffic_access_token else {
+        return Err(Error::BackendUnavailable {
+            backend_id: backend.config.backend_id().to_owned(),
+        });
+    };
     let expected_host = format!(
         "{}-{}.{}",
         request.port,
@@ -58,7 +63,7 @@ pub(super) async fn resolve(
         upstream.to_string(),
         Some(PortIngressCredential::new(
             TRAFFIC_ACCESS_HEADER,
-            access.traffic_access_token,
+            traffic_access_token,
         )),
     ))
 }

@@ -6,6 +6,8 @@ milestones are finished.
 
 ## Active
 
+- [Add one-shot sandbox lifetimes](one-shot-sandbox-lifetime.md)
+
 ## Completed
 
 - [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)

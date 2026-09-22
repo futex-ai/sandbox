@@ -24,7 +24,7 @@ async fn terminal_recovery_finds_the_tagged_process_without_restarting_it() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((
@@ -80,7 +80,7 @@ async fn terminal_recovery_does_not_allocate_when_the_tag_is_absent() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((
@@ -122,7 +122,7 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let expected_tag = terminal_tag.clone();
@@ -188,7 +188,7 @@ async fn restored_cleanup_rejects_non_normal_helper_termination() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((

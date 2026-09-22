@@ -63,5 +63,6 @@ fn client_without_transport() -> ReqwestE2bControlApi {
         transport: Arc::new(Unimock::new(())),
         sandbox_domain: "e2b.app".to_owned(),
         idle_timeout_seconds: 600,
+        lifetime_metadata_key: "sandbox_lifetime".to_owned(),
     }
 }

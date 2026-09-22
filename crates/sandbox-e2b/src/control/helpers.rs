@@ -46,7 +46,7 @@ pub(super) fn map_access(
         sandbox_id: body.sandbox_id,
         domain: sandbox_domain.to_owned(),
         envd_access_token: token,
-        traffic_access_token: traffic_token,
+        traffic_access_token: Some(traffic_token),
     })
 }
 

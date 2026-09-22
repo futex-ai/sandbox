@@ -35,6 +35,34 @@ and commands use the account present in their templates. Root, unsafe account
 names, unsafe prefixes or paths, shell characters, whitespace, and process
 names longer than Linux's 15-byte task-name limit are rejected.
 
+## Sandbox Lifetimes
+
+E2B creation maps `SandboxLifetime` without changing the existing interactive
+payload:
+
+- `IdleAutoPause` sends `autoPause: true`, `autoPauseMemory: true`,
+  `autoResume: { enabled: false }`, and the configured idle timeout.
+- `OneShot { max_lifetime }` sends `autoPause: false`,
+  `autoPauseMemory: false`, `autoResume: { enabled: false }`, and that validated
+  whole-second maximum as `timeout`.
+
+The one-shot maximum is 3600 seconds, inclusive. Create and recover apply the
+same validation before listing or mutating provider resources. Exact recovery
+metadata includes `lifetime`; one-shot metadata also includes
+`one_shot_max_lifetime_seconds`, under the configured metadata prefix. Managed
+inventory returns a lifetime only when those values form a complete valid
+policy. Older, missing, unknown, or malformed metadata stays unknown.
+
+Before E2B connect or pause, the concrete control client reads sandbox detail.
+An idle-auto-pause or legacy resource keeps the existing POST behavior. A
+running one-shot resource reacquires envd access from that GET only, provided
+automatic resume is disabled; it never sends connect, resume, pause, or timeout
+updates. A paused one-shot resource is unavailable rather than resumed. E2B
+does not return its private-traffic token from sandbox detail, so private-port
+ingress also returns backend unavailability instead of extending a one-shot
+deadline. The consumer remains responsible for explicit destruction after
+work, with E2B's original timeout as the final cleanup bound.
+
 ## Transport And Reconciliation
 
 Control and process transports are traits and can be injected. Control calls
@@ -74,10 +102,10 @@ retryable provider unavailability.
 Sandbox creation sends its single provider mutation directly after request
 validation; it does not perform a fallible inventory preflight. The mutation
 carries exact configured metadata, including the stable runtime-or-browser
-consumer value. Ambiguous delivery performs inventory-only recovery and never
-dispatches another create. Managed inventory returns a recognized
-consumer class, rejects an unusable sandbox identity, and leaves the consumer
-absent for resources created before that metadata was added. Snapshot recovery
+consumer and lifetime values. Ambiguous delivery performs inventory-only
+recovery and never dispatches another create. Managed inventory returns
+recognized consumer and lifetime values, rejects an unusable sandbox identity,
+and leaves missing or malformed metadata absent. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
 The source stays paused when recovery sees no new snapshot or more than one
 candidate; only a synchronous completed create or exactly one recovered
@@ -98,12 +126,13 @@ validated configured sandbox domain. The complete HTTPS URL must parse to the
 exact configured envd hostname before the access-token header is added. Access
 tokens and private-traffic credentials stay inside call-local types and are
 redacted from debug output.
-Sandbox create and connect responses require nonblank envd and
+Sandbox create and ordinary connect responses require nonblank envd and
 private-traffic credentials. Missing or blank credentials keep an accepted
-create delivery-ambiguous and make connect retryable provider unavailability.
-Read-only lookup also requires a nonblank envd access token from an already
-running sandbox with automatic resume disabled. A missing or blank token maps
-to retryable provider unavailability before any envd request is attempted.
+create delivery-ambiguous and make ordinary connect retryable provider
+unavailability. One-shot read access requires only a nonblank envd token from
+an already running sandbox with automatic resume disabled; it deliberately has
+no traffic token. A missing or blank envd token maps to retryable provider
+unavailability before any envd request is attempted.
 Process and file requests explicitly authenticate the configured workload
 account. Only storage and reconciliation helpers override that identity with
 the trusted root account.
@@ -111,9 +140,9 @@ Failed setup and verification diagnostics also redact the active opaque
 sandbox ID and envd access token before the final 4 KiB tail is selected. A
 known value split by the streaming tail boundary has its visible suffix
 redacted as well.
-Creation and recovery share validation. An unconfigured logical profile or
-unsupported network policy returns a handled provider-neutral error before any
-provider request.
+Creation and recovery share validation. An invalid one-shot lifetime,
+unconfigured logical profile, or unsupported network policy returns a handled
+provider-neutral error before any provider request.
 
 ## Files, Processes, Terminals, And Screens
 
@@ -239,7 +268,8 @@ Oversized replacement writes fail before acquiring mutating sandbox access.
 
 The public backend conformance process uses `/bin/sh` with a self-contained
 script that emits exact stdout and stderr bytes, so a normal E2B image does not
-need a test-only executable.
+need a test-only executable. Its lifetime probe creates and destroys a bounded
+one-shot sandbox without pausing or resuming it.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
@@ -289,6 +319,7 @@ cleanup retries every still-pending sandbox request before destroying the
 recovered or already tracked resource. The lifecycle test applies the same
 ownership to snapshot requests, polls recovery after an in-progress or
 delivery-ambiguous response, and retries that recovery during cleanup when no
-provider snapshot handle was obtained. Live
+provider snapshot handle was obtained. A separate ignored probe creates,
+recovers, and destroys one one-shot sandbox. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.

@@ -63,7 +63,7 @@ async fn write_uses_one_atomic_descriptor_relative_process_operation() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new(

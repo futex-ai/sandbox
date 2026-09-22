@@ -17,12 +17,30 @@ Managed inventory returns it when recognized and uses `None` for older
 resources that lack the metadata; adapters must not guess. Operations that are
 not valid for a class fail with a typed error before dispatch.
 
+`SandboxLifetime` gives both service and backend create requests one of two
+policies. `IdleAutoPause` is the default and preserves the existing resumable
+interactive lifecycle. `OneShot { max_lifetime }` never pauses, is not
+resumable, and remains running until the consumer destroys it or the provider
+timeout destroys it. A one-shot duration must be a whole number of seconds in
+`1..=3600`, bounded by `SANDBOX_ONE_SHOT_MAX_LIFETIME`; create and recovery must
+reject zero, fractional-second, or larger values before provider access.
+Consumers should explicitly destroy completed one-shot work instead of waiting
+for the timeout.
+
+Adapters preserve the lifetime kind and, for one-shot sandboxes, its maximum
+duration in provider metadata used for recovery. Managed inventory returns
+`Some(lifetime)` only when that metadata is complete and valid. Missing,
+unknown, or malformed lifetime metadata remains `None`, never an inferred
+default. Reacquiring access to a running one-shot sandbox must use a
+non-mutating read path. Resume, connect, pause, or any other access operation
+must not move its destruction deadline beyond the original `max_lifetime`.
+
 ## Backend Requirements
 
 Every `SandboxBackend` implementation must support:
 
 - create, recover, inspect, resume, pause, and destroy;
-- managed-sandbox listing with optional consumer correlation IDs;
+- managed-sandbox listing with optional consumer, lifetime, and correlation IDs;
 - snapshot inventory, creation, ambiguous-delivery recovery, inspection, and
   deletion;
 - bounded regular-file reads and replacement writes below a trusted root;
@@ -207,8 +225,8 @@ attempting an identity read. The final record name must remain absent while
 its private inode is written and synced, then be published atomically without
 replacing another record and followed by a directory sync. Recovery validates
 that versioned record against the original request. If the process has already
-disappeared, recovery and inspection
-return the recorded provider reference and `Exited`; they never allocate a
+disappeared, recovery and inspection return the recorded provider reference and
+`Exited`; they never allocate a
 replacement. Unknown record versions, malformed records, identity conflicts,
 and duplicate selectors fail closed. A live legacy terminal without a record
 remains discoverable by its exact selector, but an exited legacy terminal has
@@ -216,14 +234,16 @@ no recoverable provider identity. Input rejects an exited terminal. Explicit
 close stays idempotent and removes its identity record; restored-sandbox
 cleanup removes all retained terminal identity state.
 
-Sandbox create and connect access is valid only when the provider returns both
-a nonblank process credential and a nonblank private-traffic credential. An
-accepted create with unusable credentials remains delivery-ambiguous; connect
-returns retryable provider unavailability. Read-only access is valid only when
-the provider returns a nonblank call-local process credential for an
-already-running sandbox whose automatic resume is disabled. A missing or blank
-credential is retryable provider unavailability and must not be sent to the
-provider's process endpoint.
+Sandbox create access is valid only when the provider returns both a nonblank
+process credential and a nonblank private-traffic credential. An accepted
+create with unusable credentials remains delivery-ambiguous. Ordinary connect
+requires the same credentials and maps missing values to retryable provider
+unavailability. Read-only access is valid when the provider returns a nonblank
+call-local process credential for an already-running sandbox whose automatic
+resume is disabled. This read path may omit a private-traffic credential; an
+operation that requires that credential must fail instead of mutating a
+one-shot sandbox's timeout. A missing or blank process credential is retryable
+provider unavailability and must not be sent to the provider process endpoint.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact
@@ -243,6 +263,8 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
+It includes `exercise_one_shot_lifetime`, which creates, recovers, explicitly
+destroys, and idempotently cleans up a bounded one-shot sandbox.
 The process probe uses `/bin/sh` plus a self-contained script that emits exact
 stdout and stderr bytes; conforming images therefore need a standard shell but
 no harness-only executable.

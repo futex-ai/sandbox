@@ -42,7 +42,12 @@ impl E2bSandboxBackend {
                 config.api_key().to_owned(),
                 config.sandbox_domain().to_owned(),
                 config.idle_timeout_seconds(),
-            ),
+            )
+            .map(|control| {
+                control.with_lifetime_metadata_key(
+                    config.runtime_conventions().metadata_key("lifetime"),
+                )
+            }),
             config.backend_id(),
             None,
         )?;

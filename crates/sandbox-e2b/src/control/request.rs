@@ -42,7 +42,13 @@ impl ReqwestE2bControlApi {
             transport: Arc::new(transport),
             sandbox_domain,
             idle_timeout_seconds,
+            lifetime_metadata_key: "sandbox_lifetime".to_owned(),
         })
+    }
+
+    pub(crate) fn with_lifetime_metadata_key(mut self, key: String) -> Self {
+        self.lifetime_metadata_key = key;
+        self
     }
 
     async fn request(

@@ -115,7 +115,7 @@ async fn terminal_read_waits_for_delayed_durable_output() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((
@@ -217,7 +217,7 @@ async fn terminal_read_treats_a_missing_log_as_empty_while_the_process_is_alive(
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((
@@ -266,7 +266,7 @@ fn access(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
 

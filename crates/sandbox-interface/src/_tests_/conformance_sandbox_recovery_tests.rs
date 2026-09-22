@@ -100,6 +100,7 @@ fn sandbox_request() -> BackendCreateSandboxRequest {
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(Uuid::now_v7()),
         consumer: SandboxConsumer::Runtime,
+        lifetime: crate::SandboxLifetime::IdleAutoPause,
         deployment_id: "backend-conformance".to_owned(),
         profile: "test".to_owned(),
         network: SandboxNetworkPolicy::Open,

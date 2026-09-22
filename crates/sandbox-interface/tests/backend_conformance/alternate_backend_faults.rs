@@ -8,11 +8,12 @@ use std::{
     },
 };
 
-use sandbox_interface::ProviderRef;
+use sandbox_interface::{ProviderRef, SandboxLifetime};
 
 #[derive(Default)]
 pub(super) struct AlternateBackendFaults {
     ambiguous_create: AtomicBool,
+    one_shot_creates: AtomicUsize,
     recovery_misses: AtomicUsize,
     fail_snapshot_deletes: AtomicBool,
     fail_terminal_closes: AtomicBool,
@@ -47,6 +48,16 @@ impl AlternateBackendFaults {
             .expect("created sandbox lock")
             .insert(provider_ref.as_str().to_owned());
         self.ambiguous_create.swap(false, Ordering::Relaxed)
+    }
+
+    pub(super) fn record_sandbox_lifetime(&self, lifetime: SandboxLifetime) {
+        if matches!(lifetime, SandboxLifetime::OneShot { .. }) {
+            self.one_shot_creates.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub(super) fn one_shot_create_was_exercised(&self) -> bool {
+        self.one_shot_creates.load(Ordering::Relaxed) > 0
     }
 
     pub(super) fn miss_recovery(&self) -> bool {

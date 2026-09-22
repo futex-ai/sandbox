@@ -9,6 +9,7 @@ mod mapping;
 mod port_ingress;
 mod process_run;
 mod read_only_exec;
+mod sandbox_metadata;
 mod sandboxes;
 mod screen_resize;
 mod screen_stack;
@@ -27,6 +28,10 @@ mod backend_tests;
 #[cfg(test)]
 #[path = "_tests_/sandbox_create_tests.rs"]
 mod sandbox_create_tests;
+
+#[cfg(test)]
+#[path = "_tests_/sandbox_lifetime_access_tests.rs"]
+mod sandbox_lifetime_access_tests;
 
 #[cfg(test)]
 #[path = "_tests_/backend_conformance_tests.rs"]

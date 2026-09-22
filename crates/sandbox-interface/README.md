@@ -33,6 +33,13 @@ guessing a class.
 After local validation, sandbox creation dispatches its one provider mutation
 without a fallible inventory preflight. Once that call starts, only recovery
 reads may follow; ambiguous delivery never permits a second create.
+Creation also carries `SandboxLifetime`. `IdleAutoPause` is the default for
+resumable interactive sessions. `OneShot { max_lifetime }` never pauses or
+resumes and must use a whole-second duration from 1 through 3600 seconds; the
+consumer destroys it after work and the provider timeout is the fallback.
+Backends validate the same bound on create and recovery before provider access.
+Managed inventory reports `Some(lifetime)` only for complete valid metadata and
+leaves older or malformed resources unknown.
 Direct process and stateless read-only execution requests require a non-empty
 command, at most 128 KiB across the command and arguments, and a deadline no
 longer than 300 seconds. Each direct-process stream and the combined stateless
@@ -52,6 +59,7 @@ final status instead of accepting an absent or unsuccessful completion marker.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
+It also creates, recovers, and explicitly destroys a bounded one-shot sandbox.
 Its process probe invokes `/bin/sh` with a self-contained script that emits
 exact stdout and stderr bytes, so a normal backend image needs no test-only
 executable.
@@ -109,10 +117,16 @@ or inventory responses whose operating-system PID is zero.
 ## Quick Start
 
 ```rust
-use sandbox_interface::{SandboxId, ScreenViewportSize};
+use std::time::Duration;
+
+use sandbox_interface::{SandboxId, SandboxLifetime, ScreenViewportSize};
 
 let sandbox_id = SandboxId::new();
 let viewport = ScreenViewportSize::new(1280, 720)?;
+let lifetime = SandboxLifetime::OneShot {
+    max_lifetime: Duration::from_secs(900),
+};
+lifetime.validate()?;
 
 assert!(!sandbox_id.to_string().is_empty());
 assert_eq!(viewport.width(), 1280);
@@ -131,6 +145,7 @@ cargo clippy -p sandbox-interface --all-targets --all-features -- -D warnings
 ### Key Code
 
 - `src/backend.rs` — provider lifecycle and reconciliation obligations.
+- `src/lifetime.rs` — typed lifetime policies and one-shot validation.
 - `src/backend_images.rs` — caller-owned image preparation phase types.
 - `src/service.rs` — trusted consumer lifecycle boundary.
 - `src/backend_files.rs` and `src/process_run.rs` — bounded file/process data.
