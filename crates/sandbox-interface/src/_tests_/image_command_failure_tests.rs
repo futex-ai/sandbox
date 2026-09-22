@@ -40,6 +40,46 @@ fn redacts_overlapping_sensitive_values_without_leaving_a_suffix() {
 }
 
 #[test]
+fn redacts_sensitive_values_before_crlf_normalization() {
+    let sensitive = "top\r\nsecret".to_owned();
+    let failure = ImageCommandFailure::from_captured_output(
+        b"token=top\r\nsecret",
+        Some(1),
+        false,
+        &[sensitive],
+    );
+
+    assert_eq!(failure.output.as_deref(), Some("token=[REDACTED]"));
+}
+
+#[test]
+fn redacts_sensitive_values_before_ansi_removal() {
+    let sensitive = "\x1b[31msecret\x1b[0m".to_owned();
+    let failure = ImageCommandFailure::from_captured_output(
+        b"token=\x1b[31msecret\x1b[0m",
+        Some(1),
+        false,
+        &[sensitive],
+    );
+
+    assert_eq!(failure.output.as_deref(), Some("token=[REDACTED]"));
+}
+
+#[test]
+fn redacts_truncated_sensitive_suffix_before_ansi_removal() {
+    let sensitive = "prefix\x1b[31msecret\x1b[0m".to_owned();
+    let failure = ImageCommandFailure::from_captured_output(
+        b"\x1b[31msecret\x1b[0m tail",
+        Some(1),
+        true,
+        &[sensitive],
+    );
+
+    assert_eq!(failure.output.as_deref(), Some("[REDACTED] tail"));
+    assert!(failure.output_truncated);
+}
+
+#[test]
 fn normalized_output_keeps_a_utf8_bounded_tail() {
     let input = ["prefix", &"🙂".repeat(IMAGE_COMMAND_OUTPUT_MAX_BYTES)].concat();
     let failure = ImageCommandFailure::from_captured_output(input.as_bytes(), Some(2), false, &[]);

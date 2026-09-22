@@ -102,3 +102,41 @@ conformance while dropping, merging, or mislabeling stderr.
       automatically fixing it.
 - [x] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md`.
+
+## Milestone 5: Redact Secrets Before Output Normalization
+
+At the end of this milestone, environment secrets are removed from raw command
+failure bytes before ANSI stripping, CRLF normalization, or control-character
+removal can change their representation and defeat exact matching.
+
+### Review Item
+
+2. **Severity: high — redact environment secrets before normalizing output.**
+   `ImageCommandFailure` currently normalizes captured output before replacing
+   complete sensitive strings. An environment value containing CRLF or ANSI
+   control sequences can therefore be transformed into a different string and
+   returned through a handled diagnostic. Option A: redact complete sensitive
+   byte sequences from raw output before normalization. Option B: normalize
+   every sensitive value through the identical output pipeline before string
+   replacement. **Recommendation: A**, because it preserves support for
+   arbitrary non-NUL UTF-8 values and removes secrets at the earliest boundary;
+   the user selected this option.
+
+- [x] Add failing CRLF and ANSI environment-secret regressions before changing
+      diagnostic normalization.
+- [x] Redact complete nonempty sensitive values and truncated raw prefixes
+      before any output transformation while retaining normalized fallback
+      redaction.
+- [x] Update the contract, adapter documentation, and both crate READMEs with
+      the raw-byte redaction order.
+- [x] Run focused diagnostic tests, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for secrets, generated artifacts, whitespace errors,
+      stale documentation, and unrelated edits.
+- [ ] Run `git add -A`, commit the completed fix with a Conventional Commit,
+      and push the current branch.
+- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+      clean local diff against `origin/main`; report every finding without
+      automatically fixing it.
+- [ ] Mark this milestone complete and move the plan from Active to Completed
+      in `plans/README.md`.

@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::IMAGE_COMMAND_OUTPUT_MAX_BYTES;
 
+const REDACTION: &[u8] = b"[REDACTED]";
+
 /// Provider-neutral failure facts from one user-authored image command.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ImageCommandFailure {
@@ -21,9 +23,9 @@ impl ImageCommandFailure {
     /// Normalizes captured process bytes into the provider-neutral diagnostic.
     ///
     /// Backends pass any sensitive values available at this boundary. Empty
-    /// values are ignored so they cannot rewrite every string boundary. When
-    /// capture omitted earlier bytes, a leading suffix of a sensitive value is
-    /// redacted before text normalization and final tail bounding.
+    /// values are ignored so they cannot rewrite every byte boundary. Complete
+    /// sensitive values and truncated leading suffixes are redacted before
+    /// output normalization and final tail bounding.
     #[must_use]
     pub fn from_captured_output(
         bytes: &[u8],
@@ -31,7 +33,9 @@ impl ImageCommandFailure {
         capture_truncated: bool,
         sensitive_values: &[String],
     ) -> Self {
-        let stripped = strip_ansi_escapes::strip(bytes);
+        let redacted = redact_complete_values(bytes, sensitive_values);
+        let redacted = redact_truncated_prefix(redacted, capture_truncated, sensitive_values);
+        let stripped = strip_ansi_escapes::strip(redacted);
         let stripped = redact_truncated_prefix(stripped, capture_truncated, sensitive_values);
         let mut output = String::from_utf8_lossy(&stripped).replace("\r\n", "\n");
         output.retain(|character| matches!(character, '\n' | '\t') || !character.is_control());
@@ -51,6 +55,30 @@ impl ImageCommandFailure {
             output_truncated: capture_truncated || normalized_truncated,
         }
     }
+}
+
+fn redact_complete_values(bytes: &[u8], sensitive_values: &[String]) -> Vec<u8> {
+    let mut redactions = sensitive_values
+        .iter()
+        .map(String::as_bytes)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    redactions.sort_unstable_by_key(|value| Reverse(value.len()));
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut cursor = 0;
+    while cursor < bytes.len() {
+        let matched = redactions
+            .iter()
+            .find_map(|value| bytes[cursor..].starts_with(value).then_some(value.len()));
+        if let Some(length) = matched {
+            output.extend_from_slice(REDACTION);
+            cursor += length;
+        } else {
+            output.push(bytes[cursor]);
+            cursor += 1;
+        }
+    }
+    output
 }
 
 fn redact_truncated_prefix(
@@ -75,7 +103,7 @@ fn redact_truncated_prefix(
     if matched == 0 {
         return bytes;
     }
-    let mut redacted = b"[REDACTED]".to_vec();
+    let mut redacted = REDACTION.to_vec();
     redacted.extend_from_slice(&bytes[matched..]);
     redacted
 }

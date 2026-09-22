@@ -221,13 +221,15 @@ fence and arrange cleanup.
 
 Provider diagnostics returned through handled errors must not contain secret
 values or opaque backend handles. Image-command failures must redact every
-provider identifier and credential known to the adapter before applying the
-final output bound. If streaming capture already omitted earlier bytes, a
-leading fragment that can be the suffix of a known sensitive value must also
-be redacted. Direct-process environment values are secrets: request and
-transport debug output, tracing, handled errors, and image-command diagnostics
-must never expose them. Unknown profile errors do not echo an untrusted profile
-name.
+provider identifier and credential known to the adapter from raw captured bytes
+before ANSI stripping, CRLF normalization, control removal, or the final output
+bound. If streaming capture already omitted earlier bytes, a leading fragment
+that can be the suffix of a known sensitive value must also be redacted before
+normalization. A normalized fallback redaction handles formatting inserted
+around otherwise unchanged sensitive text. Direct-process environment values
+are secrets: request and transport debug output, tracing, handled errors, and
+image-command diagnostics must never expose them. Unknown profile errors do not
+echo an untrusted profile name.
 
 ## Conformance
 
