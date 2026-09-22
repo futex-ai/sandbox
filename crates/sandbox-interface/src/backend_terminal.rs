@@ -8,7 +8,7 @@ use crate::{OperationId, ProviderRef, TerminalId, TerminalState};
 pub const TERMINAL_OUTPUT_MAX_WAIT: Duration = Duration::from_secs(30);
 
 /// Provider terminal state and durable-log identity.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendTerminal {
     /// Opaque provider process reference.
     pub provider_ref: ProviderRef,
@@ -19,7 +19,7 @@ pub struct BackendTerminal {
 }
 
 /// Provider request to create a durable PTY.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendTerminalCreateRequest {
     /// Stable consumer terminal correlation handle.
     pub terminal_id: TerminalId,
@@ -35,7 +35,7 @@ pub struct BackendTerminalCreateRequest {
 }
 
 /// Provider request to ingest durable terminal output.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendOutputRequest {
     /// Source provider sandbox reference.
     pub sandbox_provider_ref: ProviderRef,
@@ -54,7 +54,7 @@ pub struct BackendOutputRequest {
 }
 
 /// Bytes and state ingested from one provider terminal.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendTerminalOutput {
     /// Raw PTY bytes to normalize at the service boundary.
     pub bytes: Vec<u8>,
@@ -71,7 +71,7 @@ pub struct BackendTerminalOutput {
 }
 
 /// Exact provider terminal-input request.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendInputRequest {
     /// Source provider sandbox reference.
     pub sandbox_provider_ref: ProviderRef,

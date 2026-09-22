@@ -1,6 +1,6 @@
 //! Bounded argv-direct non-interactive process execution values.
 
-use std::{collections::BTreeMap, fmt, time::Duration};
+use std::{collections::BTreeMap, time::Duration};
 
 use crate::{Error, FILE_TRANSFER_PATH_MAX_BYTES, ProviderRef, ResourceOwner, Result, SandboxId};
 
@@ -35,17 +35,11 @@ pub enum ProcessRunContextError {
     #[error("[sandbox_interface/process_run] environment variable name is invalid")]
     InvalidEnvironmentName,
     /// An environment value contains a NUL byte.
-    #[error("[sandbox_interface/process_run] environment variable `{name}` has an invalid value")]
-    InvalidEnvironmentValue {
-        /// Validated environment variable name whose value was rejected.
-        name: String,
-    },
+    #[error("[sandbox_interface/process_run] environment variable value is invalid")]
+    InvalidEnvironmentValue,
     /// The sandbox template owns this environment name.
-    #[error("[sandbox_interface/process_run] environment variable `{name}` is template-owned")]
-    TemplateOwnedEnvironmentName {
-        /// Protected environment variable name.
-        name: String,
-    },
+    #[error("[sandbox_interface/process_run] environment variable name is template-owned")]
+    TemplateOwnedEnvironmentName,
     /// The environment contains too many entries.
     #[error("[sandbox_interface/process_run] environment exceeds the {limit}-variable limit")]
     TooManyEnvironmentVariables {
@@ -128,51 +122,6 @@ impl BackendRunProcessRequest {
     }
 }
 
-impl fmt::Debug for RunProcessRequest {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("RunProcessRequest")
-            .field("owner", &self.owner)
-            .field("sandbox_id", &self.sandbox_id)
-            .field("command", &self.command)
-            .field("args", &self.args)
-            .field("cwd", &self.cwd)
-            .field("envs", &RedactedEnvironment(&self.envs))
-            .field("stdout_limit", &self.stdout_limit)
-            .field("stderr_limit", &self.stderr_limit)
-            .field("deadline", &self.deadline)
-            .finish()
-    }
-}
-
-impl fmt::Debug for BackendRunProcessRequest {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("BackendRunProcessRequest")
-            .field("sandbox_provider_ref", &self.sandbox_provider_ref)
-            .field("command", &self.command)
-            .field("args", &self.args)
-            .field("cwd", &self.cwd)
-            .field("envs", &RedactedEnvironment(&self.envs))
-            .field("stdout_limit", &self.stdout_limit)
-            .field("stderr_limit", &self.stderr_limit)
-            .field("deadline", &self.deadline)
-            .finish()
-    }
-}
-
-struct RedactedEnvironment<'a>(&'a BTreeMap<String, String>);
-
-impl fmt::Debug for RedactedEnvironment<'_> {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map = formatter.debug_map();
-        for name in self.0.keys() {
-            map.entry(name, &"[REDACTED]");
-        }
-        map.finish()
-    }
-}
-
 fn validate_execution_context(cwd: Option<&str>, envs: &BTreeMap<String, String>) -> Result<()> {
     validate_working_directory(cwd)?;
     if envs.len() > PROCESS_RUN_MAX_ENV_VARS {
@@ -191,12 +140,12 @@ fn validate_execution_context(cwd: Option<&str>, envs: &BTreeMap<String, String>
         }
         if template_owns_environment_name(name) {
             return Err(invalid_context(
-                ProcessRunContextError::TemplateOwnedEnvironmentName { name: name.clone() },
+                ProcessRunContextError::TemplateOwnedEnvironmentName,
             ));
         }
         if value.contains('\0') {
             return Err(invalid_context(
-                ProcessRunContextError::InvalidEnvironmentValue { name: name.clone() },
+                ProcessRunContextError::InvalidEnvironmentValue,
             ));
         }
         let Some(with_name) = total_bytes.checked_add(name.len()) else {
@@ -260,7 +209,7 @@ fn invalid_context(reason: ProcessRunContextError) -> Error {
 /// truncated into a success: callers must treat `stdout_overflowed`,
 /// `stderr_overflowed`, and a missing exit as typed failures before parsing
 /// any captured bytes.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct SandboxProcessOutput {
     /// Captured stdout bytes up to the requested limit.
     pub stdout: Vec<u8>,

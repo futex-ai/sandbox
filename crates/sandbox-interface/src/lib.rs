@@ -11,6 +11,7 @@ mod conformance_image;
 mod conformance_resources;
 mod constants;
 mod consumer;
+mod diagnostics;
 mod domain;
 mod error;
 mod ids;

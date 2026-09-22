@@ -46,16 +46,11 @@ pub(super) async fn run_process_phase(
     command: ProcessCommand,
     phase: ImagePhase,
 ) -> Result<()> {
-    let mut sensitive_values = vec![
-        connection.sandbox_id().to_owned(),
-        connection.access_token().to_owned(),
-    ];
-    sensitive_values.extend(command.envs.values().cloned());
     let output = backend.processes.run(connection, command).await?;
     if output.succeeded() {
         return Ok(());
     }
-    Err(phase.error(output, &sensitive_values))
+    Err(phase.error(output))
 }
 
 impl ImagePhase {
@@ -70,15 +65,15 @@ impl ImagePhase {
         }
     }
 
-    fn error(self, output: ProcessRunOutput, sensitive_values: &[String]) -> Error {
+    fn error(self, output: ProcessRunOutput) -> Error {
         match self {
             Self::Setup => Error::ImageSetupFailed {
-                command: Some(command_failure(output, sensitive_values)),
+                command: Some(command_failure(output)),
                 retained_sandbox: None,
             },
             Self::Verify(index) => Error::ImageVerificationFailed {
                 index,
-                command: Some(command_failure(output, sensitive_values)),
+                command: Some(command_failure(output)),
                 retained_sandbox: None,
             },
             Self::Scrub => Error::ImageScrubFailed,
@@ -86,11 +81,11 @@ impl ImagePhase {
     }
 }
 
-fn command_failure(output: ProcessRunOutput, sensitive_values: &[String]) -> ImageCommandFailure {
-    ImageCommandFailure::from_captured_output(
-        &output.bytes,
-        output.exit_code,
-        output.output_truncated,
-        sensitive_values,
-    )
+fn command_failure(output: ProcessRunOutput) -> ImageCommandFailure {
+    ImageCommandFailure {
+        exit_code: output.exit_code,
+        exited: output.exited,
+        output_bytes: output.bytes.len(),
+        output_truncated: output.output_truncated,
+    }
 }

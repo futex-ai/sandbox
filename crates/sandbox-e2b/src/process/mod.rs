@@ -9,6 +9,7 @@ mod framing;
 mod http;
 mod http_error;
 mod mapping;
+mod output_debug;
 mod provider_pid;
 mod regular_file;
 mod regular_file_cleanup;

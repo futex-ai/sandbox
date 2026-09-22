@@ -1,17 +1,16 @@
-//! Redaction-safe debugging for process commands that may carry secrets.
+//! Process command diagnostics contain selected metadata only.
 
-use std::{collections::BTreeMap, fmt};
+use std::fmt;
 
-use super::types::{ProcessCommand, SplitProcessCommand};
+use super::types::{ProcessCommand, ProcessPtyRequest, SplitProcessCommand};
 
 impl fmt::Debug for ProcessCommand {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("ProcessCommand")
-            .field("command", &self.command)
-            .field("args", &self.args)
-            .field("cwd", &self.cwd)
-            .field("envs", &RedactedEnvironment(&self.envs))
+            .field("arg_count", &self.args.len())
+            .field("has_cwd", &self.cwd.is_some())
+            .field("env_count", &self.envs.len())
             .field("output_capture", &self.output_capture)
             .field("timeout", &self.timeout)
             .field("read_only", &self.read_only)
@@ -23,10 +22,9 @@ impl fmt::Debug for SplitProcessCommand {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("SplitProcessCommand")
-            .field("command", &self.command)
-            .field("args", &self.args)
-            .field("cwd", &self.cwd)
-            .field("envs", &RedactedEnvironment(&self.envs))
+            .field("arg_count", &self.args.len())
+            .field("has_cwd", &self.cwd.is_some())
+            .field("env_count", &self.envs.len())
             .field("stdout_limit", &self.stdout_limit)
             .field("stderr_limit", &self.stderr_limit)
             .field("deadline", &self.deadline)
@@ -34,15 +32,13 @@ impl fmt::Debug for SplitProcessCommand {
     }
 }
 
-struct RedactedEnvironment<'a>(&'a BTreeMap<String, String>);
-
-impl fmt::Debug for RedactedEnvironment<'_> {
+impl fmt::Debug for ProcessPtyRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut map = formatter.debug_map();
-        for name in self.0.keys() {
-            map.entry(name, &"[REDACTED]");
-        }
-        map.finish()
+        formatter
+            .debug_struct("ProcessPtyRequest")
+            .field("log_limit", &self.log_limit)
+            .field("has_cwd", &self.cwd.is_some())
+            .finish()
     }
 }
 

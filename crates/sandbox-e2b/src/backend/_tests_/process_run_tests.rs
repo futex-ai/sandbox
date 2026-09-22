@@ -110,8 +110,8 @@ async fn invalid_execution_context_is_rejected_before_provider_dispatch() {
     assert!(matches!(
         env_error,
         Error::InvalidProcessRunContext {
-            reason: ProcessRunContextError::TemplateOwnedEnvironmentName { ref name }
-        } if name == "PATH"
+            reason: ProcessRunContextError::TemplateOwnedEnvironmentName
+        }
     ));
     assert!(!env_error.to_string().contains("secret-path"));
 }
@@ -139,6 +139,8 @@ async fn valid_execution_context_is_forwarded_to_the_process_transport() {
                     BTreeMap::from([("SANDBOX_PROBE".to_owned(), "adapter-value".to_owned())])
                 );
                 Ok(ProcessSplitOutput {
+                    stdout: b"adapter-value\r\n\x1b[31m\xff".to_vec(),
+                    stderr: b"adapter-value".to_vec(),
                     exit_code: Some(0),
                     exited: true,
                     ..ProcessSplitOutput::default()
@@ -155,6 +157,8 @@ async fn valid_execution_context_is_forwarded_to_the_process_transport() {
         .await
         .expect("valid process context should run");
 
+    assert_eq!(output.stdout, b"adapter-value\r\n\x1b[31m\xff");
+    assert_eq!(output.stderr, b"adapter-value");
     assert_eq!(output.exit_code, Some(0));
     assert!(output.exited);
 }

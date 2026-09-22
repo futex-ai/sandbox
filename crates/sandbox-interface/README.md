@@ -51,15 +51,21 @@ directory and an ordered environment map. The working directory is capped at
 `[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and the map is capped at 256
 entries and 64 KiB across name and value bytes. `PATH`, `HOME`, `LD_*`, and
 `DYLD_*` remain template-owned. `ProcessRunContextError` preserves the typed
-rejection reason, while request `Debug` output redacts every environment value.
+rejection reason without echoing an environment name or value. Process request
+`Debug` exposes only typed consumer identifiers, counts, flags, and limits;
+command text, paths, and environment contents are omitted even when no
+explicit environment entries are supplied.
 Stateless read-only execution keeps its explicit working directory and exposes
 no environment map.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
-total, and handled diagnostics redact known sensitive values from raw bytes
-before output normalization. A longest leading suffix is removed before any
-contained complete secret when capture begins mid-value. Provider adapters must
-enforce transport frame bounds before retaining provider chunks and must decode
+total. `ImageCommandFailure` contains only exit status, retained output byte
+count, and capture truncation; the former output snippet and normalization API
+are removed. Process and terminal output `Debug` also omits captured contents,
+while raw stdout/stderr, PTY output, and transcript data serialization remain
+unmasked. Provider references hide their contents in `Debug`, including nested
+retained-sandbox errors, while explicit access and serialization preserve the
+reference. Provider adapters must enforce transport frame bounds before retaining provider chunks and must decode
 the exact typed empty mutation acknowledgment before reporting delivery
 success. After a process end is observed, an adapter must also validate the
 provider stream's final status instead of accepting an absent or unsuccessful
@@ -159,3 +165,4 @@ cargo clippy -p sandbox-interface --all-targets --all-features -- -D warnings
 
 - [Sandbox contract](../../docs/sandbox-contract.md)
 - [E2B adapter guarantees](../../docs/e2b-adapter.md)
+- [Process data and diagnostics](../../docs/process-diagnostics.md)

@@ -151,7 +151,7 @@ pub struct TerminalAction {
 }
 
 /// Bounded UTF-8 terminal transcript window.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct TranscriptWindow {
     /// Owning terminal handle.
     pub terminal_id: TerminalId,

@@ -8,7 +8,7 @@ use crate::{ProviderRef, RealizeImageFileInput, ResourceOwner, SandboxId};
 /// one-shot phase. This operation never creates or destroys a sandbox and never
 /// inventories, creates, or recovers a snapshot. Provider-owned verification,
 /// scrub, and measurement must not load user-controlled login profiles.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendPrepareImageRequest {
     /// Stable consumer sandbox handle for the persisted source runtime.
     pub sandbox_id: SandboxId,

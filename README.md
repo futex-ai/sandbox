@@ -65,10 +65,12 @@ Terminal creation and recovery also reject transcript limits above the shared
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
 output before credentials are acquired. Trusted direct process calls may select
 a validated absolute working directory and bounded environment map, while
-template-owned resolution variables remain protected and environment values
-are redacted from raw diagnostics with overlap-safe ordering before output
-normalization. Image preparation validates every input path and size before it
-connects, incomplete filesystem-size measurements fail closed, and cache
+template-owned resolution variables remain protected. Process and terminal
+diagnostics expose selected metadata only; command text, environment entries,
+and output contents are omitted. Terminal output, saved transcripts, and
+returned stdout/stderr remain unmasked. Image failures report exit and capture
+facts without output snippets. Image preparation validates every input path
+and size before it connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A
 replacement payload remains inside a root-owned private directory on the
@@ -166,6 +168,8 @@ copy application orchestration or provider template infrastructure.
   protocol.
 - [`docs/e2b-adapter.md`](docs/e2b-adapter.md) documents adapter guarantees and
   configuration.
+- [`docs/process-diagnostics.md`](docs/process-diagnostics.md) separates exact
+  sensitive process data from metadata-only diagnostics.
 - [`docs/juno-adoption.md`](docs/juno-adoption.md) describes the separate
   consumer cutover.
 - [`plans/README.md`](plans/README.md) indexes implementation plans.

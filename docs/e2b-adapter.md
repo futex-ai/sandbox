@@ -133,10 +133,11 @@ unavailability before any envd request is attempted.
 Process and file requests explicitly authenticate the configured workload
 account. Only storage and reconciliation helpers override that identity with
 the trusted root account.
-Failed setup and verification diagnostics also redact the active opaque
-sandbox ID and envd access token before the final 4 KiB tail is selected. A
-known value split by the streaming tail boundary has its visible suffix
-redacted as well.
+Failed setup and verification errors expose only the phase/index, exit status,
+retained raw output byte count, capture truncation, and optional retained
+sandbox. The adapter drains the existing 4 KiB capture window without copying
+its contents into errors or serialized failure metadata. It does not scan,
+normalize, or mask captured text. See [process diagnostics](process-diagnostics.md).
 Creation and recovery share validation. An invalid one-shot lifetime,
 unconfigured logical profile, or unsupported network policy returns a handled
 provider-neutral error before any provider request.
@@ -207,13 +208,12 @@ use `[A-Za-z_][A-Za-z0-9_]*`; values reject NUL. At most 256 entries and 64 KiB
 across every name and value are accepted. The adapter rejects `PATH`, `HOME`,
 all `LD_*`, and all `DYLD_*` names so the template remains responsible for
 executable and loader resolution. Validation happens before the control API is
-asked for sandbox access. Environment values are redacted from request and
-command debug output and are removed from raw image-failure bytes before ANSI,
-newline, or control-character normalization. For truncated capture, the longest
-leading secret suffix is removed before contained complete values; normalized
-fallback redaction still handles formatting inserted around otherwise
-unchanged secret text. The stateless read-only path still supplies only its
-existing explicit `cwd` and an empty environment map. PTY startup remains
+asked for sandbox access. Process and terminal `Debug` contain only selected
+metadata; they omit command text, paths, environment entries, input, and
+captured output. Validation errors report typed reasons without echoing names
+or values. Raw process results, PTY output, and saved transcripts remain
+unmasked, including credentials deliberately printed by a command. The
+stateless read-only path still supplies only its existing explicit `cwd` and an empty environment map. PTY startup remains
 separate and keeps its fixed `LANG`, `LC_ALL`, and `TERM` values plus its
 existing optional `cwd`.
 

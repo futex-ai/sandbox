@@ -239,19 +239,17 @@ normal helper exit. An adapter that cannot confirm resize process termination
 returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
 fence and arrange cleanup.
 
-Provider diagnostics returned through handled errors must not contain secret
-values or opaque backend handles. Image-command failures must redact every
-provider identifier and credential known to the adapter from raw captured bytes
-before ANSI stripping, CRLF normalization, control removal, or the final output
-bound. If streaming capture already omitted earlier bytes, a leading fragment
-that can be the suffix of a known sensitive value must be matched against every
-secret and redacted before complete values. This ordering prevents a contained
-shorter secret from obscuring the longest truncated match. A normalized
-fallback redaction handles formatting inserted around otherwise unchanged
-sensitive text. Direct-process environment values are secrets: request and
-transport debug output, tracing, handled errors, and image-command diagnostics
-must never expose them. Unknown profile errors do not echo an untrusted profile
-name.
+[Process diagnostics](process-diagnostics.md) define the boundary between
+sensitive process data and automatic diagnostics. Process and terminal `Debug`,
+tracing, and handled image errors expose selected metadata only. They omit
+caller-controlled command text, paths, environment entries, input, and output
+contents instead of matching known secrets. Image failures retain exit and
+capture facts without output snippets; nested provider references hide their
+contents in `Debug`. Environment validation reports typed reasons without
+echoing a name or value. Unknown profile errors do not echo an untrusted name.
+Raw stdout/stderr, PTY output, and saved terminal transcripts remain unmasked
+within their existing bounds. Their explicit data access and transcript
+serialization must preserve content, even when it contains a secret.
 
 ## Conformance
 

@@ -3,7 +3,7 @@
 /// Maximum UTF-8 bytes accepted for a logical sandbox profile name.
 pub const SANDBOX_PROFILE_MAX_BYTES: usize = 120;
 
-/// Maximum normalized UTF-8 bytes retained for a failed image command.
+/// Maximum raw bytes retained internally while draining an image command.
 pub const IMAGE_COMMAND_OUTPUT_MAX_BYTES: usize = 4096;
 
 /// Maximum logical profiles configured for one sandbox backend.

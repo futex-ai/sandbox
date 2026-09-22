@@ -9,7 +9,7 @@ pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
 
 /// Request for one persistent PTY wrapped by a bounded transcript helper.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessPtyRequest {
     /// Provider process correlation tag.
     pub tag: String,
@@ -86,7 +86,7 @@ pub struct ProcessInfo {
 }
 
 /// Bounded result of a non-interactive provider process.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessRunOutput {
     /// Combined bounded stdout/stderr bytes.
     pub bytes: Vec<u8>,
@@ -102,7 +102,7 @@ pub struct ProcessRunOutput {
 ///
 /// Overflow and deadline expiry are reported as data so the caller can fail
 /// typed instead of parsing truncated output.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct ProcessSplitOutput {
     /// Captured stdout bytes up to the requested limit.
     pub stdout: Vec<u8>,
@@ -119,7 +119,7 @@ pub struct ProcessSplitOutput {
 }
 
 /// Bounded transient PTY Connect result.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessConnectOutput {
     /// PTY bytes received during the bounded connection.
     pub bytes: Vec<u8>,
@@ -130,7 +130,7 @@ pub struct ProcessConnectOutput {
 }
 
 /// One durable provider-log read.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessFileChunk {
     /// Exact bytes from the requested absolute offset.
     pub bytes: Vec<u8>,

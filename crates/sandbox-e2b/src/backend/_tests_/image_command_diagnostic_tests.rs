@@ -17,7 +17,7 @@ use crate::{
 use super::configured::E2bSandboxBackend;
 
 #[tokio::test]
-async fn setup_failure_retains_provider_sandbox_and_command_detail() {
+async fn setup_failure_retains_provider_sandbox_and_command_metadata() {
     let sandbox_id = SandboxId::new();
     let control = retained_control("retained-source");
     let processes = Unimock::new(
@@ -41,18 +41,19 @@ async fn setup_failure_retains_provider_sandbox_and_command_detail() {
         Error::ImageSetupFailed {
             command: Some(ImageCommandFailure {
                 exit_code: Some(7),
-                ref output,
+                exited: true,
+                output_bytes: 12,
                 output_truncated: false,
             }),
             retained_sandbox: Some(ref retained)
         } if retained.sandbox_id == sandbox_id
             && retained.provider_ref.as_str() == "retained-source"
-            && output.as_deref() == Some("setup failed")
+
     ));
 }
 
 #[tokio::test]
-async fn verification_failure_preserves_index_and_sanitized_missing_exit_detail() {
+async fn verification_failure_preserves_index_and_missing_exit_metadata() {
     let sandbox_id = SandboxId::new();
     let control = retained_control("retained-verify");
     let processes = Unimock::new((
@@ -86,13 +87,15 @@ async fn verification_failure_preserves_index_and_sanitized_missing_exit_detail(
             index: 1,
             command: Some(ImageCommandFailure {
                 exit_code: None,
-                ref output,
+                exited: false,
+                output_bytes,
                 output_truncated: false,
             }),
             retained_sandbox: Some(ref retained),
         } if retained.sandbox_id == sandbox_id
             && retained.provider_ref.as_str() == "retained-verify"
-            && output.as_deref() == Some("bad\nnext�")
+            && output_bytes == b"\x1b[31mbad\x1b[0m\r\nnext\x00\xff".len()
+
     ));
 }
 
@@ -129,7 +132,7 @@ async fn setup_failure_preserves_transport_truncation() {
 }
 
 #[tokio::test]
-async fn setup_failure_redacts_connection_identity_and_access_token() {
+async fn setup_failure_diagnostics_omit_connection_identity_and_access_token() {
     let sandbox_id = SandboxId::new();
     let control = retained_control("opaque-provider-id");
     let processes = Unimock::new(
@@ -154,15 +157,23 @@ async fn setup_failure_redacts_connection_identity_and_access_token() {
     assert!(matches!(
         error,
         Error::ImageSetupFailed {
-            command: Some(ImageCommandFailure { ref output, .. }),
+            command: Some(_),
             ..
-        } if output.as_deref()
-            == Some("sandbox=[REDACTED] token=[REDACTED]")
+        }
     ));
+    for diagnostic in [
+        error.to_string(),
+        format!("{error:?}"),
+        format!("{error:#?}"),
+    ] {
+        assert!(!diagnostic.contains("opaque-provider-id"));
+        assert!(!diagnostic.contains("call-local-token"));
+        assert!(!diagnostic.contains("sandbox="));
+    }
 }
 
 #[tokio::test]
-async fn truncated_setup_failure_redacts_a_token_suffix_at_the_tail_boundary() {
+async fn truncated_setup_failure_omits_a_token_suffix_at_the_tail_boundary() {
     let sandbox_id = SandboxId::new();
     let control = retained_control("opaque-provider-id");
     let processes = Unimock::new(
@@ -189,10 +200,15 @@ async fn truncated_setup_failure_redacts_a_token_suffix_at_the_tail_boundary() {
     assert!(matches!(
         error,
         Error::ImageSetupFailed {
-            command: Some(ImageCommandFailure { ref output, .. }),
+            command: Some(ImageCommandFailure {
+                output_bytes: 26,
+                output_truncated: true,
+                ..
+            }),
             ..
-        } if output.as_deref() == Some("[REDACTED] after-boundary")
+        }
     ));
+    assert!(!format!("{error:?}").contains("local-token"));
 }
 
 fn retained_control(provider: &'static str) -> Unimock {

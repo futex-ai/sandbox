@@ -1,4 +1,4 @@
-//! Direct process execution-context validation and redaction tests.
+//! Direct process execution-context validation and diagnostic tests.
 
 use std::{collections::BTreeMap, time::Duration};
 
@@ -102,8 +102,8 @@ fn environment_values_reject_nul_without_echoing_the_value() {
     assert!(matches!(
         error,
         Error::InvalidProcessRunContext {
-            reason: ProcessRunContextError::InvalidEnvironmentValue { ref name }
-        } if name == "SANDBOX_PROBE"
+            reason: ProcessRunContextError::InvalidEnvironmentValue
+        }
     ));
     assert!(!error.to_string().contains("secret-after"));
 }
@@ -123,9 +123,7 @@ fn template_owned_environment_names_are_rejected() {
 
         assert_context_error(
             request,
-            ProcessRunContextError::TemplateOwnedEnvironmentName {
-                name: name.to_owned(),
-            },
+            ProcessRunContextError::TemplateOwnedEnvironmentName,
         );
     }
 }
@@ -168,7 +166,7 @@ fn total_environment_key_and_value_bytes_are_capped() {
 }
 
 #[test]
-fn request_debug_redacts_environment_values() {
+fn request_debug_reports_environment_count_only() {
     let envs = BTreeMap::from([("SANDBOX_TOKEN".to_owned(), "never-log-me".to_owned())]);
     let mut backend = backend_request();
     backend.envs = envs.clone();
@@ -176,8 +174,8 @@ fn request_debug_redacts_environment_values() {
     service.envs = envs;
 
     for debug in [format!("{backend:?}"), format!("{service:?}")] {
-        assert!(debug.contains("SANDBOX_TOKEN"));
-        assert!(debug.contains("[REDACTED]"));
+        assert!(!debug.contains("SANDBOX_TOKEN"));
+        assert!(debug.contains("env_count: 1"));
         assert!(!debug.contains("never-log-me"));
     }
 }
