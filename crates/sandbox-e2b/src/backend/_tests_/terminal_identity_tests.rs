@@ -40,6 +40,11 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
             .returns(Err(Error::NotFound {
                 resource: ResourceKind::File,
             })),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
         ProcessTransportMock::kill
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {

@@ -2,7 +2,7 @@
 
 use sandbox_interface::{
     BackendTerminal, BackendTerminalCreateRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef,
-    ResourceKind, Result, TerminalState,
+    Result, TerminalState,
 };
 
 use crate::process::{ProcessConnection, ProcessPtyRequest};
@@ -159,39 +159,14 @@ pub(super) async fn inspect(
         .await?
         .with_user(TRUSTED_PROCESS_USER);
     let processes = backend.processes.list(connection.clone()).await?;
-    let live = identity.resolve(
+    let state = terminal_record::resolve_state(
+        backend,
+        &connection,
+        identity,
         &processes,
         backend.config.runtime_conventions().terminal_tag_prefix(),
-    );
-    let state = match live {
-        Ok(Some(_)) => {
-            match terminal_record::read(backend, &connection, identity.terminal_id()).await? {
-                Some(record) => {
-                    record.ensure_identity(identity)?;
-                    record.ensure_tag(&terminal_tag(
-                        backend.config.runtime_conventions().terminal_tag_prefix(),
-                        identity.terminal_id(),
-                    ))?;
-                    record.state(&processes)?
-                }
-                None => TerminalState::Ready,
-            }
-        }
-        Ok(None) | Err(Error::NotFound { .. }) => {
-            let record = terminal_record::read(backend, &connection, identity.terminal_id())
-                .await?
-                .ok_or(Error::NotFound {
-                    resource: ResourceKind::Terminal,
-                })?;
-            record.ensure_identity(identity)?;
-            record.ensure_tag(&terminal_tag(
-                backend.config.runtime_conventions().terminal_tag_prefix(),
-                identity.terminal_id(),
-            ))?;
-            record.state(&processes)?
-        }
-        Err(error) => return Err(error),
-    };
+    )
+    .await?;
     Ok(BackendTerminal {
         provider_ref: terminal_ref,
         provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{}.log", identity.terminal_id()),

@@ -53,10 +53,10 @@ async fn terminal_create_and_durable_read_map_process_state() {
             })),
         ProcessTransportMock::list
             .next_call(matching!(_))
-            .answers(&|_, connection| {
+            .answers_arc(Arc::new(move |_, connection| {
                 assert_eq!(connection.user(), Some("root"));
-                Ok(Vec::new())
-            }),
+                Ok(vec![process(terminal_id)])
+            })),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {
@@ -101,7 +101,7 @@ async fn terminal_create_and_durable_read_map_process_state() {
     );
     assert_eq!(output.bytes, b"output");
     assert_eq!(output.next_offset, 11);
-    assert_eq!(output.state, TerminalState::Exited);
+    assert_eq!(output.state, TerminalState::Ready);
     assert!(output.overflowed);
 }
 

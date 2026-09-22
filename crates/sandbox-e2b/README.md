@@ -76,10 +76,12 @@ temporary name, then atomically publishes the final name without replacement.
 Recovery and inspection use it to return the same provider reference as
 `Exited` after an immediate shell exit. Live terminals without a record remain
 compatible; exited legacy terminals and unknown record versions fail closed.
-Input rejects exited terminals, explicit close removes the record idempotently,
-and restored cleanup removes all terminal identity state. File reads use one
-descriptor-relative, non-following helper; writes stage their payload, bind it
-to the caller-computed SHA-256
+Inspection and output share record-aware resolution, so unrelated PID reuse
+cannot hide an exited terminal's retained transcript while same-tag conflicts
+fail closed. Input rejects exited terminals, explicit close removes the record
+idempotently, and restored cleanup removes all terminal identity state. File
+reads use one descriptor-relative, non-following helper; writes stage their
+payload, bind it to the caller-computed SHA-256
 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer

@@ -182,12 +182,12 @@ weakening terminal identity fencing.
 
 - [x] Record the finding with severity, location, context, impact, options, and
       recommendation.
-- [ ] Add a failing regression for reading a retained exited-terminal
+- [x] Add a failing regression for reading a retained exited-terminal
       transcript after unrelated PID reuse.
-- [ ] Centralize record-aware terminal identity resolution and use it for
+- [x] Centralize record-aware terminal identity resolution and use it for
       inspection and output reads.
-- [ ] Align protocol and adapter documentation with the final read behavior.
-- [ ] Run focused regressions, formatting, Clippy, the full workspace test
+- [x] Align protocol and adapter documentation with the final read behavior.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
       suite, file-length lint, smoke coverage, and `cargo xtask check`.
 - [ ] Audit the final diff, commit and push the fix, confirm GitHub CI, and run
       a clean post-push `cargo xtask review` against `origin/main`.

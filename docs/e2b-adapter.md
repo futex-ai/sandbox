@@ -231,12 +231,16 @@ identity state. This makes a missing directory on a fresh sandbox an
 idempotent initialization case while unsafe existing storage still fails
 closed.
 
-Inspection and output reads bind the stored PID to the exact tag. Input first
-rejects an absent process, then selects the tag inside the provider mutation;
-close uses the same atomic selector, so PID reuse cannot target an unrelated
-process. Close is idempotent and removes the identity record after a confirmed
-kill. Restored-terminal cleanup also kills by tag and removes every transcript
-and identity record, then requires its maintenance command to exit normally.
+Inspection and output reads share one record-aware resolver that binds the
+stored PID to the exact tag. If an unrelated process reuses the numeric PID,
+the durable record classifies the original terminal as `Exited` and output can
+still ingest its retained transcript; reuse of the expected tag by another PID
+fails closed. Input first rejects an absent process, then selects the tag inside
+the provider mutation; close uses the same atomic selector, so PID reuse cannot
+target an unrelated process. Close is idempotent and removes the identity
+record after a confirmed kill. Restored-terminal cleanup also kills by tag and
+removes every transcript and identity record, then requires its maintenance
+command to exit normally.
 Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the

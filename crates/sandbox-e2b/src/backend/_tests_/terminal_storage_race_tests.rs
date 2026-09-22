@@ -3,7 +3,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendOutputRequest, Error, ProviderRef, SandboxBackend, TerminalId, TerminalState,
+    BackendOutputRequest, Error, OperationId, ProviderRef, SandboxBackend, TerminalId,
+    TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -68,6 +69,54 @@ async fn terminal_output_rejects_a_substituted_log_path_before_provider_access()
     ));
 }
 
+#[tokio::test]
+async fn exited_terminal_output_survives_unrelated_pid_reuse() {
+    let terminal_id = TerminalId::new();
+    let operation_id = OperationId::new();
+    let identity = identity_record(terminal_id, operation_id);
+    let identity_size = identity.len() as u64;
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(access())),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some("unrelated-process".to_owned()),
+            }])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .answers_arc(Arc::new(move |_, _, request: ProcessRegularFileRequest| {
+                assert_eq!(request.path, format!("{terminal_id}.identity.json"));
+                Ok(ProcessFileChunk {
+                    bytes: identity.clone(),
+                    total_size: identity_size,
+                })
+            })),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .answers_arc(Arc::new(move |_, _, request: ProcessRegularFileRequest| {
+                assert_eq!(request.path, format!("{terminal_id}.log"));
+                Ok(ProcessFileChunk {
+                    bytes: b"final output".to_vec(),
+                    total_size: 12,
+                })
+            })),
+    ));
+    let backend = backend(control, processes);
+
+    let output = backend
+        .read_terminal(request(terminal_id, expected_log_path(terminal_id)))
+        .await
+        .expect("durable transcript should survive unrelated PID reuse");
+
+    assert_eq!(output.bytes, b"final output");
+    assert_eq!(output.state, TerminalState::Exited);
+}
+
 fn request(terminal_id: TerminalId, provider_log_path: String) -> BackendOutputRequest {
     BackendOutputRequest {
         sandbox_provider_ref: ProviderRef::new("sandbox"),
@@ -89,6 +138,19 @@ fn process(terminal_id: TerminalId) -> ProcessInfo {
         pid: 41,
         tag: Some(format!("sandbox-terminal-{terminal_id}")),
     }
+}
+
+fn identity_record(terminal_id: TerminalId, operation_id: OperationId) -> Vec<u8> {
+    format!(
+        concat!(
+            "{{\"schema\":\"sandbox-e2b-terminal-identity-v1\",",
+            "\"pid\":41,\"terminal_id\":\"{}\",",
+            "\"operation_id\":\"{}\",",
+            "\"tag\":\"sandbox-terminal-{}\"}}\n"
+        ),
+        terminal_id, operation_id, terminal_id,
+    )
+    .into_bytes()
 }
 
 fn access() -> ControlSandboxAccess {

@@ -10,7 +10,7 @@ use sandbox_interface::{
 use crate::process::ProcessRegularFileRequest;
 
 use super::{
-    configured::E2bSandboxBackend, mapping, terminal_identity::TerminalIdentity,
+    configured::E2bSandboxBackend, mapping, terminal_identity::TerminalIdentity, terminal_record,
     terminal_storage::TERMINAL_LOG_DIRECTORY,
 };
 
@@ -59,7 +59,7 @@ pub(super) async fn read(
             maximum: TERMINAL_OUTPUT_MAX_WAIT.as_secs(),
         })?;
     let mut retry_post_read_growth = true;
-    let (chunk, process) = loop {
+    let (chunk, state) = loop {
         let listed = match tokio::time::timeout_at(
             provider_deadline,
             backend.processes.list(connection.clone()),
@@ -69,10 +69,21 @@ pub(super) async fn read(
             Ok(result) => result?,
             Err(_) => return Err(provider_read_timeout(backend)),
         };
-        let process = identity.resolve(
-            &listed,
-            backend.config.runtime_conventions().terminal_tag_prefix(),
-        )?;
+        let state = match tokio::time::timeout_at(
+            provider_deadline,
+            terminal_record::resolve_state(
+                backend,
+                &connection,
+                identity,
+                &listed,
+                backend.config.runtime_conventions().terminal_tag_prefix(),
+            ),
+        )
+        .await
+        {
+            Ok(result) => result?,
+            Err(_) => return Err(provider_read_timeout(backend)),
+        };
         let helper_timeout =
             provider_deadline.saturating_duration_since(tokio::time::Instant::now());
         let chunk = match tokio::time::timeout_at(
@@ -99,7 +110,7 @@ pub(super) async fn read(
             Err(error) => return Err(error),
         };
         let Some(chunk) = chunk else {
-            if process.is_none() {
+            if state == TerminalState::Exited {
                 return Err(Error::NotFound {
                     resource: ResourceKind::Terminal,
                 });
@@ -114,8 +125,11 @@ pub(super) async fn read(
             retry_post_read_growth = false;
             continue;
         }
-        if !chunk.bytes.is_empty() || process.is_none() || started.elapsed() >= request.wait {
-            break (chunk, process);
+        if !chunk.bytes.is_empty()
+            || state == TerminalState::Exited
+            || started.elapsed() >= request.wait
+        {
+            break (chunk, state);
         }
         wait_for_output(&request, started).await;
     };
@@ -136,7 +150,7 @@ pub(super) async fn read(
         bytes: chunk.bytes,
         next_offset,
         total_size: chunk.total_size,
-        state: mapping::terminal_state(process.as_ref()),
+        state,
         exit_code: None,
         overflowed: chunk.total_size >= provider_log_limit,
     })

@@ -9,7 +9,7 @@ use crate::process::{ProcessConnection, ProcessInfo, ProcessRegularFileRequest};
 
 use super::{
     configured::E2bSandboxBackend,
-    terminal_identity::TerminalIdentity,
+    terminal_identity::{TerminalIdentity, terminal_tag},
     terminal_storage::{TERMINAL_LOG_DIRECTORY, identity_file_name},
 };
 
@@ -74,6 +74,32 @@ impl TerminalRecord {
                 "multiple E2B terminal processes matched one identity record",
             )),
         }
+    }
+}
+
+pub(super) async fn resolve_state(
+    backend: &E2bSandboxBackend,
+    connection: &ProcessConnection,
+    identity: TerminalIdentity,
+    processes: &[ProcessInfo],
+    terminal_tag_prefix: &str,
+) -> Result<TerminalState> {
+    match identity.resolve(processes, terminal_tag_prefix) {
+        Ok(Some(_)) => Ok(TerminalState::Ready),
+        Ok(None)
+        | Err(Error::NotFound {
+            resource: ResourceKind::Terminal,
+        }) => {
+            let record = read(backend, connection, identity.terminal_id())
+                .await?
+                .ok_or(Error::NotFound {
+                    resource: ResourceKind::Terminal,
+                })?;
+            record.ensure_identity(identity)?;
+            record.ensure_tag(&terminal_tag(terminal_tag_prefix, identity.terminal_id()))?;
+            record.state(processes)
+        }
+        Err(error) => Err(error),
     }
 }
 
