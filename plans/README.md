@@ -7,9 +7,9 @@ milestones are finished.
 ## Active
 
 - [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)
-- [Stream process runs](stream-process-runs.md)
 
 ## Completed
 
+- [Stream process runs](stream-process-runs.md)
 - [Harden stream completion and credential routing](harden-stream-completion-and-credential-routing.md)
 - [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)

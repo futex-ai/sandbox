@@ -67,10 +67,35 @@ pushed, and independently reviewed against `origin/main`.
       failure until all checks pass.
 - [x] Audit tracked files for secrets, generated artifacts, whitespace errors,
       and unrelated edits.
-- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+- [x] Run `git add -A`, commit all completed work with a Conventional Commit,
       and push the current branch with every new file tracked.
-- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+- [x] Run `cargo xtask review` after the push so the AI reviewer checks the
       clean local diff against `origin/main`; record and report every finding
       without automatically fixing it.
-- [ ] Mark the plan complete and move it from Active to Completed in
+- [x] Mark the plan complete and move it from Active to Completed in
       `plans/README.md` after the implementation and review workflow finishes.
+
+## Review Outcome
+
+The post-push review completed on commit `53d4811` and reported two findings.
+They are intentionally recorded without changing the reviewed implementation
+so the maintainer can choose the follow-up.
+
+1. **Severity: medium — preserve abnormal process termination in events.** In
+   `crates/sandbox-e2b/src/process/stream_run.rs`, the E2B `exited` flag is
+   discarded when mapping a provider end frame to `Exited { exit_code }`. A
+   signal termination can carry the default zero exit code, so doing nothing
+   can make a killed command look successful to a consumer. Option A: extend
+   the public exit event to preserve the provider's normal-exit flag. Option B:
+   add a distinct signal-termination event. **Recommendation: A**, because it
+   retains status already preserved by collected execution with the smallest
+   semantic change.
+2. **Severity: medium — deliver deadline outcomes before cleanup.** In
+   `crates/sandbox-e2b/src/process/stream_run.rs`, the worker awaits the bounded
+   best-effort kill before it sends `DeadlineExpired`. If the kill request
+   stalls, doing nothing can delay the terminal outcome by up to three seconds
+   beyond the advertised absolute deadline. Option A: send and close the event
+   stream at the deadline, then perform cleanup independently. Option B: add
+   and document a cleanup grace period beyond the public deadline.
+   **Recommendation: A**, because it keeps the absolute deadline meaningful
+   while retaining best-effort cleanup.
