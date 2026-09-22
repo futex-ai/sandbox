@@ -50,9 +50,10 @@ acknowledgment, including an exact versioned screen-resize object; process
 start and inventory responses must contain a nonzero PID. Connect collectors
 and incremental process streams keep reading after a process end until they
 validate the required success trailer; a missing, malformed, or unsuccessful
-trailer cannot look like ordinary completion. Envd and private-port hosts always
-use the configured routing domain, never a domain supplied by an injected
-control response.
+trailer cannot look like ordinary completion. Timer expiry after a process end
+but before that trailer is a transport failure, not a routine command timeout.
+Envd and private-port hosts always use the configured routing domain, never a
+domain supplied by an injected control response.
 Missing read credentials stay retryable.
 Caller-controlled process durations are capped before provider access.
 Collected process, read-only, file, and terminal-helper operations retain their

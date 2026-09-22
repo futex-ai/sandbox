@@ -107,10 +107,10 @@ impl ConnectProcessTransport {
             biased;
             _ = sender.closed() => return Completion::ConsumerDropped,
             _ = tokio::time::sleep_until(settings.absolute_deadline) => {
-                return Completion::Outcome(ProcessStreamOutcome::DeadlineExpired);
+                return Completion::Outcome(state.deadline_outcome());
             }
             _ = tokio::time::sleep_until(state.idle_deadline) => {
-                return Completion::Outcome(ProcessStreamOutcome::IdleTimeout);
+                return Completion::Outcome(state.idle_outcome());
             }
             result = opening => match result {
                 Ok(provider_stream) => provider_stream,
@@ -123,10 +123,10 @@ impl ConnectProcessTransport {
                 biased;
                 _ = sender.closed() => return Completion::ConsumerDropped,
                 _ = tokio::time::sleep_until(settings.absolute_deadline) => {
-                    return Completion::Outcome(ProcessStreamOutcome::DeadlineExpired);
+                    return Completion::Outcome(state.deadline_outcome());
                 }
                 _ = tokio::time::sleep_until(state.idle_deadline) => {
-                    return Completion::Outcome(ProcessStreamOutcome::IdleTimeout);
+                    return Completion::Outcome(state.idle_outcome());
                 }
                 item = provider_stream.next() => match item {
                     Some(Ok(fragment)) => fragment,
@@ -216,7 +216,7 @@ impl ConnectProcessTransport {
             ProcessEvent::KeepAlive => (None, None),
         };
         if let Some(event) = event {
-            match deliver(event, settings, sender, state.idle_deadline).await {
+            match deliver(event, settings, sender, state).await {
                 Delivery::Sent => {}
                 Delivery::ConsumerDropped => {
                     return EventResult::Complete(Completion::ConsumerDropped);

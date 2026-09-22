@@ -51,11 +51,12 @@ final status instead of accepting an absent or unsuccessful completion marker.
 Incremental process streams emit typed start, stdout, stderr, exit, and final
 outcome events. Exit events preserve whether termination was normal or caused
 by a signal; `Completed` confirms the provider stream trailer, not command
-success. Only stdout or stderr data resets the idle timer. Every owned stream
-drains its bounded queued data, ends with one independently stored outcome, and
-cannot block best-effort cleanup through consumer backpressure. Unfinished
-processes are still killed after overflow, timeout, transport failure, or
-consumer drop.
+success. Timer expiry after exit but before that trailer is a transport failure,
+not a command timeout. Only stdout or stderr data resets the idle timer. Every
+owned stream drains its bounded queued data, ends with one independently stored
+outcome, and cannot block best-effort cleanup through consumer backpressure.
+Unfinished processes are still killed after overflow, timeout, transport
+failure, or consumer drop.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, collected and streaming split-output execution, private ingress,

@@ -81,6 +81,18 @@ pub(super) fn start_then_pending(pid: u32) -> ByteStream {
     Box::pin(start.chain(stream::pending()))
 }
 
+pub(super) fn start_end_then_pending(pid: u32) -> ByteStream {
+    let events = stream::iter([
+        Ok(Bytes::from(event_frame(&format!(
+            r#"{{"event":{{"start":{{"pid":{pid}}}}}}}"#
+        )))),
+        Ok(Bytes::from(event_frame(
+            r#"{"event":{"end":{"exitCode":0,"exited":true}}}"#,
+        ))),
+    ]);
+    Box::pin(events.chain(stream::pending()))
+}
+
 pub(super) fn start_then_periodic(pid: u32, frame: Vec<u8>, every: Duration) -> ByteStream {
     let start = stream::once(async move {
         Ok(Bytes::from(event_frame(&format!(

@@ -104,7 +104,8 @@ so the maintainer can choose the follow-up.
 
 At the end of this milestone, exit events preserve normal-versus-signal
 termination and terminal outcomes close the observable stream before bounded
-cleanup can extend its deadline.
+cleanup can extend its deadline. Timer expiry after process end is classified
+as incomplete transport until the required success trailer arrives.
 
 - [x] Add failing regressions for a signalled process with a default zero exit
       code and for a deadline outcome whose process kill remains stalled.
@@ -130,8 +131,19 @@ cleanup can extend its deadline.
 - [x] Re-run focused and full checks, then audit the backpressure fix diff.
 - [x] Commit and push the backpressure fix, then run `cargo xtask review` on the
       clean branch and record every new finding without automatically fixing it.
-- [ ] Resolve the post-exit timer classification finding below after the
+- [x] Resolve the post-exit timer classification finding below after the
       maintainer chooses a solution.
+- [x] Add failing regressions for deadline expiry after a delivered exit and
+      idle expiry while exit-event delivery is blocked by a full queue.
+- [x] Map both timer outcomes to transport failure after process end without
+      changing their pre-exit meaning.
+- [x] Update the contract, adapter guide, and workspace and crate READMEs with
+      the post-exit trailer rule.
+- [x] Re-run focused tests and `cargo xtask check`, then audit the complete
+      review-finding fix.
+- [ ] Commit and push the fix, then run `cargo xtask review` against
+      `origin/main` and record every new finding without automatically fixing
+      it.
 - [ ] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md` after the review workflow finishes.
 
@@ -166,3 +178,7 @@ cleanup can extend its deadline.
    collected behavior so timeout outcomes take precedence after exit.
    **Recommendation: A**, because it preserves the existing final-trailer
    invariant consistently across collected and streaming execution.
+
+   **Resolution:** Option A now maps either timer to `TransportFailure` after
+   process end, including while `Exited` is blocked on queue capacity. Focused
+   regressions preserve `DeadlineExpired` and `IdleTimeout` before process end.

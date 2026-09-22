@@ -147,12 +147,15 @@ cannot be mistaken for a successful zero exit code.
 trailer is decoded, and means the provider stream completed rather than that
 the command succeeded. Consumers must inspect both `exit_code` and `exited`.
 Missing or failed trailers, invalid ordering, malformed frames, and provider
-transport errors end with `TransportFailure`.
+transport errors end with `TransportFailure`. Once `Exited` has been decoded,
+expiry of either timer before the success trailer is also a
+`TransportFailure`, including expiry while delivery of `Exited` is blocked.
 `StdoutOverflow` and `StderrOverflow` are distinct, and only the bounded prefix
-may be emitted before either. An absolute deadline produces `DeadlineExpired`;
-an idle timer produces `IdleTimeout` and resets only when stdout or stderr data
-arrives, not for start, keep-alive, process-end, or transport frames. Every
-stream consumed to its end contains exactly one `Outcome` as its last item.
+may be emitted before either. Before process end, an absolute deadline produces
+`DeadlineExpired`; an idle timer produces `IdleTimeout` and resets only when
+stdout or stderr data arrives, not for start, keep-alive, process-end, or
+transport frames. Every stream consumed to its end contains exactly one
+`Outcome` as its last item.
 
 If streaming ends before a process end is observed, the backend makes a bounded
 best-effort kill after it has learned the PID. This includes overflow, idle or

@@ -99,6 +99,24 @@ impl StreamState {
         });
         (event, outcome)
     }
+
+    pub(super) fn deadline_outcome(&self) -> ProcessStreamOutcome {
+        self.timeout_outcome(ProcessStreamOutcome::DeadlineExpired)
+    }
+
+    pub(super) fn idle_outcome(&self) -> ProcessStreamOutcome {
+        self.timeout_outcome(ProcessStreamOutcome::IdleTimeout)
+    }
+
+    /// A decoded process end requires a verified trailer, so later timer
+    /// expiry represents incomplete transport rather than command execution.
+    fn timeout_outcome(&self, outcome: ProcessStreamOutcome) -> ProcessStreamOutcome {
+        if self.ended {
+            ProcessStreamOutcome::TransportFailure
+        } else {
+            outcome
+        }
+    }
 }
 
 fn capture_bytes(total: &mut usize, bytes: Vec<u8>, limit: usize) -> (Vec<u8>, bool) {
@@ -112,16 +130,16 @@ pub(super) async fn deliver(
     event: ProcessStreamEvent,
     settings: &StreamSettings,
     sender: &Sender<ProcessStreamEvent>,
-    idle_deadline: tokio::time::Instant,
+    state: &StreamState,
 ) -> Delivery {
     tokio::select! {
         biased;
         _ = sender.closed() => Delivery::ConsumerDropped,
         _ = tokio::time::sleep_until(settings.absolute_deadline) => {
-            Delivery::Outcome(ProcessStreamOutcome::DeadlineExpired)
+            Delivery::Outcome(state.deadline_outcome())
         }
-        _ = tokio::time::sleep_until(idle_deadline) => {
-            Delivery::Outcome(ProcessStreamOutcome::IdleTimeout)
+        _ = tokio::time::sleep_until(state.idle_deadline) => {
+            Delivery::Outcome(state.idle_outcome())
         }
         result = sender.send(event) => match result {
             Ok(()) => Delivery::Sent,
