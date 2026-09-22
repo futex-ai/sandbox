@@ -51,9 +51,13 @@ atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
 without relying on a timing delay. The writer and reconciler run as the trusted
 account and keep markers below a private root-owned directory that workload
 processes cannot traverse or modify. Both paths verify the requested bytes
-before replacement. The temporary inode stays trusted through the atomic
-rename; the writer then assigns it to the configured workload account, and the
-commit marker lets reconciliation finish that ownership handoff after a crash.
+before replacement. The writer creates a root-owned `0700` directory beside
+the destination so the prepared inode stays on the same filesystem, then keeps
+that directory descriptor open and renames its private payload through the
+descriptor. Renaming or replacing the private directory's visible name cannot
+substitute workload bytes. The writer then assigns the replacement to the
+configured workload account, and the commit marker lets reconciliation finish
+that ownership handoff after a crash.
 An unconfirmed revocation returns a fencing error instead of pretending the
 write safely failed. A writer removes
 its commit marker after the replacement and containing directory are durable;

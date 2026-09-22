@@ -8,6 +8,7 @@ REVOKED = 0
 COMMITTED = 51
 FAILED = 52
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+TEMPORARY_FILE = 'payload'
 
 
 def open_below(directory, name, flags):
@@ -73,6 +74,42 @@ def open_private_state(root, path):
         raise
 
 
+def open_private_temporary(parent, name):
+    parts = relative_parts(name)
+    if len(parts) != 1:
+        raise ValueError()
+    try:
+        opened = open_below(parent, name, DIRECTORY_FLAGS)
+    except FileNotFoundError:
+        return None, None
+    try:
+        metadata = os.fstat(opened)
+        visible = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+            or metadata.st_dev != os.fstat(parent).st_dev
+            or (visible.st_dev, visible.st_ino) != (metadata.st_dev, metadata.st_ino)
+        ):
+            raise ValueError()
+        return opened, (metadata.st_dev, metadata.st_ino)
+    except Exception:
+        os.close(opened)
+        raise
+
+
+def remove_private_temporary(parent, name, identity):
+    try:
+        visible = os.stat(name, dir_fd=parent, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if not stat.S_ISDIR(visible.st_mode) or (visible.st_dev, visible.st_ino) != identity:
+        return
+    os.rmdir(name, dir_fd=parent)
+    os.fsync(parent)
+
+
 def target_matches(directory, target, expected, digest):
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
     try:
@@ -135,12 +172,14 @@ def finish_target(directory, target, expected, digest, owner_uid, owner_gid, mod
 
 directory = None
 state_directory = None
+temporary_directory = None
+temporary_identity = None
 outcome = FAILED
 try:
     root = sys.argv[1]
     path = sys.argv[2]
     staging = sys.argv[3]
-    temporary = sys.argv[4]
+    temporary_name = sys.argv[4]
     state_root = sys.argv[5]
     state_path = sys.argv[6]
     expected = int(sys.argv[7])
@@ -167,11 +206,18 @@ try:
         os.close(directory)
         directory = child
     target = path_parts[-1]
+    temporary_directory, temporary_identity = open_private_temporary(
+        directory,
+        temporary_name,
+    )
     if state_value == 'revoked':
-        try:
-            os.unlink(temporary, dir_fd=directory)
-        except FileNotFoundError:
-            pass
+        if temporary_directory is not None:
+            try:
+                os.unlink(TEMPORARY_FILE, dir_fd=temporary_directory)
+            except FileNotFoundError:
+                pass
+            os.fsync(temporary_directory)
+            remove_private_temporary(directory, temporary_name, temporary_identity)
         os.fsync(directory)
         if target_matches(directory, target, expected, expected_digest):
             outcome = COMMITTED
@@ -179,16 +225,29 @@ try:
             outcome = REVOKED
     elif state_value.startswith('commit:'):
         owner_uid, owner_gid, mode = committed_identity(state_value, expected_digest)
-        if target_matches(directory, temporary, expected, expected_digest):
+        if temporary_directory is not None and target_matches(
+            temporary_directory,
+            TEMPORARY_FILE,
+            expected,
+            expected_digest,
+        ):
             try:
-                os.replace(temporary, target, src_dir_fd=directory, dst_dir_fd=directory)
+                os.replace(
+                    TEMPORARY_FILE,
+                    target,
+                    src_dir_fd=temporary_directory,
+                    dst_dir_fd=directory,
+                )
             except FileNotFoundError:
                 pass
-        else:
+        elif temporary_directory is not None:
             try:
-                os.unlink(temporary, dir_fd=directory)
+                os.unlink(TEMPORARY_FILE, dir_fd=temporary_directory)
             except FileNotFoundError:
                 pass
+        if temporary_directory is not None:
+            os.fsync(temporary_directory)
+            remove_private_temporary(directory, temporary_name, temporary_identity)
         if finish_target(
             directory,
             target,
@@ -205,6 +264,8 @@ try:
 except (IndexError, OSError, ValueError):
     outcome = FAILED
 finally:
+    if temporary_directory is not None:
+        os.close(temporary_directory)
     if directory is not None:
         os.close(directory)
     if state_directory is not None:

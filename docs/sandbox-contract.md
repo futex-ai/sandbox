@@ -86,8 +86,13 @@ storage the workload cannot traverse, unlink, or replace; a marker in a shared
 temporary directory is not a valid fence. Using a trusted writer for that
 private marker must not leave the replaced workload file owned by the trusted
 identity. The verified temporary inode must remain outside workload control
-until its atomic rename, and an interrupted commit must retain enough trusted
-state to finish the intended ownership and mode handoff during reconciliation.
+until its atomic rename. A provider may satisfy both that isolation and the
+same-filesystem rename requirement by creating a trusted `0700` directory next
+to the destination, retaining its verified descriptor, and renaming a private
+payload from that descriptor; a workload rename of the directory entry must
+not change the source inode. Cleanup must validate the same private directory
+before using it. An interrupted commit must retain enough trusted state to
+finish the intended ownership and mode handoff during reconciliation.
 File transfers are capped at 256 MiB. Every file in a multi-file
 image-preparation request must pass its path and size checks before the backend
 acquires provider access or writes any earlier file. Provider response and

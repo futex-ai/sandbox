@@ -714,3 +714,35 @@ limit.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 22: Trusted Replacement Temporary Storage
+
+Resolve the high-severity replacement race from the provider-boundary review.
+In simple terms, a trusted temporary file is not protected when its name is in
+a workload-writable directory: the workload can swap that name after digest
+verification and corrupt the destination. At the end of this milestone, the
+prepared inode remains behind a private directory descriptor on the
+destination filesystem until the atomic replacement.
+
+- [x] Record the review finding, its corruption impact, and the recommended
+      private-directory solution without assuming prior implementation context.
+- [x] Add a failing regression that swaps a public replacement temporary after
+      digest verification and proves the original implementation can corrupt
+      the destination.
+- [x] Create and verify a root-owned `0700` temporary directory on the
+      destination filesystem, retain its descriptor, and replace from that
+      private descriptor so workload directory-entry races cannot substitute
+      the prepared inode.
+- [x] Update cleanup reconciliation to use the private temporary directory,
+      validate its ownership and mode, and remove it when its stable name is
+      still available.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the private temporary-directory guarantee.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

@@ -102,11 +102,17 @@ reconciliation. Both helpers run as root and create the marker below
 `/var/lib/sandbox-e2b/write-fences`, whose descriptor-relative parent creation
 requires root ownership and denies group or other access. A workload process
 therefore cannot remove a revocation and let an older writer commit later. The
-root writer keeps the verified temporary inode trusted through its atomic
-rename, then assigns the replacement to the configured workload account. Its
-commit marker records the expected ownership and mode so reconciliation can
-finish that handoff after an interrupted commit without exposing the temporary
-bytes to workload tampering.
+root writer creates a root-owned `0700` temporary directory beside the target,
+verifies its descriptor, ownership, mode, device, and visible inode, and writes
+the prepared payload below that descriptor. This keeps the payload on the
+destination filesystem for atomic replacement without exposing its directory
+entry to the workload. Both the writer and reconciler rename from a held private
+directory descriptor, so moving or replacing the directory's visible name
+cannot substitute a different inode. They remove the private directory when
+its stable name remains available. The writer then assigns the replacement to
+the configured workload account. Its commit marker records the expected
+ownership and mode so reconciliation can finish that handoff after an
+interrupted commit without exposing the temporary bytes to workload tampering.
 Process execution is direct-argv and keeps stdout, stderr, deadlines, and
 overflow outcomes separate. Each decoded process-data event must contain exactly one of
 PTY, stdout, or stderr; multiple populated channels fail as malformed instead

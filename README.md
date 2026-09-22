@@ -37,8 +37,10 @@ Authenticated control routes reject dot-segment provider identifiers before
 dispatch. Image preparation validates every input path and size before it
 connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
-keep uncertain-write fences and terminal logs in root-owned storage while the
-interactive shell runs as an explicitly configured non-root account.
+keep uncertain-write fences and terminal logs in root-owned storage. A
+replacement payload remains inside a root-owned private directory on the
+destination filesystem until it is renamed through held descriptors, while
+the interactive shell runs as an explicitly configured non-root account.
 
 ## Developer Setup
 

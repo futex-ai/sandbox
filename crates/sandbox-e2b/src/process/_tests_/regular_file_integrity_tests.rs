@@ -20,7 +20,7 @@ fn writer_rejects_same_size_staging_tampering() {
         root: root.path().to_string_lossy().into_owned(),
         path: "src/lib.rs".to_owned(),
         staging_path: staged.to_string_lossy().into_owned(),
-        temporary_name: ".sandbox-write-test".to_owned(),
+        temporary_directory: ".sandbox-write-test".to_owned(),
         state_root: stage.path().to_string_lossy().into_owned(),
         state_path: "state".to_owned(),
         expected_size: b"replacement".len(),
