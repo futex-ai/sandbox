@@ -27,18 +27,19 @@ async fn terminal_create_and_durable_read_map_process_state() {
             .returns(Ok(access("source"))),
     ));
     let processes = Unimock::new((
-        ProcessTransportMock::list
-            .next_call(matching!(_))
-            .answers(&|_, connection| {
-                assert_eq!(connection.user(), Some("root"));
-                Ok(Vec::new())
-            }),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {
                 assert_eq!(connection.user(), Some("root"));
                 Ok(successful_run())
             }),
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .answers(&|_, connection| {
+                assert_eq!(connection.user(), Some("root"));
+                Ok(Vec::new())
+            }),
+        missing_identity(),
         ProcessTransportMock::start_pty
             .next_call(matching!(_, _))
             .answers_arc(Arc::new(move |_, connection, request| {
@@ -48,10 +49,11 @@ async fn terminal_create_and_durable_read_map_process_state() {
             })),
         ProcessTransportMock::list
             .next_call(matching!(_))
-            .answers(&|_, connection| {
+            .answers_arc(Arc::new(move |_, connection| {
                 assert_eq!(connection.user(), Some("root"));
-                Ok(Vec::new())
-            }),
+                Ok(vec![process(terminal_id)])
+            })),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {
@@ -96,7 +98,7 @@ async fn terminal_create_and_durable_read_map_process_state() {
     );
     assert_eq!(output.bytes, b"output");
     assert_eq!(output.next_offset, 11);
-    assert_eq!(output.state, TerminalState::Exited);
+    assert_eq!(output.state, TerminalState::Ready);
     assert!(output.overflowed);
 }
 
@@ -106,17 +108,13 @@ async fn terminal_read_waits_for_delayed_durable_output() {
     let control = Unimock::new(
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("sandbox"))
-            .returns(Ok(ControlSandboxAccess {
-                sandbox_id: "sandbox".to_owned(),
-                domain: "e2b.app".to_owned(),
-                envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: Some("traffic-token".to_owned()),
-            })),
+            .returns(Ok(access("sandbox"))),
     );
     let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
@@ -126,6 +124,7 @@ async fn terminal_read_waits_for_delayed_durable_output() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
@@ -165,6 +164,7 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
@@ -174,6 +174,7 @@ async fn terminal_read_retries_output_appended_after_an_empty_chunk() {
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .returns(Ok(ProcessFileChunk {
@@ -208,17 +209,13 @@ async fn terminal_read_treats_a_missing_log_as_empty_while_the_process_is_alive(
     let control = Unimock::new(
         E2bControlApiMock::connect_sandbox
             .next_call(matching!("sandbox"))
-            .returns(Ok(ControlSandboxAccess {
-                sandbox_id: "sandbox".to_owned(),
-                domain: "e2b.app".to_owned(),
-                envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: Some("traffic-token".to_owned()),
-            })),
+            .returns(Ok(access("sandbox"))),
     );
     let processes = Unimock::new((
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![process(terminal_id)])),
+        missing_identity(),
         ProcessTransportMock::read_regular_file
             .next_call(matching!(_, _))
             .returns(Err(Error::NotFound {
@@ -254,6 +251,14 @@ fn process(terminal_id: TerminalId) -> ProcessInfo {
 
 fn provider_ref(terminal_id: TerminalId) -> ProviderRef {
     ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"))
+}
+
+fn missing_identity() -> impl unimock::Clause {
+    ProcessTransportMock::read_regular_file
+        .next_call(matching!(_, _))
+        .returns(Err(Error::NotFound {
+            resource: ResourceKind::File,
+        }))
 }
 
 fn access(sandbox_id: &str) -> ControlSandboxAccess {

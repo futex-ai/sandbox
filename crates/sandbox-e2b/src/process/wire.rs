@@ -31,8 +31,12 @@ pub(super) fn pty_start(request: ProcessPtyRequest) -> StartRequestWire {
                 TERMINAL_WRAPPER,
                 [
                     request.log_path,
+                    request.identity_path,
                     request.log_limit.to_string(),
                     request.workload_user,
+                    request.terminal_id.to_string(),
+                    request.operation_id.to_string(),
+                    request.tag.clone(),
                 ],
             ),
             envs,

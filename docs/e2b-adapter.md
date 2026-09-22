@@ -99,8 +99,11 @@ inventory retain the broader opaque route-segment format. An unusable ID from
 an accepted create remains delivery-ambiguous; an unusable inventory row is
 retryable provider unavailability.
 
-Sandbox creation filters on exact configured metadata, including the stable
-runtime-or-browser consumer and lifetime values. Managed inventory returns
+Sandbox creation sends its single provider mutation directly after request
+validation; it does not perform a fallible inventory preflight. The mutation
+carries exact configured metadata, including the stable runtime-or-browser
+consumer and lifetime values. Ambiguous delivery performs inventory-only
+recovery and never dispatches another create. Managed inventory returns
 recognized consumer and lifetime values, rejects an unusable sandbox identity,
 and leaves missing or malformed metadata absent. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
@@ -211,19 +214,56 @@ adapter rejects a root that is not an absolute normalized path and a target
 that is not a normalized relative path. Both fields are byte-bounded and
 reject empty components, dot components, parent traversal, and NUL bytes.
 
-Terminal recovery lists processes by the configured stable tag and never
-starts a replacement when recovery finds no match. Inspection and output reads
-bind the stored PID to that exact tag. Input and close requests select the tag
-inside the provider operation itself, so a process that reuses the stored PID
-cannot receive input or be killed. Restored-terminal cleanup also kills by tag,
-then requires its maintenance command to exit normally. Terminal log-directory
+Terminal recovery first lists processes by the configured stable tag and never
+starts a replacement. A live terminal remains compatible with older sandboxes
+that have no durable identity record. New terminals also store
+`<terminal-id>.identity.json` beside the transcript. The strict JSON record has
+schema `sandbox-e2b-terminal-identity-v1` plus the nonzero PID, terminal ID,
+operation ID, and exact process tag. Unknown schemas, extra fields, malformed
+content, request mismatches, and tag conflicts fail closed. When only a valid
+record remains, recovery and inspection reconstruct the same `e2b-pty-v1`
+provider reference and report `Exited`; an exited legacy terminal without a
+record remains unrecoverable.
+
+Create and recover run the same root-authenticated, ownership- and
+symlink-validating directory initializer before they list or read terminal
+identity state. This makes a missing directory on a fresh sandbox an
+idempotent initialization case while unsafe existing storage still fails
+closed.
+
+Inspection and output reads share one record-aware resolver that validates any
+present record and binds its stored PID to the exact tag, even while that
+process is live. Selector-only lookup remains available only for live legacy
+terminals without a record. If an unrelated process reuses the numeric PID, the
+durable record classifies the original terminal as `Exited` and output can
+still ingest its retained transcript; reuse of the expected tag by another PID
+fails closed. Only `NotFound(File)` enables record-free legacy lookup;
+provider-level terminal absence propagates instead of masquerading as a missing
+record. Output polling passes an earlier absolute completion deadline to the
+identity helper. The process transport reserves its three-second termination
+window before choosing an execution cutoff, and a final return reserve keeps
+cleanup ahead of the outer deadline. Recovery and inspection retain their
+explicit ten-second identity-read limit. Input first rejects an absent process,
+then selects the tag inside the provider mutation; close uses the same atomic
+selector, so PID reuse cannot target an unrelated process. Close is idempotent
+and retains the identity record for final transcript reads. Restored-terminal
+cleanup kills by tag and removes every transcript and identity record, then
+requires its maintenance command to exit normally.
+Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the
 operation without creating or deleting content through its target. The
 root-authenticated transcript wrapper traverses
 `/var/lib/sandbox-e2b/terminals` through non-following directory descriptors,
-creates a root-owned regular leaf exclusively, and gives that descriptor only
-to the tagged root supervisor. The root recorder writes through a private pipe,
+creates a root-owned `0600` identity record and transcript below the root-owned
+`0700` directory. It writes and fsyncs the identity JSON through a private
+temporary name, atomically hard-links the final name without replacement,
+fsyncs the directory, removes the temporary name, and syncs the directory
+again before it forks the shell recorder. Recovery therefore cannot observe an
+empty or partial final record. The supervisor gives the transcript descriptor
+only to the tagged root process. The identity record lasts until restored
+cleanup or sandbox destruction; explicit close retains it with the transcript
+for final ingestion. The root recorder writes through a private pipe,
 which the supervisor clips to the exact remaining byte count while continuing
 to drain overflow. The recorder's child closes all private descriptors,
 initializes supplementary groups, and drops its UID and GID to the configured
@@ -269,13 +309,6 @@ the configured workload identity. The size-measurement command authenticates
 as root so `du` can traverse private adapter state such as write fences, and it
 propagates filesystem traversal and I/O failures rather than accepting a
 partial total.
-
-The terminal transcript descriptor and byte limit are installed by the trusted
-root supervisor. Its root recorder receives only a private write pipe, and only
-the recorder's child drops to the configured workload account before starting
-the intended interactive login shell. This keeps profile output and early exits
-inside terminal bookkeeping without giving the shell any way to replace,
-truncate, or forge earlier transcript bytes.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only the exact version, width, and height

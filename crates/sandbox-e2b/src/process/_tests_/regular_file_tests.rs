@@ -66,6 +66,7 @@ fn request(root: impl Into<String>, path: impl Into<String>) -> ProcessRegularFi
         offset: 0,
         max_bytes: 4,
         timeout: Duration::from_secs(300),
+        completion_deadline: None,
     }
 }
 

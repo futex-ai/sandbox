@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use sandbox_interface::TerminalId;
+
 use crate::{
     process::{ProcessCommand, ProcessOutputCapture},
     trusted_python,
@@ -41,6 +43,17 @@ exec /usr/bin/python3 -I -S -c "$1" "$2" "$3"
 
 pub(super) fn create_directory_command() -> ProcessCommand {
     directory_command(TERMINAL_STORAGE_ROOT, TERMINAL_LOG_RELATIVE_DIRECTORY)
+}
+
+pub(super) fn identity_file_name(terminal_id: TerminalId) -> String {
+    format!("{terminal_id}.identity.json")
+}
+
+pub(super) fn identity_path(terminal_id: TerminalId) -> String {
+    format!(
+        "{TERMINAL_LOG_DIRECTORY}/{}",
+        identity_file_name(terminal_id)
+    )
 }
 
 fn directory_command(root: &str, path: &str) -> ProcessCommand {

@@ -56,6 +56,7 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
                 offset: 0,
                 max_bytes: 32,
                 timeout: Duration::MAX,
+                completion_deadline: None,
             },
         )
         .await

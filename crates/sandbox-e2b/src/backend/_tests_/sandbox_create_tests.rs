@@ -9,7 +9,7 @@ use sandbox_interface::{
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
 
-use crate::{ControlSandbox, ControlSandboxState, E2bAdapterConfig, E2bControlApiMock, E2bProfile};
+use crate::{ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile};
 
 use super::configured::E2bSandboxBackend;
 
@@ -104,25 +104,30 @@ async fn recovery_revalidates_one_shot_lifetime_before_provider_access() {
 }
 
 #[tokio::test]
-async fn idle_lifetime_and_consumer_are_included_in_correlation_metadata() {
+async fn idle_lifetime_and_consumer_dispatch_without_an_inventory_preflight() {
     let control = Unimock::new(
-        E2bControlApiMock::list_sandboxes
+        E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
-            .answers(&|_, metadata| {
+            .answers(&|_, request| {
                 assert_eq!(
-                    metadata.get("sandbox_consumer").map(String::as_str),
+                    request.metadata.get("sandbox_consumer").map(String::as_str),
                     Some("browser")
                 );
                 assert_eq!(
-                    metadata.get("sandbox_lifetime").map(String::as_str),
+                    request.metadata.get("sandbox_lifetime").map(String::as_str),
                     Some("idle_auto_pause")
                 );
-                assert!(!metadata.contains_key("sandbox_one_shot_max_lifetime_seconds"));
-                Ok(vec![ControlSandbox {
+                assert!(
+                    !request
+                        .metadata
+                        .contains_key("sandbox_one_shot_max_lifetime_seconds")
+                );
+                Ok(ControlSandboxAccess {
                     sandbox_id: "existing".to_owned(),
-                    state: ControlSandboxState::Running,
-                    metadata: Default::default(),
-                }])
+                    domain: "e2b.app".to_owned(),
+                    envd_access_token: "call-local-token".to_owned(),
+                    traffic_access_token: Some("traffic-token".to_owned()),
+                })
             }),
     );
     let backend =
@@ -141,24 +146,26 @@ async fn idle_lifetime_and_consumer_are_included_in_correlation_metadata() {
 #[tokio::test]
 async fn one_shot_duration_is_included_in_correlation_metadata() {
     let control = Unimock::new(
-        E2bControlApiMock::list_sandboxes
+        E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
-            .answers(&|_, metadata| {
+            .answers(&|_, request| {
                 assert_eq!(
-                    metadata.get("sandbox_lifetime").map(String::as_str),
+                    request.metadata.get("sandbox_lifetime").map(String::as_str),
                     Some("one_shot")
                 );
                 assert_eq!(
-                    metadata
+                    request
+                        .metadata
                         .get("sandbox_one_shot_max_lifetime_seconds")
                         .map(String::as_str),
                     Some("90")
                 );
-                Ok(vec![ControlSandbox {
+                Ok(ControlSandboxAccess {
                     sandbox_id: "existing".to_owned(),
-                    state: ControlSandboxState::Running,
-                    metadata: metadata.clone(),
-                }])
+                    domain: "e2b.app".to_owned(),
+                    envd_access_token: "call-local-token".to_owned(),
+                    traffic_access_token: Some("traffic-token".to_owned()),
+                })
             }),
     );
     let backend =

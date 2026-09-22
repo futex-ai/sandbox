@@ -5,6 +5,7 @@ mod connect_helpers;
 mod connection;
 mod file;
 mod framing;
+mod helper_run;
 mod http;
 mod http_error;
 mod mapping;

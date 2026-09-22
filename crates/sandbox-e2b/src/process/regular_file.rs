@@ -107,9 +107,16 @@ pub(super) async fn read(
 ) -> Result<ProcessFileChunk> {
     let max_bytes = request.max_bytes;
     let timeout = request.timeout;
-    let output = transport
-        .run_helper(connection, command(request), timeout)
-        .await?;
+    let completion_deadline = request.completion_deadline;
+    let command = command(request);
+    let output = match completion_deadline {
+        Some(deadline) => {
+            transport
+                .run_helper_before(connection, command, deadline)
+                .await?
+        }
+        None => transport.run_helper(connection, command, timeout).await?,
+    };
     match output.exit_code {
         Some(0) => decode(&output.bytes, max_bytes),
         Some(44) => Err(Error::NotFound {
