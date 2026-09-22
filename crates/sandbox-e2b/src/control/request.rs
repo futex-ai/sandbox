@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 
+use crate::config::{nonempty_canonical, valid_api_base, valid_sandbox_domain};
 use crate::error::{Error, Result};
 
 use super::{
@@ -15,16 +16,31 @@ use super::{
 
 impl ReqwestE2bControlApi {
     /// Builds a typed control client with a bounded Reqwest transport.
+    ///
+    /// The API origin must be an HTTPS root URL, the API key and sandbox
+    /// routing domain must be nonempty and canonical, and the idle timeout
+    /// must be nonzero.
     pub fn new(
         api_base: impl Into<String>,
         api_key: impl Into<String>,
         sandbox_domain: impl Into<String>,
         idle_timeout_seconds: u32,
     ) -> Result<Self> {
-        let transport = ReqwestE2bHttpTransport::new(api_base.into(), api_key.into())?;
+        let api_base = api_base.into();
+        let api_key = api_key.into();
+        let sandbox_domain = sandbox_domain.into();
+        if !nonempty_canonical(&api_base)
+            || !valid_api_base(&api_base)
+            || !nonempty_canonical(&api_key)
+            || !valid_sandbox_domain(&sandbox_domain)
+            || idle_timeout_seconds == 0
+        {
+            return Err(Error::InvalidRequest);
+        }
+        let transport = ReqwestE2bHttpTransport::new(api_base, api_key)?;
         Ok(Self {
             transport: Arc::new(transport),
-            sandbox_domain: sandbox_domain.into(),
+            sandbox_domain,
             idle_timeout_seconds,
         })
     }

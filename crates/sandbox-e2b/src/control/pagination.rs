@@ -46,14 +46,15 @@ pub(super) async fn list_snapshots(
     sandbox_id: &str,
     name: &str,
 ) -> Result<Vec<ControlSnapshot>> {
+    if sandbox_id.is_empty() || name.is_empty() {
+        return Err(Error::InvalidRequest);
+    }
     let mut pagination = Pagination::default();
     let mut result = Vec::new();
     loop {
         let path = {
             let mut query = url::form_urlencoded::Serializer::new(String::new());
-            if !sandbox_id.is_empty() {
-                query.append_pair("sandboxID", sandbox_id);
-            }
+            query.append_pair("sandboxID", sandbox_id);
             query.append_pair("limit", PAGE_SIZE);
             pagination.append(&mut query);
             format!("/snapshots?{}", query.finish())
@@ -63,7 +64,7 @@ pub(super) async fn list_snapshots(
             .await?;
         result.extend(
             rows.into_iter()
-                .filter(|row| name.is_empty() || snapshot_has_name(row, name))
+                .filter(|row| snapshot_has_name(row, name))
                 .map(|row| ControlSnapshot {
                     snapshot_id: row.snapshot_id,
                 }),

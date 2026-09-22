@@ -149,16 +149,32 @@ impl E2bAdapterConfig {
     }
 }
 
-fn nonempty_canonical(value: &str) -> bool {
+pub(crate) fn nonempty_canonical(value: &str) -> bool {
     !value.is_empty() && value.trim() == value
 }
 
-fn valid_api_base(value: &str) -> bool {
+pub(crate) fn valid_api_base(value: &str) -> bool {
     let Ok(url) = Url::parse(value) else {
         return false;
     };
     url.scheme() == "https"
         && url.has_host()
+        && url.path() == "/"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+}
+
+pub(crate) fn valid_sandbox_domain(value: &str) -> bool {
+    if !nonempty_canonical(value) {
+        return false;
+    }
+    let Ok(url) = Url::parse(&format!("https://{value}/")) else {
+        return false;
+    };
+    url.host_str() == Some(value)
+        && url.port().is_none()
         && url.path() == "/"
         && url.username().is_empty()
         && url.password().is_none()

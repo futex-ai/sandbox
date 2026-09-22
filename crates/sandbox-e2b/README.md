@@ -25,7 +25,10 @@ request.
 
 `E2bAdapterConfig` validates the API origin, API key, idle timeout, logical
 profiles, template IDs, and denied IP/CIDR destinations, then keeps those
-values externally immutable. Its neutral runtime conventions use the `sandbox`
+values externally immutable. The public concrete control-client constructor
+independently requires an HTTPS root origin, a nonempty canonical API key, a
+valid sandbox routing domain, and a nonzero idle timeout before it creates a
+credentialed transport. Its neutral runtime conventions use the `sandbox`
 metadata prefix, `sandbox-terminal-` process-tag prefix,
 `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
 The default workload account is the non-root `user`; deployments can select a
@@ -40,7 +43,8 @@ Creates use exact metadata, including the typed sandbox consumer class, to
 recover ambiguous delivery. Managed inventory maps recognized consumer
 metadata and leaves it absent for older resources. Create and recover validate
 the same profile and network-policy rules before any control request. Snapshot
-recovery uses bounded, cursor-safe inventory traversal. Terminal identities
+recovery requires a nonempty source sandbox and correlation name before its
+bounded, cursor-safe inventory traversal. Terminal identities
 combine an E2B PID with the consumer terminal ID; reads verify both values,
 while input and close operations use envd's atomic tag selector so PID reuse
 cannot retarget them. File reads use one descriptor-relative, non-following
@@ -77,8 +81,11 @@ bounded while streaming. Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Direct process requests are validated before
 the adapter acquires sandbox access: commands must be non-empty, combined argv
-is capped at 128 KiB, each stream cap is at most 64 MiB, and deadlines cannot
-exceed 300 seconds. Failed image-command diagnostics redact the call-local
+is capped at 128 KiB, each stream cap is at most 64 MiB, and caller-controlled
+process, read-only execution, and regular-file durations cannot exceed 300
+seconds. Terminal output waits cannot exceed 30 seconds. Every bound is
+checked before provider access, and absolute Tokio deadlines use checked
+arithmetic. Failed image-command diagnostics redact the call-local
 opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
 process data with zero or multiple output channels is rejected instead of
@@ -91,8 +98,11 @@ headers are mapped without waiting for an unused response body. DNS,
 connection, timeout, and response-stream failures remain typed as provider
 unavailability; failed mutating delivery remains ambiguous. A successful safe
 response with malformed JSON is also retryable provider unavailability. A
-terminal-input response must decode E2B's typed empty acknowledgment; malformed
-output after that accepted mutation keeps the delivery outcome ambiguous.
+terminal-input response must decode E2B's exact empty JSON acknowledgment;
+unknown fields or malformed output after that accepted mutation keep the
+delivery outcome ambiguous. A read-only access lookup treats a missing or
+blank envd token as retryable provider unavailability and does not attempt an
+unauthenticated envd request.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,

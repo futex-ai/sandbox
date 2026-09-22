@@ -73,6 +73,36 @@ async fn read_access_rejects_paused_or_auto_resuming_sandboxes() {
     ));
 }
 
+#[tokio::test]
+async fn read_access_rejects_missing_or_empty_credentials_as_unavailable() {
+    let (client, _) = recording_client(vec![
+        json_response(
+            200,
+            r#"{
+                "sandboxID":"missing",
+                "state":"running",
+                "lifecycle":{"autoResume":false}
+            }"#,
+        ),
+        json_response(
+            200,
+            r#"{
+                "sandboxID":"empty",
+                "state":"running",
+                "envdAccessToken":"",
+                "lifecycle":{"autoResume":false}
+            }"#,
+        ),
+    ]);
+
+    for sandbox_id in ["missing", "empty"] {
+        assert!(matches!(
+            client.get_sandbox_read_access(sandbox_id).await,
+            Err(E2bAdapterError::Unavailable)
+        ));
+    }
+}
+
 fn recording_client(responses: Vec<HttpResponse>) -> (ReqwestE2bControlApi, RecordedRequests) {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let responses = Arc::new(Mutex::new(VecDeque::from(responses)));

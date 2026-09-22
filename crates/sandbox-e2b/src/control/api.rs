@@ -32,7 +32,7 @@ pub trait E2bControlApi: Send + Sync {
     async fn kill_sandbox(&self, sandbox_id: &str) -> Result<()>;
     /// Creates one persistent snapshot.
     async fn create_snapshot(&self, sandbox_id: &str, name: &str) -> Result<ControlSnapshot>;
-    /// Lists source-and-name-filtered snapshots.
+    /// Lists snapshots for one nonempty source sandbox and correlation name.
     async fn list_snapshots(&self, sandbox_id: &str, name: &str) -> Result<Vec<ControlSnapshot>>;
     /// Inspects a snapshot within its source-and-name-filtered inventory.
     async fn get_snapshot(

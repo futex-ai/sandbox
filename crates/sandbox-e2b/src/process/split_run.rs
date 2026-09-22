@@ -24,7 +24,9 @@ impl ConnectProcessTransport {
             stderr_limit,
             deadline,
         } = command;
-        let absolute_deadline = tokio::time::Instant::now() + deadline;
+        let absolute_deadline = tokio::time::Instant::now()
+            .checked_add(deadline)
+            .ok_or(crate::error::Error::InvalidRequest)?;
         let limits = StreamLimits {
             stdout: stdout_limit,
             stderr: stderr_limit,

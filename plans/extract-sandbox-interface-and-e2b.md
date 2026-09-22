@@ -746,3 +746,85 @@ destination filesystem until the atomic replacement.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 23: Provider Input And Response Safety
+
+Resolve every finding from the post-temporary-storage review. At the end of
+this milestone, credentials can travel only to a validated HTTPS control
+origin, snapshot recovery always stays inside one nonempty source and
+correlation, mutation acknowledgments must be exactly empty, public duration
+inputs cannot panic, and unusable read credentials remain retryable.
+
+### Review Items
+
+1. **Severity: medium — validate the public control client before sending an
+   API key.** The concrete control client is public, so callers can construct it
+   without going through the validated backend configuration. Today an HTTP URL
+   is accepted and the provider API key would then be sent without transport
+   encryption. Doing nothing risks exposing that key through a typo or unsafe
+   endpoint. Option A: apply the same nonempty-key and HTTPS root-origin checks
+   in the public constructor. Option B: make the concrete constructor private.
+   **Recommendation: A**, because it keeps the useful public client while
+   making every construction path safe.
+2. **Severity: medium — reject missing snapshot scope before any provider
+   request.** Snapshot recovery must list snapshots for one source sandbox and
+   one operation name. Today an empty source omits the source filter, which can
+   list every snapshot in the provider account; an empty operation name can
+   match every returned row. Doing nothing could adopt an unrelated snapshot
+   or force needless manual reconciliation. Option A: reject empty source and
+   operation values before dispatch. Option B: replace the strings with new
+   validated types. **Recommendation: A**, because it restores the safety fence
+   with the smallest compatible change.
+3. **Severity: medium — accept only a truly empty mutation acknowledgment.** A
+   terminal input is safe to report as delivered only when the provider returns
+   the expected empty JSON object. Today an object such as
+   `{"error":"failed"}` is silently treated as empty because unknown fields are
+   ignored. Doing nothing can report success for an unconfirmed input. Option
+   A: reject unknown fields when decoding the empty response. Option B: add a
+   custom exact-object decoder. **Recommendation: A**, because the existing
+   typed response can enforce the rule directly.
+4. **Severity: medium — bound and safely add caller-provided durations.** Public
+   backend and process requests carry Rust `Duration` values. An extreme value
+   can overflow an absolute deadline and panic after provider access has
+   already been acquired. Doing nothing lets a bad direct caller crash its
+   worker task. Option A: validate documented maximum durations at each E2B
+   entry point and also use checked deadline arithmetic. Option B: use checked
+   arithmetic only. **Recommendation: A**, because requests should be both
+   bounded and panic-free.
+5. **Severity: medium — treat missing read credentials as provider
+   unavailability.** A read-only sandbox lookup can succeed while omitting or
+   returning an empty access token. Today a missing token becomes an internal
+   error and an empty token reaches envd. Doing nothing makes a temporary bad
+   provider response non-retryable or causes an avoidable unauthenticated
+   request. Option A: require a nonempty token and return retryable
+   unavailability otherwise. Option B: add a separate response type with a
+   validated credential. **Recommendation: A**, because it directly preserves
+   the documented safe-read behavior.
+
+- [x] Record all five review findings with severity, context, impact, options,
+      and recommendations in simple language that assumes no prior context.
+- [x] Add failing regressions first for unsafe public control construction,
+      empty snapshot scope, nonempty mutation acknowledgments, excessive
+      durations, and missing or empty read credentials.
+- [x] Validate the public control client's API key, HTTPS root origin, sandbox
+      domain, and idle timeout before constructing its credentialed transport.
+- [x] Reject empty snapshot source and correlation values before an
+      authenticated inventory request.
+- [x] Require the typed empty Connect acknowledgment to reject unknown fields.
+- [x] Enforce provider duration limits before access acquisition and use
+      checked arithmetic wherever an absolute Tokio deadline is created.
+- [x] Apply the same duration bound to the public regular-file transport entry
+      point so every caller-controlled process timeout has one error contract.
+- [x] Map missing and empty non-mutating read credentials to retryable provider
+      unavailability without sending an envd request.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the tightened construction, scope, acknowledgment, duration, and
+      credential rules.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

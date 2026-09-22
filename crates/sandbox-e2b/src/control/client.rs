@@ -104,9 +104,12 @@ impl E2bControlApi for ReqwestE2bControlApi {
         if lifecycle.auto_resume {
             return Err(Error::Unavailable);
         }
-        let token = response.envd_access_token.ok_or_else(|| {
-            Error::internal_message("secure E2B sandbox info omitted envd access token")
-        })?;
+        let Some(token) = response
+            .envd_access_token
+            .filter(|token| !token.trim().is_empty())
+        else {
+            return Err(Error::Unavailable);
+        };
         Ok(ControlSandboxReadAccess {
             sandbox_id: response.sandbox_id,
             domain: self.sandbox_domain.clone(),

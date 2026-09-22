@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use sandbox_interface::{
-    BackendOutputRequest, BackendTerminalOutput, Error, ResourceKind, Result, TerminalState,
+    BackendOutputRequest, BackendTerminalOutput, Error, ResourceKind, Result,
+    TERMINAL_OUTPUT_MAX_WAIT, TerminalState,
 };
 
 use crate::process::ProcessRegularFileRequest;
@@ -20,6 +21,13 @@ pub(super) async fn read(
     backend: &E2bSandboxBackend,
     request: BackendOutputRequest,
 ) -> Result<BackendTerminalOutput> {
+    if request.wait > TERMINAL_OUTPUT_MAX_WAIT {
+        return Err(Error::InvalidSeconds {
+            field: "wait",
+            minimum: 0,
+            maximum: TERMINAL_OUTPUT_MAX_WAIT.as_secs(),
+        });
+    }
     let provider_log_limit = match u64::try_from(request.provider_log_limit) {
         Ok(provider_log_limit) => provider_log_limit,
         Err(source) => {
@@ -41,7 +49,15 @@ pub(super) async fn read(
         .await?
         .with_user(TRUSTED_PROCESS_USER);
     let started = tokio::time::Instant::now();
-    let provider_deadline = started + request.wait + PROVIDER_READ_ALLOWANCE;
+    let provider_deadline = request
+        .wait
+        .checked_add(PROVIDER_READ_ALLOWANCE)
+        .and_then(|wait| started.checked_add(wait))
+        .ok_or(Error::InvalidSeconds {
+            field: "wait",
+            minimum: 0,
+            maximum: TERMINAL_OUTPUT_MAX_WAIT.as_secs(),
+        })?;
     let mut retry_post_read_growth = true;
     let (chunk, process) = loop {
         let listed = match tokio::time::timeout_at(

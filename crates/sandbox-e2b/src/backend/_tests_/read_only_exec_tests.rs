@@ -101,6 +101,36 @@ async fn read_only_exec_rejects_unexpectedly_truncated_output() {
     assert!(matches!(error, Error::ReadOnlyOutputTooLarge));
 }
 
+#[tokio::test]
+async fn read_only_exec_rejects_excessive_timeout_before_provider_access() {
+    let backend = E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    );
+
+    let error = backend
+        .read_only_exec(BackendReadOnlyExecRequest {
+            sandbox_provider_ref: ProviderRef::new("provider"),
+            cwd: "/tmp/sandbox/repo".to_owned(),
+            executable: "/usr/bin/git".to_owned(),
+            args: vec!["status".to_owned()],
+            output_limit: 4096,
+            timeout: Duration::from_secs(301),
+        })
+        .await
+        .expect_err("excessive read-only timeout must be rejected");
+
+    assert!(matches!(
+        error,
+        Error::InvalidSeconds {
+            field: "timeout",
+            minimum: 0,
+            maximum: 300,
+        }
+    ));
+}
+
 fn config() -> E2bAdapterConfig {
     E2bAdapterConfig::new(
         "e2b",

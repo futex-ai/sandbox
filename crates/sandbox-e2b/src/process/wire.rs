@@ -179,6 +179,7 @@ pub(super) struct SignalRequestWire {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct EmptyWire {}
 
 #[derive(Deserialize)]

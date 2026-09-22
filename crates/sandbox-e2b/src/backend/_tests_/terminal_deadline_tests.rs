@@ -7,7 +7,7 @@ use std::{
 };
 
 use sandbox_interface::{
-    BackendOutputRequest, ProviderRef, SandboxBackend, TerminalId, TerminalState,
+    BackendOutputRequest, Error, ProviderRef, SandboxBackend, TerminalId, TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -68,6 +68,29 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
         assert!(timeout > wait + Duration::from_secs(4));
         assert!(timeout <= wait + Duration::from_secs(5));
     }
+}
+
+#[tokio::test]
+async fn terminal_reads_reject_excessive_wait_before_provider_access() {
+    let backend = E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    );
+
+    let error = backend
+        .read_terminal(request(TerminalId::new(), Duration::from_secs(31)))
+        .await
+        .expect_err("excessive terminal wait must be rejected");
+
+    assert!(matches!(
+        error,
+        Error::InvalidSeconds {
+            field: "wait",
+            minimum: 0,
+            maximum: 30,
+        }
+    ));
 }
 
 fn request(terminal_id: TerminalId, wait: Duration) -> BackendOutputRequest {

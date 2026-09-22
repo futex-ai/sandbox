@@ -30,15 +30,17 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
-Direct process requests require a non-empty command, at most 128 KiB across
-the command and arguments, at most 64 MiB for each captured stream, and a
-deadline no longer than 300 seconds.
+Direct process and stateless read-only execution requests require a non-empty
+command, at most 128 KiB across the command and arguments, at most 64 MiB for
+each captured stream, and a deadline no longer than 300 seconds. A terminal
+output read may wait at most 30 seconds. Backends reject these duration bounds
+before acquiring provider access.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is
 split by a bounded-output cutoff. Provider adapters must enforce transport
-frame bounds before retaining provider chunks and must decode typed mutation
-acknowledgments before reporting delivery success.
+frame bounds before retaining provider chunks and must decode the exact typed
+empty mutation acknowledgment before reporting delivery success.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.

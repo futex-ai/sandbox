@@ -41,6 +41,8 @@ After that call begins, every retry uses the matching recovery method with the
 same request; an empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.
+Snapshot inventory requires a nonempty source provider reference and nonempty
+correlation value before an authenticated provider request is built.
 
 Image construction is a caller-persisted state machine:
 
@@ -102,15 +104,21 @@ provider chunk, and its partial-frame buffer may retain only the current
 allowed frame. A bounded one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
-the exact destination host is validated. Empty opaque provider identifiers and
+the exact destination host is validated. A public concrete client must reject
+a non-HTTPS or non-root API origin, an empty or padded API key, an invalid
+routing domain, and a zero idle timeout before it constructs its credentialed
+transport. Empty opaque provider identifiers and
 identifiers equal to `.` or `..` must fail before authenticated route
 construction. Port zero, empty required text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A
 direct process command cannot be empty; its command and arguments total at
-most 128 KiB, each requested stream limit is at most 64 MiB, and its deadline
-is at most 300 seconds. These bounds must be checked before acquiring provider
-sandbox access. In particular, an oversized replacement write must fail before
-connecting to or resuming its sandbox.
+most 128 KiB, each requested stream limit is at most 64 MiB, and every direct,
+stateless read-only, or process-transport duration is at most 300 seconds. A
+terminal output long poll is at most 30 seconds. These bounds must be checked
+before acquiring provider sandbox access, and absolute deadlines must use
+checked arithmetic so no caller duration can panic. In particular, an
+oversized replacement write must fail before connecting to or resuming its
+sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
@@ -139,8 +147,9 @@ Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
 sufficient identity fence because a numeric process ID can be reused between
 the two calls. A successful transport status is not enough to prove terminal
-input delivery: the provider's typed acknowledgment must decode successfully,
-and a malformed response remains delivery-ambiguous. The same identity rule
+input delivery: the provider's typed acknowledgment must be exactly the
+expected empty object. Unknown fields or malformed JSON remain
+delivery-ambiguous. The same identity rule
 applies when killing terminals inherited by a restored sandbox. Provider-side
 transcripts enforce the requested byte count exactly, including limits that
 are smaller than or not aligned to 1 KiB. The
@@ -155,6 +164,11 @@ shutdown must use the trusted supervisor identity as well. Transcript capture
 starts before that shell, so login-profile output and exits remain captured
 without allowing the shell to replace, truncate, or forge the stored
 transcript.
+
+Read-only access is valid only when the provider returns a nonblank call-local
+credential for an already-running sandbox whose automatic resume is disabled.
+A missing or blank credential is retryable provider unavailability and must
+not be sent to the provider's process endpoint.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact

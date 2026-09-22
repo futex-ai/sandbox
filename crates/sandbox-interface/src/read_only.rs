@@ -91,7 +91,8 @@ pub struct BackendReadOnlyExecRequest {
     pub args: Vec<String>,
     /// Maximum combined stdout and stderr bytes returned.
     pub output_limit: usize,
-    /// Maximum command duration.
+    /// Maximum command duration, bounded by
+    /// [`PROCESS_RUN_MAX_DEADLINE`](crate::PROCESS_RUN_MAX_DEADLINE).
     pub timeout: Duration,
 }
 

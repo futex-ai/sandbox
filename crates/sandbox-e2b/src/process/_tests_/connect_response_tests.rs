@@ -57,13 +57,28 @@ async fn malformed_empty_mutation_response_preserves_delivery_ambiguity() {
     assert!(matches!(result, Err(DomainError::DeliveryUnknown)));
 }
 
+#[tokio::test]
+async fn nonempty_mutation_acknowledgment_preserves_delivery_ambiguity() {
+    let transport = transport_with_response(true, br#"{"error":"failed"}"#);
+
+    let result = transport
+        .send_input(connection(), ProcessSelector::Pid(7), b"input".to_vec())
+        .await;
+
+    assert!(matches!(result, Err(DomainError::DeliveryUnknown)));
+}
+
 fn transport(ambiguous: bool) -> ConnectProcessTransport {
+    transport_with_response(ambiguous, b"not-json")
+}
+
+fn transport_with_response(ambiguous: bool, response: &'static [u8]) -> ConnectProcessTransport {
     let http: Arc<dyn ConnectHttpTransport> = Arc::new(Unimock::new(
         unary_call
             .next_call(matching!(_, _, _, _))
             .answers_arc(Arc::new(move |_, _, _, _, actual| {
                 assert_eq!(actual, ambiguous);
-                Ok(b"not-json".to_vec())
+                Ok(response.to_vec())
             })),
     ));
     ConnectProcessTransport::with_response_http(http)

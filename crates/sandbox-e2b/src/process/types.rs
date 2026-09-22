@@ -34,7 +34,7 @@ pub struct ProcessCommand {
     pub cwd: Option<String>,
     /// Explicit output overflow behavior for this command.
     pub output_capture: ProcessOutputCapture,
-    /// Maximum command execution duration.
+    /// Maximum command execution duration, capped at 300 seconds.
     pub timeout: Duration,
     /// Whether output overflow maps to the public stateless-read limit error.
     pub read_only: bool,
@@ -66,7 +66,7 @@ pub struct SplitProcessCommand {
     pub stdout_limit: usize,
     /// Maximum captured stderr bytes before overflow is reported.
     pub stderr_limit: usize,
-    /// Execution deadline for the whole run.
+    /// Execution deadline for the whole run, capped at 300 seconds.
     pub deadline: Duration,
 }
 
@@ -160,7 +160,7 @@ pub struct ProcessRegularFileRequest {
     pub offset: u64,
     /// Maximum number of file bytes returned.
     pub max_bytes: usize,
-    /// Maximum provider-side helper duration.
+    /// Maximum provider-side helper duration, capped at 300 seconds.
     pub timeout: Duration,
 }
 
@@ -174,7 +174,7 @@ pub trait ProcessTransport: Send + Sync {
         connection: ProcessConnection,
         request: ProcessPtyRequest,
     ) -> Result<ProcessInfo>;
-    /// Connects transiently to a running PTY.
+    /// Connects transiently to a running PTY for at most 300 seconds.
     async fn connect(
         &self,
         connection: ProcessConnection,

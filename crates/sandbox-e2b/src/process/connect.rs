@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sandbox_interface::{Error as DomainError, Result as DomainResult};
+use sandbox_interface::{Error as DomainError, PROCESS_RUN_MAX_DEADLINE, Result as DomainResult};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::error::{Error, Result};
@@ -113,6 +113,7 @@ impl ProcessTransport for ConnectProcessTransport {
         wait: Duration,
         max_bytes: usize,
     ) -> DomainResult<ProcessConnectOutput> {
+        validate_duration("wait", wait)?;
         let events = map_result(
             self.collect(
                 connection,
@@ -139,6 +140,7 @@ impl ProcessTransport for ConnectProcessTransport {
         command: ProcessCommand,
     ) -> DomainResult<ProcessRunOutput> {
         let timeout = command.timeout;
+        validate_duration("timeout", timeout)?;
         self.run_for(connection, command, timeout).await
     }
 
@@ -147,6 +149,7 @@ impl ProcessTransport for ConnectProcessTransport {
         connection: ProcessConnection,
         command: SplitProcessCommand,
     ) -> DomainResult<ProcessSplitOutput> {
+        validate_duration("deadline", command.deadline)?;
         map_result(
             self.collect_split(connection, command).await,
             false,
@@ -203,6 +206,7 @@ impl ProcessTransport for ConnectProcessTransport {
         connection: ProcessConnection,
         request: ProcessRegularFileRequest,
     ) -> DomainResult<ProcessFileChunk> {
+        validate_duration("timeout", request.timeout)?;
         super::regular_file::read(self, connection, request).await
     }
 
@@ -252,13 +256,28 @@ impl ProcessTransport for ConnectProcessTransport {
     }
 }
 
+fn validate_duration(field: &'static str, duration: Duration) -> DomainResult<()> {
+    if duration > PROCESS_RUN_MAX_DEADLINE {
+        return Err(DomainError::InvalidSeconds {
+            field,
+            minimum: 0,
+            maximum: PROCESS_RUN_MAX_DEADLINE.as_secs(),
+        });
+    }
+    Ok(())
+}
+
 #[cfg(test)]
-#[path = "_tests_/connect_transport_tests.rs"]
-mod connect_transport_tests;
+#[path = "_tests_/connect_duration_tests.rs"]
+mod connect_duration_tests;
 
 #[cfg(test)]
 #[path = "_tests_/connect_response_tests.rs"]
 mod connect_response_tests;
+
+#[cfg(test)]
+#[path = "_tests_/connect_transport_tests.rs"]
+mod connect_transport_tests;
 
 #[cfg(test)]
 #[path = "_tests_/process_capture_tests.rs"]

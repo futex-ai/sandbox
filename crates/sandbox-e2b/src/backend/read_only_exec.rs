@@ -1,6 +1,8 @@
 //! Stateless read-only command execution through E2B envd.
 
-use sandbox_interface::{BackendReadOnlyExecRequest, Error, ReadOnlyExecOutput, Result};
+use sandbox_interface::{
+    BackendReadOnlyExecRequest, Error, PROCESS_RUN_MAX_DEADLINE, ReadOnlyExecOutput, Result,
+};
 
 use crate::process::{ProcessCommand, ProcessOutputCapture};
 
@@ -10,6 +12,13 @@ pub(super) async fn execute(
     backend: &E2bSandboxBackend,
     request: BackendReadOnlyExecRequest,
 ) -> Result<ReadOnlyExecOutput> {
+    if request.timeout > PROCESS_RUN_MAX_DEADLINE {
+        return Err(Error::InvalidSeconds {
+            field: "timeout",
+            minimum: 0,
+            maximum: PROCESS_RUN_MAX_DEADLINE.as_secs(),
+        });
+    }
     let connection = mapping::read_only_connection(backend, &request.sandbox_provider_ref).await?;
     let output = backend
         .processes

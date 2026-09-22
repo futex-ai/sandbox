@@ -21,6 +21,11 @@ deduplicated. Validated fields are externally immutable; callers can inspect
 non-secret values through read-only accessors and can replace runtime
 conventions only with an already validated value.
 
+`ReqwestE2bControlApi::new` applies the same safety checks at its public
+boundary: it rejects a non-HTTPS or non-root API origin, an empty or padded API
+key, an invalid sandbox routing domain, and a zero idle timeout before building
+the authenticated transport.
+
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
 prefix, absolute screen-helper path, exact helper and agent process names
 stopped before an image snapshot, and the non-root workload account. Neutral
@@ -51,7 +56,8 @@ safe operation's response type. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
 operation-specific recovery fence resolves the outcome. `SendInput` also
 decodes E2B's typed empty response, so a successful HTTP status with malformed
-JSON remains delivery-ambiguous instead of being treated as an acknowledgment.
+JSON, a non-object response, or an object with any field remains
+delivery-ambiguous instead of being treated as an acknowledgment.
 Empty opaque provider IDs and IDs equal to `.` or `..` are rejected before
 route construction, so URL normalization cannot move an API-key-authenticated
 call outside its intended sandbox or snapshot endpoint.
@@ -60,7 +66,8 @@ Sandbox creation filters on exact configured metadata, including the stable
 runtime-or-browser consumer value. Managed inventory returns a recognized
 consumer class and leaves it absent for resources created before that metadata
 was added. Snapshot recovery walks bounded cursor pagination and adopts exactly
-one new correlated snapshot.
+one new correlated snapshot. It rejects an empty source sandbox or correlation
+name before issuing the authenticated inventory request.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
 fail closed. If an accepted create response cannot be decoded or omits the
 identity or credentials needed to identify the created resource, the result
@@ -70,6 +77,9 @@ Envd routing is derived from adapter configuration, not a response-provided
 host. The complete HTTPS URL must parse to the exact configured envd hostname
 before the access-token header is added. Access tokens and private-traffic
 credentials stay inside call-local types and are redacted from debug output.
+Read-only lookup also requires a nonblank envd access token from an already
+running sandbox with automatic resume disabled. A missing or blank token maps
+to retryable provider unavailability before any envd request is attempted.
 Process and file requests explicitly authenticate the configured workload
 account. Only storage and reconciliation helpers override that identity with
 the trusted root account.
@@ -114,12 +124,18 @@ the configured workload account. Its commit marker records the expected
 ownership and mode so reconciliation can finish that handoff after an
 interrupted commit without exposing the temporary bytes to workload tampering.
 Process execution is direct-argv and keeps stdout, stderr, deadlines, and
-overflow outcomes separate. Each decoded process-data event must contain exactly one of
-PTY, stdout, or stderr; multiple populated channels fail as malformed instead
-of silently dropping output. Before acquiring sandbox access, the adapter
-rejects an empty command, more than 128 KiB across the command and arguments,
-a stdout or stderr limit above 64 MiB, or a deadline above 300 seconds. File and
-maintenance helpers require a normal process exit; a default zero exit code on
+overflow outcomes separate. Each decoded process-data event must contain
+exactly one of PTY, stdout, or stderr; multiple populated channels fail as
+malformed instead of silently dropping output. Before acquiring sandbox
+access, the adapter rejects an empty command, more than 128 KiB across the
+command and arguments,
+a stdout or stderr limit above 64 MiB, or a deadline above 300 seconds. Public
+Connect waits, combined-output commands, split-stream commands, regular-file
+reads, and stateless read-only execution use the same 300-second ceiling;
+terminal output long polls use a 30-second ceiling. Caller-controlled bounds
+are checked before provider access, and every absolute Tokio deadline uses
+checked arithmetic. File and maintenance helpers require a normal process exit;
+a default zero exit code on
 a signal event is not success. A one-shot process whose collection times out,
 overflows, or fails decoding is killed with a bounded cleanup call once its PID
 has been observed; persistent terminal connections are left running

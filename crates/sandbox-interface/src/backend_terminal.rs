@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use crate::{OperationId, ProviderRef, TerminalId, TerminalState};
 
+/// Maximum provider-side long poll accepted for one terminal output read.
+pub const TERMINAL_OUTPUT_MAX_WAIT: Duration = Duration::from_secs(30);
+
 /// Provider terminal state and durable-log identity.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendTerminal {
@@ -45,7 +48,7 @@ pub struct BackendOutputRequest {
     pub max_bytes: usize,
     /// Provider-side transcript byte cap used when the terminal was created.
     pub provider_log_limit: usize,
-    /// Optional bounded long-poll duration.
+    /// Optional long-poll duration, bounded by [`TERMINAL_OUTPUT_MAX_WAIT`].
     pub wait: Duration,
 }
 

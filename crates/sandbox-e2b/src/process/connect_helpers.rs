@@ -36,7 +36,9 @@ impl ConnectProcessTransport {
         mode: CollectionMode,
     ) -> Result<CollectedEvents> {
         let request = encode(request)?;
-        let deadline = tokio::time::Instant::now() + wait;
+        let deadline = tokio::time::Instant::now()
+            .checked_add(wait)
+            .ok_or(Error::InvalidRequest)?;
         let mut stream = match tokio::time::timeout_at(
             deadline,
             self.http

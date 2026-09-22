@@ -38,7 +38,7 @@ pub use self::backend_files::{
 pub use self::backend_images::{BackendPrepareImageRequest, BackendPreparedImage};
 pub use self::backend_terminal::{
     BackendInputRequest, BackendOutputRequest, BackendTerminal, BackendTerminalCreateRequest,
-    BackendTerminalOutput,
+    BackendTerminalOutput, TERMINAL_OUTPUT_MAX_WAIT,
 };
 pub use self::constants::{
     FILE_TRANSFER_MAX_BYTES, FILE_TRANSFER_PATH_MAX_BYTES, IMAGE_COMMAND_OUTPUT_MAX_BYTES,
