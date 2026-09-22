@@ -133,14 +133,16 @@ the two calls. The same rule applies when killing terminals inherited by a
 restored sandbox. Provider-side transcripts enforce the requested byte count
 exactly, including limits that are smaller than or not aligned to 1 KiB. The
 provider must create, retain, and read the transcript as a trusted identity in
-storage inaccessible to the workload. The recorder keeps the storage
-descriptor while its child closes every copy, drops to a validated non-root
-workload identity, and only then starts the interactive login shell. Reads must
-derive and verify the same terminal-owned path before provider access. Process
-discovery, input, and shutdown must use the trusted recorder identity as well.
-Transcript capture starts before that shell, so login-profile output and exits
-remain captured without allowing the shell to replace, truncate, or forge the
-stored transcript.
+storage inaccessible to the workload. A tagged trusted supervisor keeps the
+storage descriptor, clips bytes from a private recorder pipe, drains overflow,
+and waits for recorder exit. The recorder's child closes every private
+descriptor, drops to a validated non-root workload identity, and only then
+starts the interactive login shell. Reads must derive and verify the same
+terminal-owned path before provider access. Process discovery, input, and
+shutdown must use the trusted supervisor identity as well. Transcript capture
+starts before that shell, so login-profile output and exits remain captured
+without allowing the shell to replace, truncate, or forge the stored
+transcript.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact

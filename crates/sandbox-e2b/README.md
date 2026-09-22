@@ -64,7 +64,9 @@ connection. Every trusted Python helper uses isolated module lookup with site
 initialization disabled, so sandbox working-directory modules, `PYTHONPATH`,
 and user startup customization cannot run before file checks, cleanup, or
 terminal transcript setup. Terminal transcript writers enforce arbitrary byte
-limits exactly rather than rounding to filesystem blocks.
+limits exactly rather than rounding to filesystem blocks. A trusted supervisor
+clips recorder chunks to the remaining limit, keeps draining overflow so the
+interactive terminal stays usable, and waits for the recorder before exiting.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Direct process requests are validated before the
@@ -105,16 +107,18 @@ creation and restored cleanup traverse from directory descriptors with non-follo
 opens; an intermediate symlink makes the operation fail without touching its
 target. Image setup, verification, scrub, and size measurement use non-login
 shells, so a staged or setup-created profile cannot skip a later safety phase
-or forge its result. The terminal transcript wrapper runs the recorder as the
-trusted account and opens its log below
+or forge its result. The terminal transcript wrapper runs a supervisor and
+recorder as the trusted account and opens its log below
 private root-owned storage through non-following directory descriptors. The
-recorder keeps the only log descriptor; its child closes every inherited
+supervisor keeps the only log descriptor and bounds data received over a
+private recorder pipe. The recorder's shell child closes every inherited
 private descriptor, drops to the configured workload account, and only then
 starts the interactive login shell. Reads use the trusted account, require the
 exact terminal-derived log name, and use the same descriptor-relative
-regular-file helper. Recorder discovery, input, and shutdown also use the
-trusted account, so the workload cannot replace or forge stored output and
-provider-side user scoping cannot hide the recorder from lifecycle operations.
+regular-file helper. Terminal discovery, input, and shutdown also use the
+trusted supervisor account, so the workload cannot replace or forge stored
+output and provider-side user scoping cannot hide the terminal from lifecycle
+operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
 keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed

@@ -137,14 +137,16 @@ operation without creating or deleting content through its target. The
 root-authenticated transcript wrapper traverses
 `/var/lib/sandbox-e2b/terminals` through non-following directory descriptors,
 creates a root-owned regular leaf exclusively, and gives that descriptor only
-to the root recorder. The recorder's child closes all private descriptors,
+to the tagged root supervisor. The root recorder writes through a private pipe,
+which the supervisor clips to the exact remaining byte count while continuing
+to drain overflow. The recorder's child closes all private descriptors,
 initializes supplementary groups, and drops its UID and GID to the configured
 workload account before starting Bash. Root-authenticated reads first require
 the exact terminal-derived log path, then open and read the leaf through one
-descriptor-relative helper. Recorder discovery, input, and shutdown use the
-same root-authenticated process identity. Durable reads share one absolute
-provider deadline and coherent cursor/size reporting. Transcript writers use
-the request's exact byte limit rather than a rounded filesystem block limit.
+descriptor-relative helper. Terminal discovery, input, and shutdown use the
+same root-authenticated supervisor identity. Durable reads share one absolute
+provider deadline and coherent cursor/size reporting. The supervisor waits for
+the recorder before exiting, so completed transcripts are fully drained.
 Oversized replacement writes fail before acquiring mutating sandbox access.
 
 Image preparation accepts the caller's durably stored source provider
@@ -173,11 +175,11 @@ filesystem traversal and I/O failures rather than accepting `du`'s partial
 output.
 
 The terminal transcript descriptor and byte limit are installed by the trusted
-root recorder. Only its child drops to the configured workload account, closes
-the storage descriptor, and starts the one intended interactive login shell.
-This keeps profile output and early exits inside terminal bookkeeping without
-giving the shell any way to replace, truncate, or forge earlier transcript
-bytes.
+root supervisor. Its root recorder receives only a private write pipe, and only
+the recorder's child drops to the configured workload account before starting
+the intended interactive login shell. This keeps profile output and early exits
+inside terminal bookkeeping without giving the shell any way to replace,
+truncate, or forge earlier transcript bytes.
 
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only an exact versioned acknowledgment and

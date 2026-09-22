@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    io::{ErrorKind, Write},
+    io::Write,
     os::unix::fs::symlink,
     process::{Command, Stdio},
     thread,
@@ -15,7 +15,7 @@ use super::TERMINAL_WRAPPER;
 
 #[test]
 fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
-    for limit in [64, 4097] {
+    for limit in [0, 64, 4097] {
         let directory = tempdir().expect("temporary transcript directory");
         let transcript = directory.path().join("terminal.log");
         let mut child = start_wrapper(&transcript, limit);
@@ -24,14 +24,11 @@ fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
             .write_all(b"printf '%010000d' 0\n")
             .expect("write terminal command");
         let observed_size = wait_for_transcript_size(&transcript, limit);
-        let exit_result = input.write_all(b"exit\n");
+        input.write_all(b"exit\n").expect("exit terminal shell");
 
         let status = child.wait().expect("wait for bounded terminal wrapper");
 
-        if let Err(error) = exit_result {
-            assert_eq!(error.kind(), ErrorKind::BrokenPipe);
-        }
-        assert_ne!(status.code(), Some(124), "terminal wrapper timed out");
+        assert!(status.success(), "terminal wrapper did not exit normally");
         assert_eq!(observed_size, u64::try_from(limit).expect("test limit"));
         assert_eq!(
             std::fs::metadata(&transcript)
@@ -108,10 +105,14 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
     let status = child.wait().expect("wait for terminal wrapper");
 
     assert!(status.success(), "terminal wrapper did not exit normally");
-    let transcript_size = std::fs::metadata(transcript)
-        .expect("completed transcript")
-        .len();
-    assert!(transcript_size > 0 && transcript_size < 1024 * 1024);
+    let transcript = fs::read(transcript).expect("completed transcript");
+    assert!(
+        transcript
+            .windows(b"complete".len())
+            .any(|part| part == b"complete"),
+        "terminal wrapper exited before draining the transcript"
+    );
+    assert!(!transcript.is_empty() && transcript.len() < 1024 * 1024);
 }
 
 fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
