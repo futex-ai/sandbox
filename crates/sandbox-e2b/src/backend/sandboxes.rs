@@ -14,7 +14,7 @@ use crate::{
     runtime_conventions::E2bRuntimeConventions,
 };
 
-use super::{configured::E2bSandboxBackend, mapping};
+use super::{configured::E2bSandboxBackend, mapping, sandbox_metadata};
 
 pub(super) async fn managed(
     backend: &E2bSandboxBackend,
@@ -43,6 +43,7 @@ fn managed_sandbox(
             .metadata
             .get(&conventions.metadata_key("consumer"))
             .and_then(|value| SandboxConsumer::from_metadata(value)),
+        lifetime: sandbox_metadata::lifetime(&sandbox.metadata, conventions),
     }
 }
 
@@ -58,7 +59,7 @@ pub(super) async fn create(
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
     let profile = validate_request(backend, &request)?;
-    let metadata = metadata(backend, &request);
+    let metadata = sandbox_metadata::for_create(backend.config.runtime_conventions(), &request);
     let existing = control_result(
         backend,
         backend.control.list_sandboxes(metadata.clone()).await,
@@ -78,6 +79,7 @@ pub(super) async fn create(
             allow_public_egress: profile.allow_public_egress,
             denied_destinations: profile.denied_destinations.clone(),
             idle_timeout_seconds: backend.config.idle_timeout_seconds(),
+            lifetime: request.lifetime,
         })
         .await;
     match created {
@@ -107,7 +109,10 @@ pub(super) async fn recover(
         backend,
         backend
             .control
-            .list_sandboxes(metadata(backend, &request))
+            .list_sandboxes(sandbox_metadata::for_create(
+                backend.config.runtime_conventions(),
+                &request,
+            ))
             .await,
     )?;
     Ok(exactly_one(existing)?.map(map_sandbox))
@@ -117,6 +122,7 @@ fn validate_request<'a>(
     backend: &'a E2bSandboxBackend,
     request: &BackendCreateSandboxRequest,
 ) -> Result<&'a E2bProfile> {
+    request.lifetime.validate()?;
     validate_network(request.network)?;
     backend
         .config
@@ -185,45 +191,6 @@ pub(super) async fn destroy(backend: &E2bSandboxBackend, provider_ref: ProviderR
         backend,
         backend.control.kill_sandbox(provider_ref.as_str()).await,
     )
-}
-
-fn metadata(backend: &E2bSandboxBackend, request: &BackendCreateSandboxRequest) -> SandboxMetadata {
-    let conventions = backend.config.runtime_conventions();
-    let mut metadata = BTreeMap::from([
-        (
-            conventions.metadata_key("deployment_id"),
-            request.deployment_id.clone(),
-        ),
-        (
-            conventions.metadata_key("operation_id"),
-            request.operation_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("sandbox_id"),
-            request.sandbox_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("workspace_id"),
-            request.owner.workspace_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("consumer"),
-            request.consumer.as_str().to_owned(),
-        ),
-    ]);
-    match request.owner.agent_id {
-        Some(agent_id) => {
-            metadata.insert(conventions.metadata_key("agent_id"), agent_id.to_string());
-            metadata.insert(conventions.metadata_key("owner_kind"), "agent".to_owned());
-        }
-        None => {
-            metadata.insert(
-                conventions.metadata_key("owner_kind"),
-                "platform".to_owned(),
-            );
-        }
-    }
-    metadata
 }
 
 fn exactly_one(mut sandboxes: Vec<ControlSandbox>) -> Result<Option<ControlSandbox>> {

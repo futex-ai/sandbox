@@ -1,8 +1,10 @@
 //! Deployment-managed sandbox metadata reconciliation tests.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use sandbox_interface::{OperationId, SandboxBackend, SandboxConsumer, SandboxId, SandboxState};
+use sandbox_interface::{
+    OperationId, SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxState,
+};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -20,6 +22,11 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
         ("tenant_sandbox_id".to_owned(), sandbox_id.to_string()),
         ("tenant_operation_id".to_owned(), operation_id.to_string()),
         ("tenant_consumer".to_owned(), "browser".to_owned()),
+        ("tenant_lifetime".to_owned(), "one_shot".to_owned()),
+        (
+            "tenant_one_shot_max_lifetime_seconds".to_owned(),
+            "90".to_owned(),
+        ),
     ]);
     let control = Unimock::new(
         E2bControlApiMock::list_sandboxes
@@ -40,6 +47,14 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
                         state: ControlSandboxState::Running,
                         metadata: Default::default(),
                     },
+                    ControlSandbox {
+                        sandbox_id: "malformed-sandbox".to_owned(),
+                        state: ControlSandboxState::Running,
+                        metadata: std::collections::BTreeMap::from([(
+                            "tenant_lifetime".to_owned(),
+                            "one_shot".to_owned(),
+                        )]),
+                    },
                 ])
             })),
     );
@@ -51,12 +66,20 @@ async fn managed_sandboxes_parse_only_valid_sandbox_correlation_metadata() {
         .await
         .expect("managed sandbox list should map metadata");
 
-    assert_eq!(managed.len(), 2);
+    assert_eq!(managed.len(), 3);
     assert_eq!(managed[0].state, SandboxState::Paused);
     assert_eq!(managed[0].sandbox_id, Some(sandbox_id));
     assert_eq!(managed[0].operation_id, Some(operation_id));
     assert_eq!(managed[0].consumer, Some(SandboxConsumer::Browser));
+    assert_eq!(
+        managed[0].lifetime,
+        Some(SandboxLifetime::OneShot {
+            max_lifetime: Duration::from_secs(90),
+        })
+    );
     assert_eq!(managed[1].consumer, None);
+    assert_eq!(managed[1].lifetime, None);
+    assert_eq!(managed[2].lifetime, None);
 }
 
 fn config() -> E2bAdapterConfig {

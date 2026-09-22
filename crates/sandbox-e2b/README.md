@@ -39,14 +39,21 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. A sandbox ID must be a lowercase DNS-label
-fragment that fits every envd hostname. An accepted create with an unusable ID
-remains delivery-ambiguous; managed inventory rejects the same ID as provider
-unavailability, maps recognized consumer metadata, and leaves that metadata
-absent for older resources. Create and recover validate the same profile and
-network-policy rules before any control request. Snapshot creation and
-recovery require a nonempty source sandbox and correlation name before an
+Creates use exact metadata, including the typed sandbox consumer and lifetime,
+to recover ambiguous delivery. Idle-auto-pause creation preserves the existing
+resumable request body. A one-shot create disables pause and resume and uses
+its validated 1-to-3600-second maximum as E2B's destruction timeout. Create and
+recovery reject invalid lifetimes before provider access. A sandbox ID must be
+a lowercase DNS-label fragment that fits every envd hostname. An accepted
+create with an unusable ID remains delivery-ambiguous; managed inventory rejects the same ID as provider
+unavailability, maps recognized consumer and lifetime metadata, and leaves
+missing or malformed values absent for older resources. Before connect or
+pause, the concrete client reads that metadata. Running one-shot envd access
+uses the non-mutating detail response; paused one-shot sandboxes are not resumed
+and their original timeout is never extended. Because detail does not return a
+private-traffic token, one-shot port ingress fails safely. Create and recover
+validate the same profile and network-policy rules before any control request.
+Snapshot creation and recovery require a nonempty source sandbox and correlation name before an
 authenticated request. Bounded, cursor-safe snapshot inventory rejects an
 empty or dot-segment identity as provider unavailability; an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
@@ -126,11 +133,11 @@ unavailability; failed mutating delivery remains ambiguous. A successful safe
 response with malformed JSON is also retryable provider unavailability. A
 terminal-input response must decode E2B's exact empty JSON acknowledgment;
 unknown fields or malformed output after that accepted mutation keep the
-delivery outcome ambiguous. Sandbox create and connect responses must contain
-nonblank envd and private-traffic tokens. Missing or blank credentials keep an
-accepted create delivery-ambiguous and make connect retryable. A read-only
-access lookup treats a missing or blank envd token as retryable provider
-unavailability and does not attempt an unauthenticated envd request.
+delivery outcome ambiguous. Sandbox create and ordinary connect responses must
+contain nonblank envd and private-traffic tokens. Missing or blank credentials
+keep an accepted create delivery-ambiguous and make ordinary connect retryable.
+One-shot read access requires only the nonblank envd token returned by sandbox
+detail and never attempts an unauthenticated envd request.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -212,6 +219,10 @@ Live tests are opt-in, ignored, and billable:
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
 
+E2B_API_KEY=... cargo test -p sandbox-e2b \
+  --features live-e2b --test live_e2b \
+  live_e2b_one_shot_create_and_destroy -- --ignored
+
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
   live_e2b_private_screen_bridges -- --ignored
@@ -236,6 +247,7 @@ deletable snapshot handle.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
+- `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.
 
 ### Related Docs
