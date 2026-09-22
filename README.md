@@ -25,11 +25,14 @@ it absent for resources created before the metadata existed.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
-duplicate provider work. Both snapshot probes in the shared conformance
-harness accept immediate or asynchronous completion. The harness retains every
-sandbox and snapshot create request before dispatch, proves each returned
-identity through bounded one-second-paced recovery, and records resources
-before later work can fail. Cleanup always attempts every tracked terminal,
+duplicate provider work. A source remains paused while snapshot recovery finds
+no completed result or more than one candidate; it reconnects only after the
+adapter proves exactly one completed snapshot. Both snapshot probes in the
+shared conformance harness accept immediate or asynchronous completion. The
+harness retains every sandbox and snapshot create request before dispatch,
+proves each returned identity through bounded one-second-paced recovery, and
+runs its split-output check through a self-contained `/bin/sh` command available
+in normal backend images. Cleanup always attempts every tracked terminal,
 snapshot, and sandbox; an operation error remains the reported error even if a
 cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
@@ -44,13 +47,16 @@ retryable. Snapshot operations also require one nonempty source and correlation
 value. Sandbox create and connect responses require nonblank process and
 private-traffic credentials. Provider mutations accept only their exact
 acknowledgment, including an exact versioned screen-resize object; process
-start and inventory responses must contain a nonzero PID. Missing read
-credentials stay retryable. Caller-controlled process durations
-are capped before provider access, including 30-second terminal output waits
-and 300-second process operations. Stateless commands also reject an empty
-executable, more than 128 KiB of argv, or more than 64 MiB of combined output
-before credentials are acquired. Image preparation
-validates every input path and size before it
+start and inventory responses must contain a nonzero PID. Connect streaming
+collectors reject malformed or unsuccessful end-stream envelopes instead of
+reporting an ordinary completion. Missing read credentials stay retryable.
+Caller-controlled process durations are capped before provider access,
+including 30-second terminal output waits and 300-second process operations.
+Terminal creation and recovery also reject transcript limits above the shared
+256 MiB readable-file ceiling before provider access. Stateless commands reject
+an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
+output before credentials are acquired. Image preparation validates every input
+path and size before it
 connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A

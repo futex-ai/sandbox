@@ -133,14 +133,11 @@ async fn snapshot_create_reconnects_source_and_recovery_diffs_inventory() {
 }
 
 #[tokio::test]
-async fn snapshot_recovery_distinguishes_pending_from_multiple_candidates() {
+async fn snapshot_recovery_keeps_the_source_paused_without_one_candidate() {
     let control = Unimock::new((
         E2bControlApiMock::list_snapshots
             .next_call(matching!(_, _))
             .returns(Ok(Vec::new())),
-        E2bControlApiMock::connect_sandbox
-            .next_call(matching!("source"))
-            .returns(Ok(access("source"))),
         E2bControlApiMock::list_snapshots
             .next_call(matching!(_, _))
             .returns(Ok(vec![
@@ -151,9 +148,6 @@ async fn snapshot_recovery_distinguishes_pending_from_multiple_candidates() {
                     snapshot_id: "two".to_owned(),
                 },
             ])),
-        E2bControlApiMock::connect_sandbox
-            .next_call(matching!("source"))
-            .returns(Ok(access("source"))),
     ));
     let backend = backend(control, Unimock::new(()));
 

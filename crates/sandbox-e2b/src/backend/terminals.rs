@@ -1,8 +1,8 @@
 //! E2B durable PTY creation, ingestion, input, and restored-helper cleanup.
 
 use sandbox_interface::{
-    BackendInputRequest, BackendTerminal, BackendTerminalCreateRequest, Error, ProviderRef,
-    ResourceKind, Result, TerminalState,
+    BackendInputRequest, BackendTerminal, BackendTerminalCreateRequest, Error,
+    FILE_TRANSFER_MAX_BYTES, ProviderRef, ResourceKind, Result, TerminalState,
 };
 
 use crate::process::{ProcessConnection, ProcessPtyRequest, ProcessSelector};
@@ -53,6 +53,7 @@ pub(super) async fn create(
     backend: &E2bSandboxBackend,
     request: BackendTerminalCreateRequest,
 ) -> Result<BackendTerminal> {
+    validate_transcript_limit(request.provider_log_limit)?;
     let connection = mapping::connection(backend, &request.sandbox_provider_ref)
         .await?
         .with_user(TRUSTED_PROCESS_USER);
@@ -101,10 +102,22 @@ pub(super) async fn recover(
     backend: &E2bSandboxBackend,
     request: BackendTerminalCreateRequest,
 ) -> Result<Option<BackendTerminal>> {
+    validate_transcript_limit(request.provider_log_limit)?;
     let connection = mapping::connection(backend, &request.sandbox_provider_ref)
         .await?
         .with_user(TRUSTED_PROCESS_USER);
     recover_connected(backend, &connection, request.terminal_id).await
+}
+
+fn validate_transcript_limit(provider_log_limit: usize) -> Result<()> {
+    if provider_log_limit > FILE_TRANSFER_MAX_BYTES {
+        return Err(Error::InvalidLength {
+            field: "provider_log_limit",
+            minimum: 0,
+            maximum: FILE_TRANSFER_MAX_BYTES,
+        });
+    }
+    Ok(())
 }
 
 async fn recover_connected(

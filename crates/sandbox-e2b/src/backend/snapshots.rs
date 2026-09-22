@@ -78,7 +78,6 @@ pub(super) async fn recover(
     .into_iter()
     .filter(|snapshot| !before.contains(snapshot.snapshot_id.as_str()))
     .collect::<Vec<_>>();
-    reconnect_source(backend, &request.source_provider_ref).await;
     if candidates.is_empty() {
         return Ok(BackendSnapshotRecovery::InProgress);
     }
@@ -86,6 +85,7 @@ pub(super) async fn recover(
         let candidate = candidates
             .pop()
             .ok_or_else(|| Error::internal_message("snapshot recovery candidate disappeared"))?;
+        reconnect_source(backend, &request.source_provider_ref).await;
         return Ok(BackendSnapshotRecovery::Recovered(mapping::ready_snapshot(
             candidate.snapshot_id,
         )));

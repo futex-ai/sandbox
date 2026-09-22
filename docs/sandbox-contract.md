@@ -56,7 +56,9 @@ Image construction is a caller-persisted state machine:
    request and dispatch intent, and call `create_snapshot` once.
 4. Use only `recover_snapshot_create` for an uncertain, in-progress, or resumed
    dispatch. Zero candidates remain in progress; multiple candidates require
-   reconciliation. Neither outcome may replay preparation or redispatch.
+   reconciliation. If snapshot capture pauses the source, both outcomes keep it
+   paused; only exactly one completed candidate permits reconnecting it. Neither
+   outcome may replay preparation or redispatch.
 5. Persist the completed snapshot identity and measured size, then destroy the
    source idempotently.
 
@@ -108,7 +110,9 @@ acquires provider access or writes any earlier file. Provider response and
 process output limits are enforced while bytes are consumed. A streaming frame
 decoder must validate the bounded frame header before retaining the rest of a
 provider chunk, and its partial-frame buffer may retain only the current
-allowed frame. A bounded one-shot process must be
+allowed frame. A streaming protocol's end marker must also be decoded:
+malformed metadata or a reported application error must fail collection rather
+than look like an ordinary completion. A bounded one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. A public concrete client must reject
@@ -129,9 +133,11 @@ direct or stateless process command cannot be empty, and its command and
 arguments total at most 128 KiB. Each direct stream or combined stateless
 output limit is at most 64 MiB. Every direct, stateless read-only, or
 process-transport duration is at most 300 seconds. A terminal output long poll
-is at most 30 seconds. These bounds must be checked before acquiring provider
-sandbox access, and absolute deadlines must use checked arithmetic so no caller
-duration can panic. In particular, an
+is at most 30 seconds. A terminal create or recovery request cannot set its
+provider transcript limit above the shared 256 MiB regular-file ceiling. These
+bounds must be checked before acquiring provider sandbox access, and absolute
+deadlines must use checked arithmetic so no caller duration can panic. In
+particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
 Helper processes may report success only after a normal exit; an exit-code
@@ -169,7 +175,8 @@ expected empty object. Unknown fields or malformed JSON remain
 delivery-ambiguous. The same identity rule
 applies when killing terminals inherited by a restored sandbox. Provider-side
 transcripts enforce the requested byte count exactly, including limits that
-are smaller than or not aligned to 1 KiB. The
+are smaller than or not aligned to 1 KiB, while the accepted limit stays within
+the shared 256 MiB reader ceiling. The
 provider must create, retain, and read the transcript as a trusted identity in
 storage inaccessible to the workload. A tagged trusted supervisor keeps the
 storage descriptor, clips bytes from a private recorder pipe, drains overflow,
@@ -209,6 +216,9 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
+The process probe uses `/bin/sh` plus a self-contained script that emits exact
+stdout and stderr bytes; conforming images therefore need a standard shell but
+no harness-only executable.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never

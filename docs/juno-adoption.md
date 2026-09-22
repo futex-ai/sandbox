@@ -29,10 +29,10 @@ snapshot request, and dispatch intent. Call create once. Every restart,
 ambiguous response, or in-progress result must use
 `recover_snapshot_create` with that same request. Zero candidates remain in
 progress, while multiple candidates need operator reconciliation; neither case
-may call preparation or snapshot create again. Persist the completed image and
-size before destroying the source. A crash after intent but before confirmed
-delivery must fail closed for operator action rather than guess and duplicate
-work.
+may reconnect the paused source, call preparation, or dispatch snapshot create
+again. Persist the completed image and size before destroying the source. A
+crash after intent but before confirmed delivery must fail closed for operator
+action rather than guess and duplicate work.
 
 `FileWriteUnconfirmed` requires the sandbox to stay fenced until it is
 reconciled or destroyed; do not immediately retry the write.
@@ -50,3 +50,6 @@ Active terminals created with a different durable log directory must be
 drained or have their log files migrated before the cutover, because the shared
 adapter uses its neutral log location. Apply the same migration rule to any
 template-owned cleanup artifacts whose neutral names changed during extraction.
+New terminal create and recovery requests must keep their provider transcript
+limit at or below 256 MiB so the shared regular-file reader can always ingest
+the completed transcript.

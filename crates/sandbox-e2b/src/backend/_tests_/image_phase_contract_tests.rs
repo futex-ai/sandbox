@@ -64,14 +64,11 @@ async fn preparation_failure_leaves_the_persisted_source_caller_owned() {
 
 #[tokio::test]
 async fn empty_snapshot_recovery_does_not_rebuild_or_redispatch() {
-    let control = Unimock::new((
+    let control = Unimock::new(
         E2bControlApiMock::list_snapshots
             .next_call(matching!("persisted-source", "image-operation"))
             .returns(Ok(Vec::new())),
-        E2bControlApiMock::connect_sandbox
-            .next_call(matching!("persisted-source"))
-            .returns(Ok(access("persisted-source"))),
-    ));
+    );
     let recovery = backend(control, Unimock::new(()))
         .recover_snapshot_create(snapshot_request())
         .await

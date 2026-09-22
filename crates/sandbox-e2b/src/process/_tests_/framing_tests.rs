@@ -5,8 +5,8 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use crate::E2bAdapterError;
 
 use super::{
-    ConnectFrame, DecodedFrameBatch, FrameDecoder, ProcessDataChannel, ProcessEvent, decode_event,
-    encode_frame,
+    ConnectFrame, DecodedFrameBatch, FrameDecoder, ProcessDataChannel, ProcessEvent,
+    decode_end_stream, decode_event, encode_frame,
 };
 
 #[test]
@@ -150,6 +150,28 @@ fn malformed_compressed_base64_and_json_frames_fail_closed() {
 fn zero_start_pid_is_malformed() {
     assert!(matches!(
         decode_event(br#"{"event":{"start":{"pid":0}}}"#),
+        Err(E2bAdapterError::MalformedFrame)
+    ));
+}
+
+#[test]
+fn end_stream_decoder_accepts_success_and_lenient_error_shapes() {
+    assert!(decode_end_stream(b"{}").is_ok());
+    assert!(decode_end_stream(br#"{"error":null,"metadata":{"trace":["value"]}}"#).is_ok());
+    assert!(matches!(
+        decode_end_stream(br#"{"error":{"message":"failed","extension":true}}"#),
+        Err(E2bAdapterError::Unavailable)
+    ));
+}
+
+#[test]
+fn malformed_end_stream_payloads_fail_closed() {
+    assert!(matches!(
+        decode_end_stream(b"not-json"),
+        Err(E2bAdapterError::MalformedFrame)
+    ));
+    assert!(matches!(
+        decode_end_stream(br#"{"error":"failed"}"#),
         Err(E2bAdapterError::MalformedFrame)
     ));
 }

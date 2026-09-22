@@ -51,6 +51,9 @@ authenticated request. Bounded, cursor-safe snapshot inventory rejects an
 empty or dot-segment identity as provider unavailability; an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
 inspection also rejects a response whose ID differs from the requested ID.
+Snapshot capture keeps its source paused while recovery finds no new snapshot
+or more than one candidate. The adapter reconnects the source only after create
+returns one completed snapshot or recovery proves exactly one new candidate.
 Terminal identities combine an E2B PID with the consumer terminal ID; start
 and inventory responses reject PID zero before exposing a process. Reads
 verify both identity values,
@@ -84,16 +87,22 @@ operation acquires provider access. Oversized writes fail before sandbox
 connection. Every trusted Python helper uses isolated module lookup with site
 initialization disabled, so sandbox working-directory modules, `PYTHONPATH`,
 and user startup customization cannot run before file checks, cleanup, or
-terminal transcript setup. Terminal transcript writers enforce arbitrary byte
-limits exactly rather than rounding to filesystem blocks. A trusted supervisor
-clips recorder chunks to the remaining limit, keeps draining overflow so the
-interactive terminal stays usable, and waits for the recorder before exiting.
+terminal transcript setup. Terminal transcript writers enforce accepted byte
+limits exactly rather than rounding to filesystem blocks. Create and recovery
+reject limits above the shared 256 MiB regular-file ceiling before connecting
+to the sandbox, which keeps every completed transcript readable. A trusted
+supervisor clips recorder chunks to the remaining limit, keeps draining
+overflow so the interactive terminal stays usable, and waits for the recorder
+before exiting.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
-unbounded intermediate buffer. Direct process and stateless read-only requests
-are validated before the adapter acquires sandbox access: commands must be
+unbounded intermediate buffer. Both combined and split-stream collectors
+decode Connect end-stream JSON through one path: an error object is retryable
+provider unavailability, malformed JSON fails closed, and a missing or null
+error is a clean close. Direct process and stateless read-only requests are
+validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
 combined stateless output cap is at most 64 MiB. Caller-controlled process,
 read-only execution, and regular-file durations cannot exceed 300 seconds.
@@ -126,9 +135,11 @@ or destroys a provider resource. Every staged input path and size is checked
 before the adapter connects or writes the first file. Consumers dispatch
 source and snapshot creates once, use only their recovery methods after each
 dispatch starts, and persist preparation's measured size before snapshot
-dispatch. Empty recovery inventory stays in progress instead of replaying
-preparation or allocating another resource. Before measuring a prepared
-source, configured image processes must exit after bounded TERM/KILL
+dispatch. Empty recovery inventory stays in progress and keeps the source
+paused instead of reconnecting it, replaying preparation, or allocating another
+resource. Multiple candidates likewise keep the source paused for
+reconciliation. Before measuring a prepared source, configured image processes
+must exit after bounded TERM/KILL
 escalation. Size traversal or I/O failure returns `ImageSizeUnavailable`
 instead of accepting a partial total. The size-measurement command authenticates
 as root so it can traverse private adapter storage; setup and verification

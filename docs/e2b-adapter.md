@@ -45,7 +45,10 @@ as chunks and stop as soon as their cumulative byte limit is exceeded. Clients
 that carry an API or envd access token never follow HTTP redirects. The
 streaming Connect decoder copies only one header and its declared bounded
 payload at a time; an oversized declaration is rejected before the rest of the
-HTTP chunk is copied into decoder state.
+HTTP chunk is copied into decoder state. Combined and split-stream collectors
+share one end-stream decoder. A non-null error object becomes retryable provider
+unavailability, malformed end-stream JSON fails closed, and a missing or null
+error is successful completion.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
@@ -72,6 +75,9 @@ runtime-or-browser consumer value. Managed inventory returns a recognized
 consumer class, rejects an unusable sandbox identity, and leaves the consumer
 absent for resources created before that metadata was added. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
+The source stays paused when recovery sees no new snapshot or more than one
+candidate; only a synchronous completed create or exactly one recovered
+candidate triggers reconnect.
 Snapshot creation and inventory reject an empty source sandbox or correlation
 name before issuing an authenticated request.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
@@ -194,7 +200,14 @@ descriptor-relative helper. Terminal discovery, input, and shutdown use the
 same root-authenticated supervisor identity. Durable reads share one absolute
 provider deadline and coherent cursor/size reporting. The supervisor waits for
 the recorder before exiting, so completed transcripts are fully drained.
+Terminal creation and recovery reject a provider log limit above the shared
+256 MiB regular-file ceiling before acquiring sandbox access, so a transcript
+cannot grow beyond what that reader accepts.
 Oversized replacement writes fail before acquiring mutating sandbox access.
+
+The public backend conformance process uses `/bin/sh` with a self-contained
+script that emits exact stdout and stderr bytes, so a normal E2B image does not
+need a test-only executable.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
@@ -203,13 +216,13 @@ snapshot and never destroys the source. It validates every staged file's path
 and size before connecting to the source, so one invalid later file cannot
 leave earlier files written. The caller separately records each create intent,
 dispatches it once, and uses the adapter's recover-only methods after dispatch
-starts. Empty
-recovery inventory remains `InProgress`, so an
-eventual-consistency gap cannot replay build commands, allocate a second paid
-sandbox, or create a second image. Image scrub sends TERM to both configured
-process names, waits for bounded disappearance, escalates to KILL, and fails
-unless both names are gone before size measurement. Both image scrub and
-restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
+starts. Empty recovery inventory remains `InProgress` and keeps the source
+paused, so an eventual-consistency gap cannot replay build commands, allocate a
+second paid sandbox, or create a second image. Multiple candidates likewise
+keep the source paused for reconciliation. Image scrub sends TERM to both
+configured process names, waits for bounded disappearance, escalates to KILL,
+and fails unless both names are gone before size measurement. Both image scrub
+and restored-terminal cleanup also stop inherited `sandbox-drive-*` credential
 helpers with bounded TERM/KILL polling and fail unless their exit is confirmed.
 Cache removal opens every parent and child through non-following directory
 descriptors. A setup-created symlink in the home or cache-parent path fails the

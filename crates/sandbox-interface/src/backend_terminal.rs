@@ -29,7 +29,8 @@ pub struct BackendTerminalCreateRequest {
     pub sandbox_provider_ref: ProviderRef,
     /// Optional shell working directory.
     pub cwd: Option<String>,
-    /// Provider-side transcript byte cap.
+    /// Provider-side transcript byte cap, no greater than
+    /// [`crate::FILE_TRANSFER_MAX_BYTES`].
     pub provider_log_limit: usize,
 }
 

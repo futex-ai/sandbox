@@ -161,6 +161,17 @@ pub(super) fn decode_event(payload: &[u8]) -> Result<ProcessEvent> {
     Err(Error::MalformedFrame)
 }
 
+pub(super) fn decode_end_stream(payload: &[u8]) -> Result<()> {
+    let response: EndStreamWire = match serde_json::from_slice(payload) {
+        Ok(response) => response,
+        Err(_) => return Err(Error::MalformedFrame),
+    };
+    if response.error.is_some() {
+        return Err(Error::Unavailable);
+    }
+    Ok(())
+}
+
 pub(super) fn encode_frame(payload: &[u8]) -> Result<Vec<u8>> {
     let length = match u32::try_from(payload.len()) {
         Ok(length) => length,
@@ -208,6 +219,15 @@ struct EndWire {
 
 #[derive(Deserialize)]
 struct KeepAliveWire {}
+
+#[derive(Deserialize)]
+struct EndStreamWire {
+    #[serde(default)]
+    error: Option<EndStreamErrorWire>,
+}
+
+#[derive(Deserialize)]
+struct EndStreamErrorWire {}
 
 #[cfg(test)]
 #[path = "_tests_/framing_tests.rs"]

@@ -5,7 +5,9 @@ use futures_util::StreamExt;
 use crate::error::Result;
 
 use super::connect::ConnectProcessTransport;
-use super::framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_event};
+use super::framing::{
+    FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event,
+};
 use super::types::{ProcessConnection, ProcessSplitOutput, SplitProcessCommand};
 use super::wire::{argv_start, encode};
 
@@ -54,6 +56,7 @@ impl ConnectProcessTransport {
                 let mut stop = false;
                 for frame in decoded.frames {
                     if frame.end_stream {
+                        decode_end_stream(&frame.payload)?;
                         stop = true;
                         break;
                     }

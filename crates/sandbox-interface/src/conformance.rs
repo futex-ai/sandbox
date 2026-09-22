@@ -13,7 +13,12 @@ use crate::{
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
+const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2";
+
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
+///
+/// The target image must provide `/bin/sh`; the process probe supplies its own
+/// script and requires exact stdout and stderr bytes.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
@@ -94,8 +99,8 @@ async fn exercise_backend_with_resources(
     let process = backend
         .run_process(BackendRunProcessRequest {
             sandbox_provider_ref: source.provider_ref.clone(),
-            command: "conformance-command".to_owned(),
-            args: vec!["exact-argument".to_owned()],
+            command: "/bin/sh".to_owned(),
+            args: vec!["-c".to_owned(), PROCESS_SCRIPT.to_owned()],
             stdout_limit: 4096,
             stderr_limit: 1024,
             deadline: Duration::from_secs(60),

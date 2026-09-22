@@ -3,8 +3,14 @@
 use sandbox_interface::{BackendRunProcessRequest, Result, SandboxProcessOutput};
 
 pub(super) fn run(request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
-    assert_eq!(request.command, "conformance-command");
-    assert_eq!(request.args, ["exact-argument"]);
+    assert_eq!(request.command, "/bin/sh");
+    assert_eq!(
+        request.args,
+        [
+            "-c",
+            "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2"
+        ]
+    );
     Ok(SandboxProcessOutput {
         stdout: b"argv-direct".to_vec(),
         stderr: b"separate-stderr".to_vec(),

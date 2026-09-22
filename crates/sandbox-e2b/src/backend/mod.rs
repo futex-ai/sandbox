@@ -74,6 +74,10 @@ mod snapshot_delete_tests;
 mod terminal_recovery_tests;
 
 #[cfg(test)]
+#[path = "_tests_/terminal_limit_tests.rs"]
+mod terminal_limit_tests;
+
+#[cfg(test)]
 #[path = "_tests_/terminal_identity_tests.rs"]
 mod terminal_identity_tests;
 

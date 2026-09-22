@@ -9,7 +9,7 @@ use serde::Serialize;
 use crate::error::{Error, Result};
 
 use super::connect::ConnectProcessTransport;
-use super::framing::{FrameDecoder, ProcessEvent, decode_event};
+use super::framing::{FrameDecoder, ProcessEvent, decode_end_stream, decode_event};
 use super::mapping::map_result;
 use super::selector::ProcessSelector;
 use super::types::{ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessRunOutput};
@@ -62,6 +62,7 @@ impl ConnectProcessTransport {
                 let mut complete = false;
                 for frame in decoded.frames {
                     if frame.end_stream {
+                        decode_end_stream(&frame.payload)?;
                         complete = true;
                         break;
                     }

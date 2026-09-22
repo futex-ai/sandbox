@@ -1071,3 +1071,78 @@ real nonzero operating-system process ID.
 - [ ] After a clean review, resolve superseded closeout tasks, record plan
       completion, and move this plan from Active to Completed in
       `plans/README.md`.
+
+## Milestone 28: Complete Snapshot And Stream Bounds
+
+Resolve every finding from the write-recovery and process-identity review. At
+the end of this milestone, an unfinished snapshot cannot restart its source,
+provider stream errors cannot look like ordinary completion, the public
+conformance harness runs on normal sandbox images, and every terminal
+transcript remains within the size that its reader supports.
+
+### Review Items
+
+1. **Severity: high — keep the source paused until snapshot recovery is
+   complete.** Creating a snapshot pauses the source sandbox while the provider
+   captures it. Recovery currently reconnects that source even when the
+   provider still reports no completed snapshot. Reconnecting resumes workload
+   activity during capture. Doing nothing can produce a failed or inconsistent
+   snapshot. Option A: reconnect only after recovery finds one completed
+   snapshot. Option B: add a separate caller-owned resume phase after snapshot
+   completion. **Recommendation: A**, because it preserves the existing API and
+   keeps the source paused for the whole provider capture.
+2. **Severity: medium — reject provider errors in Connect end-stream
+   envelopes.** Process output arrives as a stream of framed messages. The last
+   frame can carry a provider application error even though the HTTP request
+   itself succeeded. Collection currently stops at that frame without reading
+   it. Doing nothing can make a provider failure look like an empty poll or an
+   ordinary timeout. Option A: decode and validate the end-stream envelope in
+   one shared framing helper used by both collectors. Option B: move that
+   interpretation into the HTTP transport. **Recommendation: A**, because the
+   frame decoder already owns the streaming protocol and both collectors can
+   share the same exact rule.
+3. **Severity: medium — make the public conformance process portable.** The
+   public backend conformance harness runs an executable named
+   `conformance-command`, which exists only in its test doubles. A normal
+   sandbox image does not provide that executable. Doing nothing means the
+   advertised harness cannot test real backends. Option A: run `/bin/sh` with a
+   self-contained script that writes the expected bytes to stdout and stderr.
+   Option B: require every backend test image to install a fixture executable.
+   **Recommendation: A**, because a standard shell is already required by the
+   backend contract and needs no extra image setup.
+4. **Severity: medium — reject terminal transcript limits that the reader
+   cannot support.** Terminal creation accepts any transcript byte limit, but
+   the shared regular-file reader rejects files larger than 256 MiB. Once a
+   transcript crosses that size, even a small read fails and the file can keep
+   growing. Doing nothing can make a terminal's history permanently unreadable
+   while consuming unbounded disk space. Option A: reject limits above the
+   shared 256 MiB file-transfer cap before acquiring provider access. Option B:
+   build a separate transcript reader that allows larger total files.
+   **Recommendation: A**, because it keeps recording and reading on one clear
+   bound without adding another file protocol.
+
+- [x] Record all four review findings with severity, context, impact, options,
+      and recommendations in simple language that assumes no prior context.
+- [x] Add failing regressions first for pending snapshot recovery, Connect
+      end-stream errors in both collectors, a portable conformance command, and
+      oversized terminal transcript limits before provider access.
+- [x] Reconnect a snapshot source only after recovery observes exactly one
+      completed candidate.
+- [x] Decode and reject unsuccessful Connect end-stream envelopes through one
+      shared framing path used by combined and split-stream collection.
+- [x] Replace the conformance-only executable with a self-contained `/bin/sh`
+      command and align both fake backends with the real request.
+- [x] Cap terminal transcript creation at the shared file-transfer maximum
+      before the adapter acquires sandbox access.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      snapshot pause safety, Connect end-stream errors, portable conformance,
+      and readable terminal bounds.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, resolve superseded closeout tasks, record plan
+      completion, and move this plan from Active to Completed in
+      `plans/README.md`.

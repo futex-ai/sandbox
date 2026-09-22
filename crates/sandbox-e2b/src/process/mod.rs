@@ -28,3 +28,7 @@ pub use self::types::{
     ProcessRegularFileRequest, ProcessRunOutput, ProcessSplitOutput, ProcessTransport,
     ProcessTransportMock, SplitProcessCommand,
 };
+
+#[cfg(test)]
+#[path = "_tests_/end_stream_tests.rs"]
+mod end_stream_tests;

@@ -192,6 +192,10 @@ pub trait SandboxBackend: Send + Sync {
         request: BackendCreateSnapshotRequest,
     ) -> Result<BackendSnapshotCreateOutcome>;
     /// Reconciles ambiguous snapshot creation without replaying it.
+    ///
+    /// A provider that pauses the source during capture must keep it paused for
+    /// `InProgress` or `ReconciliationRequired` and may reconnect only after
+    /// proving one completed snapshot.
     async fn recover_snapshot_create(
         &self,
         request: BackendCreateSnapshotRequest,
@@ -221,11 +225,15 @@ pub trait SandboxBackend: Send + Sync {
     ///
     /// Durable transcript capture must be active before a user login profile
     /// can run so startup output and exits cannot bypass terminal bookkeeping.
+    /// The transcript limit must be validated before provider access and cannot
+    /// exceed [`crate::FILE_TRANSFER_MAX_BYTES`].
     async fn create_terminal(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<BackendTerminal>;
     /// Recovers a correlated terminal create without allocating a new PTY.
+    ///
+    /// The transcript limit has the same pre-provider-access bound as create.
     async fn recover_terminal_create(
         &self,
         request: BackendTerminalCreateRequest,

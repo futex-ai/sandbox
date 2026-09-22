@@ -231,8 +231,14 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
         ProcessTransportMock::run_split
             .next_call(matching!(_, _))
             .answers(&|_, _, command| {
-                assert_eq!(command.command, "conformance-command");
-                assert_eq!(command.args, ["exact-argument"]);
+                assert_eq!(command.command, "/bin/sh");
+                assert_eq!(
+                    command.args,
+                    [
+                        "-c",
+                        "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2"
+                    ]
+                );
                 Ok(ProcessSplitOutput {
                     stdout: b"argv-direct".to_vec(),
                     stderr: b"separate-stderr".to_vec(),
