@@ -1,13 +1,16 @@
 //! E2B envd Process/PTY Connect transport.
 
+mod command_debug;
 mod connect;
 mod connect_helpers;
 mod connection;
 mod file;
 mod framing;
+mod helper_run;
 mod http;
 mod http_error;
 mod mapping;
+mod output_debug;
 mod provider_pid;
 mod regular_file;
 mod regular_file_cleanup;

@@ -22,6 +22,8 @@ pub(super) async fn run(
             SplitProcessCommand {
                 command: request.command,
                 args: request.args,
+                cwd: request.cwd,
+                envs: request.envs,
                 stdout_limit: request.stdout_limit,
                 stderr_limit: request.stderr_limit,
                 deadline: request.deadline,
@@ -39,6 +41,7 @@ pub(super) async fn run(
 }
 
 fn validate(request: &BackendRunProcessRequest) -> Result<()> {
+    request.validate_execution_context()?;
     validate_argv("command", &request.command, &request.args)?;
     validate_stream_limit("stdout_limit", request.stdout_limit)?;
     validate_stream_limit("stderr_limit", request.stderr_limit)?;

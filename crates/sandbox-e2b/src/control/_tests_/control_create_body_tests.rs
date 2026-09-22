@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use sandbox_interface::EgressDestination;
+use sandbox_interface::{EgressDestination, SandboxLifetime};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -33,13 +33,17 @@ async fn open_create_body_is_encoded_byte_for_byte() {
             denied_destinations: vec!["203.0.113.42/24".to_owned()],
             allowed_destinations: None,
             idle_timeout_seconds: 600,
+            lifetime: SandboxLifetime::IdleAutoPause,
         })
         .await
         .expect("create should decode");
 
     assert_eq!(access.sandbox_id, "provider-sandbox");
     assert_eq!(access.domain, "e2b.app");
-    assert_eq!(access.traffic_access_token, "traffic-token");
+    assert_eq!(
+        access.traffic_access_token.as_deref(),
+        Some("traffic-token")
+    );
     let body = only_body(&requests);
     assert_eq!(body, OPEN_BODY);
     assert!(!String::from_utf8_lossy(&body).contains("token"));
@@ -63,6 +67,7 @@ async fn allowlist_create_body_is_encoded_byte_for_byte() {
                 },
             ]),
             idle_timeout_seconds: 600,
+            lifetime: SandboxLifetime::IdleAutoPause,
         })
         .await
         .expect("allowlist create should decode");
@@ -131,6 +136,7 @@ async fn unsafe_direct_allowlists_fail_before_transport() {
                 denied_destinations,
                 allowed_destinations: Some(allowed_destinations),
                 idle_timeout_seconds: 600,
+                lifetime: SandboxLifetime::IdleAutoPause,
             })
             .await;
 
@@ -163,6 +169,7 @@ fn recording_client() -> (ReqwestE2bControlApi, RecordedRequests) {
             transport,
             sandbox_domain: "e2b.app".to_owned(),
             idle_timeout_seconds: 600,
+            lifetime_metadata_key: "sandbox_lifetime".to_owned(),
         },
         requests,
     )
@@ -173,6 +180,7 @@ fn client_without_transport() -> ReqwestE2bControlApi {
         transport: Arc::new(Unimock::new(())),
         sandbox_domain: "e2b.app".to_owned(),
         idle_timeout_seconds: 600,
+        lifetime_metadata_key: "sandbox_lifetime".to_owned(),
     }
 }
 

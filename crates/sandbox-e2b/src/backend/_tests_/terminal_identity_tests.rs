@@ -3,14 +3,14 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendInputRequest, BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxBackend,
-    TerminalId,
+    BackendInputRequest, BackendOutputRequest, Error, OperationId, ProviderRef, ResourceKind,
+    SandboxBackend, TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
-    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessInfo,
-    ProcessSelector, ProcessTransportMock,
+    ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
+    ProcessInfo, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -35,14 +35,16 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
                     tag: Some(wrong_tag.clone()),
                 }])
             })),
-        ProcessTransportMock::send_input
-            .next_call(matching!(_, _, _))
-            .answers(&|_, connection, _, _| {
-                assert_eq!(connection.user(), Some("root"));
-                Err(Error::NotFound {
-                    resource: ResourceKind::Terminal,
-                })
-            }),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
         ProcessTransportMock::kill
             .next_call(matching!(_, _))
             .answers(&|_, connection, _| {
@@ -87,6 +89,82 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
 }
 
 #[tokio::test]
+async fn live_terminal_rejects_a_present_unknown_identity_record() {
+    let terminal_id = TerminalId::new();
+    let operation_id = OperationId::new();
+    let provider_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
+    let tag = format!("sandbox-terminal-{terminal_id}");
+    let record = format!(
+        concat!(
+            "{{\"schema\":\"sandbox-e2b-terminal-identity-v2\",",
+            "\"pid\":41,\"terminal_id\":\"{}\",",
+            "\"operation_id\":\"{}\",\"tag\":\"{}\"}}\n"
+        ),
+        terminal_id, operation_id, tag,
+    )
+    .into_bytes();
+    let record_size = record.len() as u64;
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(access())),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(tag),
+            }])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Ok(ProcessFileChunk {
+                bytes: record,
+                total_size: record_size,
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    backend
+        .inspect_terminal(ProviderRef::new("sandbox"), provider_ref)
+        .await
+        .expect_err("a present unknown identity record must fail closed");
+}
+
+#[tokio::test]
+async fn provider_absence_during_identity_read_does_not_enable_legacy_fallback() {
+    let terminal_id = TerminalId::new();
+    let provider_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(access())),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(format!("sandbox-terminal-{terminal_id}")),
+            }])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::Terminal,
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    assert_not_found(
+        backend
+            .inspect_terminal(ProviderRef::new("sandbox"), provider_ref)
+            .await,
+    );
+}
+
+#[tokio::test]
 async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
     let terminal_id = TerminalId::new();
     let terminal_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
@@ -99,6 +177,12 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
     let write_tag = expected_tag.clone();
     let close_tag = expected_tag;
     let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(write_tag.clone()),
+            }])),
         ProcessTransportMock::send_input
             .next_call(matching!(_, _, _))
             .answers_arc(Arc::new(move |_, connection, selector, input| {
@@ -146,7 +230,7 @@ fn access() -> ControlSandboxAccess {
         sandbox_id: "sandbox".to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
 

@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use sandbox_interface::SandboxLifetime;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -48,11 +49,24 @@ async fn accepted_sandbox_create_rejects_unroutable_identity_as_ambiguous() {
 
 #[tokio::test]
 async fn connect_rejects_missing_or_blank_credentials_as_unavailable() {
-    let client = recording_client([
-        r#"{"sandboxID":"sandbox","trafficAccessToken":"traffic"}"#,
-        r#"{"sandboxID":"sandbox","envdAccessToken":" ","trafficAccessToken":"traffic"}"#,
-        r#"{"sandboxID":"sandbox","envdAccessToken":"envd"}"#,
-        r#"{"sandboxID":"sandbox","envdAccessToken":"envd","trafficAccessToken":"\t"}"#,
+    let client = recording_client_with_responses([
+        (200, r#"{"sandboxID":"sandbox","state":"running"}"#),
+        (
+            201,
+            r#"{"sandboxID":"sandbox","trafficAccessToken":"traffic"}"#,
+        ),
+        (200, r#"{"sandboxID":"sandbox","state":"running"}"#),
+        (
+            201,
+            r#"{"sandboxID":"sandbox","envdAccessToken":" ","trafficAccessToken":"traffic"}"#,
+        ),
+        (200, r#"{"sandboxID":"sandbox","state":"running"}"#),
+        (201, r#"{"sandboxID":"sandbox","envdAccessToken":"envd"}"#),
+        (200, r#"{"sandboxID":"sandbox","state":"running"}"#),
+        (
+            201,
+            r#"{"sandboxID":"sandbox","envdAccessToken":"envd","trafficAccessToken":"\t"}"#,
+        ),
     ]);
 
     for _ in 0..4 {
@@ -107,6 +121,7 @@ fn create_request() -> ControlCreateSandbox {
         denied_destinations: Vec::new(),
         allowed_destinations: None,
         idle_timeout_seconds: 600,
+        lifetime: SandboxLifetime::IdleAutoPause,
     }
 }
 
@@ -140,5 +155,35 @@ fn recording_client_with_status<const N: usize>(
         transport,
         sandbox_domain: "e2b.app".to_owned(),
         idle_timeout_seconds: 600,
+        lifetime_metadata_key: "sandbox_lifetime".to_owned(),
+    }
+}
+
+fn recording_client_with_responses<const N: usize>(
+    responses: [(u16, &str); N],
+) -> ReqwestE2bControlApi {
+    let responses = Arc::new(Mutex::new(VecDeque::from(responses.map(
+        |(status, body)| HttpResponse {
+            status,
+            body: body.as_bytes().to_vec(),
+            next_token: None,
+        },
+    ))));
+    let transport: Arc<dyn E2bHttpTransport> =
+        Arc::new(Unimock::new(send.each_call(matching!(_)).answers_arc({
+            let responses = responses.clone();
+            Arc::new(move |_, _| {
+                Ok(responses
+                    .lock()
+                    .expect("response lock")
+                    .pop_front()
+                    .expect("unexpected control request"))
+            })
+        })));
+    ReqwestE2bControlApi {
+        transport,
+        sandbox_domain: "e2b.app".to_owned(),
+        idle_timeout_seconds: 600,
+        lifetime_metadata_key: "sandbox_lifetime".to_owned(),
     }
 }

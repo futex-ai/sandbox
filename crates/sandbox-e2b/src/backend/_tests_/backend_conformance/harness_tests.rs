@@ -12,11 +12,12 @@ use sandbox_interface::conformance::exercise_backend;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
-    ControlSandbox, ControlSandboxAccess, ControlSandboxReadAccess, ControlSandboxState,
-    ControlSnapshot, E2bAdapterConfig, E2bControlApiMock, E2bProfile, SandboxMetadata,
+    ControlSandbox, ControlSandboxReadAccess, ControlSandboxState, ControlSnapshot,
+    E2bControlApiMock, SandboxMetadata, backend::configured::E2bSandboxBackend,
 };
 
-use super::{backend_conformance_process, configured::E2bSandboxBackend};
+use super::super::backend_conformance_process;
+use super::fixtures::{access, config};
 
 #[tokio::test]
 async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
@@ -56,10 +57,11 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 let created_sandboxes = created_sandboxes.clone();
                 Arc::new(move |_, request| {
                     let sandbox_id = match create_index.fetch_add(1, Ordering::Relaxed) {
-                        0 => "source",
-                        1 => "restore-one",
-                        2 => "restore-two",
-                        3 => "image-source",
+                        0 => "one-shot",
+                        1 => "source",
+                        2 => "restore-one",
+                        3 => "restore-two",
+                        4 => "image-source",
                         _ => "failed-image-source",
                     };
                     created_sandboxes
@@ -151,31 +153,4 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
     exercise_backend(&backend, "general")
         .await
         .expect("E2B adapter should conform");
-}
-
-fn config() -> E2bAdapterConfig {
-    E2bAdapterConfig::new(
-        "configured-e2b",
-        "https://api.e2b.app",
-        "api-key",
-        HashMap::from([(
-            "general".to_owned(),
-            E2bProfile {
-                template: "base".to_owned(),
-                allow_public_egress: false,
-                denied_destinations: vec!["203.0.113.10/32".to_owned()],
-            },
-        )]),
-        600,
-    )
-    .expect("valid adapter config")
-}
-
-fn access(sandbox_id: &str) -> ControlSandboxAccess {
-    ControlSandboxAccess {
-        sandbox_id: sandbox_id.to_owned(),
-        domain: "e2b.app".to_owned(),
-        envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
-    }
 }

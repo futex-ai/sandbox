@@ -2,6 +2,8 @@
 
 use std::time::Duration;
 
+use sandbox_interface::TerminalId;
+
 use crate::{
     process::{ProcessCommand, ProcessOutputCapture},
     trusted_python,
@@ -43,6 +45,17 @@ pub(super) fn create_directory_command() -> ProcessCommand {
     directory_command(TERMINAL_STORAGE_ROOT, TERMINAL_LOG_RELATIVE_DIRECTORY)
 }
 
+pub(super) fn identity_file_name(terminal_id: TerminalId) -> String {
+    format!("{terminal_id}.identity.json")
+}
+
+pub(super) fn identity_path(terminal_id: TerminalId) -> String {
+    format!(
+        "{TERMINAL_LOG_DIRECTORY}/{}",
+        identity_file_name(terminal_id)
+    )
+}
+
 fn directory_command(root: &str, path: &str) -> ProcessCommand {
     python_command(DIRECTORY_CREATOR, [root, path])
 }
@@ -59,6 +72,7 @@ pub(super) fn restore_cleanup_command() -> ProcessCommand {
             TERMINAL_LOG_DIRECTORY.to_owned(),
         ],
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: HELPER_TIMEOUT,
         read_only: false,
@@ -78,6 +92,7 @@ fn python_command<'a>(
         command: trusted_python::EXECUTABLE.to_owned(),
         args: trusted_python::command_args(script, arguments.into_iter().map(str::to_owned)),
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: HELPER_TIMEOUT,
         read_only: false,

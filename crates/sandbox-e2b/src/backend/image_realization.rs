@@ -196,6 +196,7 @@ async fn observe_size(backend: &E2bSandboxBackend, connection: ProcessConnection
                 command: "/bin/sh".to_owned(),
                 args: vec!["-c".to_owned(), SIZE_COMMAND.to_owned()],
                 cwd: None,
+                envs: Default::default(),
                 output_capture: ProcessOutputCapture::HardLimit {
                     max_bytes: HELPER_OUTPUT_LIMIT,
                 },

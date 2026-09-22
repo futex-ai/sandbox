@@ -12,11 +12,13 @@ mod conformance_network;
 mod conformance_resources;
 mod constants;
 mod consumer;
+mod diagnostics;
 mod domain;
 mod error;
 mod error_kinds;
 mod ids;
 mod image_command_failure;
+mod lifetime;
 mod network;
 mod port_ingress;
 mod process_run;
@@ -55,6 +57,7 @@ pub use self::error::{Error, Result};
 pub use self::error_kinds::{QuotaKind, ResourceKind};
 pub use self::ids::{ActionId, OperationId, SandboxId, SnapshotId, TerminalId};
 pub use self::image_command_failure::ImageCommandFailure;
+pub use self::lifetime::{SANDBOX_ONE_SHOT_MAX_LIFETIME, SandboxLifetime};
 pub use self::network::{
     EGRESS_DESTINATION_MAX_ITEMS, EGRESS_DOMAIN_MAX_BYTES, EgressDestination, SandboxNetworkPolicy,
 };
@@ -63,7 +66,8 @@ pub use self::port_ingress::{
 };
 pub use self::process_run::{
     BackendRunProcessRequest, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_DEADLINE,
-    PROCESS_RUN_MAX_STREAM_BYTES, RunProcessRequest, SandboxProcessOutput,
+    PROCESS_RUN_MAX_ENV_BYTES, PROCESS_RUN_MAX_ENV_VARS, PROCESS_RUN_MAX_STREAM_BYTES,
+    ProcessRunContextError, RunProcessRequest, SandboxProcessOutput,
 };
 pub use self::provider_ref::ProviderRef;
 pub use self::read_only::{

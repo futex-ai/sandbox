@@ -118,9 +118,6 @@ async fn cleanup_recovers_and_deletes_a_pending_snapshot_before_its_source() {
 #[tokio::test]
 async fn failed_live_source_create_is_recovered_and_destroyed_during_cleanup() {
     let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .returns(Err(E2bAdapterError::DeliveryAmbiguous)),
@@ -167,9 +164,6 @@ async fn failed_live_source_create_is_recovered_and_destroyed_during_cleanup() {
 #[tokio::test]
 async fn restored_sandbox_is_tracked_before_terminal_cleanup_can_fail() {
     let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(access_for("restore-source"))),
@@ -228,6 +222,6 @@ fn access_for(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "envd-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }

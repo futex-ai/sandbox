@@ -15,7 +15,7 @@ use crate::{
     runtime_conventions::E2bRuntimeConventions,
 };
 
-use super::{configured::E2bSandboxBackend, mapping};
+use super::{configured::E2bSandboxBackend, mapping, sandbox_metadata};
 
 pub(super) async fn managed(
     backend: &E2bSandboxBackend,
@@ -44,6 +44,7 @@ fn managed_sandbox(
             .metadata
             .get(&conventions.metadata_key("consumer"))
             .and_then(|value| SandboxConsumer::from_metadata(value)),
+        lifetime: sandbox_metadata::lifetime(&sandbox.metadata, conventions),
     }
 }
 
@@ -59,15 +60,7 @@ pub(super) async fn create(
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
     let (profile, network) = validate_request(backend, &request)?;
-    let metadata = metadata(backend, &request);
-    let existing = control_result(
-        backend,
-        backend.control.list_sandboxes(metadata.clone()).await,
-    )?;
-    if let Some(existing) = exactly_one(existing)? {
-        ensure_network_match(backend, &existing, &network)?;
-        return Ok(map_sandbox(existing));
-    }
+    let metadata = sandbox_metadata::for_create(backend.config.runtime_conventions(), &request);
     let template_id = request.snapshot_provider_ref.map_or_else(
         || profile.template.clone(),
         |reference| reference.as_str().to_owned(),
@@ -84,6 +77,7 @@ pub(super) async fn create(
             denied_destinations: profile.denied_destinations.clone(),
             allowed_destinations: network::destinations(&network),
             idle_timeout_seconds: backend.config.idle_timeout_seconds(),
+            lifetime: request.lifetime,
         })
         .await;
     match created {
@@ -113,7 +107,10 @@ pub(super) async fn recover(
         backend,
         backend
             .control
-            .list_sandboxes(metadata(backend, &request))
+            .list_sandboxes(sandbox_metadata::for_create(
+                backend.config.runtime_conventions(),
+                &request,
+            ))
             .await,
     )?;
     let Some(existing) = exactly_one(existing)? else {
@@ -127,6 +124,7 @@ fn validate_request<'a>(
     backend: &'a E2bSandboxBackend,
     request: &BackendCreateSandboxRequest,
 ) -> Result<(&'a E2bProfile, SandboxNetworkPolicy)> {
+    request.lifetime.validate()?;
     let profile = backend
         .config
         .profile(&request.profile)
@@ -184,45 +182,6 @@ pub(super) async fn destroy(backend: &E2bSandboxBackend, provider_ref: ProviderR
         backend,
         backend.control.kill_sandbox(provider_ref.as_str()).await,
     )
-}
-
-fn metadata(backend: &E2bSandboxBackend, request: &BackendCreateSandboxRequest) -> SandboxMetadata {
-    let conventions = backend.config.runtime_conventions();
-    let mut metadata = BTreeMap::from([
-        (
-            conventions.metadata_key("deployment_id"),
-            request.deployment_id.clone(),
-        ),
-        (
-            conventions.metadata_key("operation_id"),
-            request.operation_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("sandbox_id"),
-            request.sandbox_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("workspace_id"),
-            request.owner.workspace_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("consumer"),
-            request.consumer.as_str().to_owned(),
-        ),
-    ]);
-    match request.owner.agent_id {
-        Some(agent_id) => {
-            metadata.insert(conventions.metadata_key("agent_id"), agent_id.to_string());
-            metadata.insert(conventions.metadata_key("owner_kind"), "agent".to_owned());
-        }
-        None => {
-            metadata.insert(
-                conventions.metadata_key("owner_kind"),
-                "platform".to_owned(),
-            );
-        }
-    }
-    metadata
 }
 
 fn create_metadata(

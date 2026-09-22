@@ -3,26 +3,30 @@
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use sandbox_interface::{Error as DomainError, Result as DomainResult};
 use serde::Serialize;
 
 use crate::error::{Error, Result};
 
 use super::connect::ConnectProcessTransport;
 use super::framing::{FrameDecoder, ProcessEvent, decode_end_stream, decode_event};
-use super::mapping::map_result;
+use super::helper_run::KILL_DEADLINE;
 use super::selector::ProcessSelector;
-use super::types::{ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessRunOutput};
-use super::wire::{command_start, encode};
+use super::types::{ProcessConnection, ProcessOutputCapture};
+use super::wire::encode;
 
 const MAX_FRAME_BYTES: usize = 1024 * 1024;
-const KILL_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum CollectionMode {
     StartPersistent,
     ObservePersistent,
     RunOneShot,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct CollectionDeadlines {
+    pub(super) execution: tokio::time::Instant,
+    pub(super) cleanup: Option<tokio::time::Instant>,
 }
 
 impl ConnectProcessTransport {
@@ -35,12 +39,35 @@ impl ConnectProcessTransport {
         output_capture: ProcessOutputCapture,
         mode: CollectionMode,
     ) -> Result<CollectedEvents> {
-        let request = encode(request)?;
-        let deadline = tokio::time::Instant::now()
+        let execution_deadline = tokio::time::Instant::now()
             .checked_add(wait)
             .ok_or(Error::InvalidRequest)?;
+        self.collect_before(
+            connection,
+            method,
+            request,
+            CollectionDeadlines {
+                execution: execution_deadline,
+                cleanup: None,
+            },
+            output_capture,
+            mode,
+        )
+        .await
+    }
+
+    pub(super) async fn collect_before(
+        &self,
+        connection: ProcessConnection,
+        method: &str,
+        request: &impl Serialize,
+        deadlines: CollectionDeadlines,
+        output_capture: ProcessOutputCapture,
+        mode: CollectionMode,
+    ) -> Result<CollectedEvents> {
+        let request = encode(request)?;
         let mut stream = match tokio::time::timeout_at(
-            deadline,
+            deadlines.execution,
             self.http
                 .stream(connection.clone(), method.to_owned(), request),
         )
@@ -53,7 +80,9 @@ impl ConnectProcessTransport {
         let mut collected = CollectedEvents::default();
         let collection: Result<()> = async {
             let mut process_ended = false;
-            while let Some(remaining) = deadline.checked_duration_since(tokio::time::Instant::now())
+            while let Some(remaining) = deadlines
+                .execution
+                .checked_duration_since(tokio::time::Instant::now())
             {
                 let fragment = match tokio::time::timeout(remaining, stream.next()).await {
                     Ok(Some(fragment)) => fragment?,
@@ -104,61 +133,23 @@ impl ConnectProcessTransport {
         }
         .await;
         if mode == CollectionMode::RunOneShot && collected.exit_code.is_none() {
-            self.kill_best_effort(connection, collected.pid).await;
+            self.kill_best_effort_by(connection, collected.pid, deadlines.cleanup)
+                .await;
         }
         collection?;
         Ok(collected)
     }
 
-    pub(super) async fn run_for(
-        &self,
-        connection: ProcessConnection,
-        command: ProcessCommand,
-        timeout: Duration,
-    ) -> DomainResult<ProcessRunOutput> {
-        let output_capture = command.output_capture;
-        let read_only = command.read_only;
-        let body = command_start(command);
-        let collected = self
-            .collect(
-                connection,
-                "Start",
-                &body,
-                timeout,
-                output_capture,
-                CollectionMode::RunOneShot,
-            )
-            .await;
-        let events = match collected {
-            Err(Error::ResponseTooLarge) if read_only => {
-                return Err(DomainError::ReadOnlyOutputTooLarge);
-            }
-            result => map_result(result, false, &self.backend_id)?,
-        };
-        Ok(ProcessRunOutput {
-            bytes: events.bytes,
-            exit_code: events.exit_code,
-            exited: events.exited,
-            output_truncated: events.output_truncated,
-        })
-    }
-
-    pub(super) async fn run_helper(
-        &self,
-        connection: ProcessConnection,
-        command: ProcessCommand,
-        timeout: Duration,
-    ) -> DomainResult<ProcessRunOutput> {
-        match self.run_for(connection, command, timeout).await {
-            Ok(output) if output.exited && output.exit_code.is_some() => Ok(output),
-            Err(error) => Err(error),
-            Ok(_) => Err(DomainError::BackendUnavailable {
-                backend_id: self.backend_id.clone(),
-            }),
-        }
-    }
-
     pub(super) async fn kill_best_effort(&self, connection: ProcessConnection, pid: Option<u32>) {
+        self.kill_best_effort_by(connection, pid, None).await;
+    }
+
+    async fn kill_best_effort_by(
+        &self,
+        connection: ProcessConnection,
+        pid: Option<u32>,
+        completion_deadline: Option<tokio::time::Instant>,
+    ) {
         let Some(pid) = pid else {
             return;
         };
@@ -168,7 +159,13 @@ impl ConnectProcessTransport {
         let kill = self
             .http
             .unary(connection, "SendSignal".to_owned(), request, false);
-        if !matches!(tokio::time::timeout(KILL_DEADLINE, kill).await, Ok(Ok(_))) {
+        let Some(relative_deadline) = tokio::time::Instant::now().checked_add(KILL_DEADLINE) else {
+            return;
+        };
+        let deadline = completion_deadline.map_or(relative_deadline, |absolute| {
+            absolute.min(relative_deadline)
+        });
+        if !matches!(tokio::time::timeout_at(deadline, kill).await, Ok(Ok(_))) {
             tracing::debug!(event = "e2b_process_kill_unconfirmed");
         }
     }

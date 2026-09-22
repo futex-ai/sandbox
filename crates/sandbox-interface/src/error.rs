@@ -4,8 +4,9 @@ use internal_error::InternalError;
 use thiserror::Error;
 
 use crate::{
-    ActionId, ImageCommandFailure, RetainedSandboxRef, SandboxConsumer, SandboxNetworkPolicy,
-    SandboxState, SnapshotState, TerminalActionState, TerminalId, TerminalState,
+    ActionId, ImageCommandFailure, ProcessRunContextError, RetainedSandboxRef, SandboxConsumer,
+    SandboxNetworkPolicy, SandboxState, SnapshotState, TerminalActionState, TerminalId,
+    TerminalState,
     error_kinds::{QuotaKind, ResourceKind},
 };
 
@@ -196,6 +197,12 @@ pub enum Error {
     /// Resize may still be running; callers must keep the session fenced.
     #[error("[sandbox_interface/error] screen resize termination is unconfirmed")]
     ScreenViewportResizeUnconfirmed,
+    /// A direct-process working directory or environment map is invalid.
+    #[error("[sandbox_interface/error] direct process context is invalid: {reason}")]
+    InvalidProcessRunContext {
+        /// Specific typed validation failure.
+        reason: ProcessRunContextError,
+    },
     /// Image realization is restricted to workspace-platform ownership.
     #[error("[sandbox_interface/error] image realization requires platform ownership")]
     PlatformOwnerRequired,

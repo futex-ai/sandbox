@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
-use sandbox_interface::{Error as DomainError, ResourceKind};
+use sandbox_interface::{Error as DomainError, OperationId, ResourceKind, TerminalId};
 use serde_json::Value;
 use unimock::{MockFn, Unimock, matching};
 
@@ -34,12 +34,17 @@ impl ConnectProcessTransport {
 
 #[test]
 fn pty_start_caps_only_the_private_provider_log() {
+    let terminal_id = TerminalId::new();
+    let operation_id = OperationId::new();
     let body: Value = serde_json::from_slice(
         &encode(&pty_start(ProcessPtyRequest {
             tag: "sandbox-terminal".to_owned(),
             log_path: "/tmp/sandbox.log".to_owned(),
+            identity_path: "/tmp/sandbox.identity.json".to_owned(),
             log_limit: 2 * 1024 * 1024,
             workload_user: "user".to_owned(),
+            terminal_id,
+            operation_id,
             cwd: None,
         }))
         .expect("PTY body"),
@@ -51,8 +56,12 @@ fn pty_start_caps_only_the_private_provider_log() {
     assert_eq!(body["process"]["args"][1], "-S");
     assert_eq!(body["process"]["args"][2], "-c");
     assert_eq!(body["process"]["args"][4], "/tmp/sandbox.log");
-    assert_eq!(body["process"]["args"][5], (2 * 1024 * 1024).to_string());
-    assert_eq!(body["process"]["args"][6], "user");
+    assert_eq!(body["process"]["args"][5], "/tmp/sandbox.identity.json");
+    assert_eq!(body["process"]["args"][6], (2 * 1024 * 1024).to_string());
+    assert_eq!(body["process"]["args"][7], "user");
+    assert_eq!(body["process"]["args"][8], terminal_id.to_string());
+    assert_eq!(body["process"]["args"][9], operation_id.to_string());
+    assert_eq!(body["process"]["args"][10], "sandbox-terminal");
     let wrapper = body["process"]["args"][3]
         .as_str()
         .expect("wrapper command");
@@ -63,6 +72,12 @@ fn pty_start_caps_only_the_private_provider_log() {
     assert!(wrapper.contains("/proc/self/fd/{LOG_DESCRIPTOR}"));
     assert!(wrapper.contains("os.closerange"));
     assert!(wrapper.contains("os.setuid"));
+    assert!(wrapper.contains("sandbox-e2b-terminal-identity-v1"));
+    assert!(wrapper.contains("os.fsync(identity)"));
+    assert!(
+        wrapper.find("os.fsync(identity)").expect("identity fsync")
+            < wrapper.find("os.fork()").expect("shell fork")
+    );
     assert!(wrapper.contains("os.execv('/bin/bash', ['bash', '-il'])"));
     assert!(!wrapper.contains("--log-size"));
     assert!(!wrapper.contains("/dev/null"));
@@ -87,8 +102,11 @@ async fn fragmented_start_stream_returns_the_provider_pid() {
             ProcessPtyRequest {
                 tag: "sandbox-terminal".to_owned(),
                 log_path: "/tmp/sandbox.log".to_owned(),
+                identity_path: "/tmp/sandbox.identity.json".to_owned(),
                 log_limit: 1024,
                 workload_user: "user".to_owned(),
+                terminal_id: TerminalId::new(),
+                operation_id: OperationId::new(),
                 cwd: None,
             },
         )
@@ -216,6 +234,7 @@ async fn run_and_list_decode_typed_unary_and_stream_responses() {
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
                 cwd: Some("/workspace".to_owned()),
+                envs: Default::default(),
                 output_capture: ProcessOutputCapture::HardLimit { max_bytes: 16 },
                 timeout: Duration::from_secs(10),
                 read_only: false,

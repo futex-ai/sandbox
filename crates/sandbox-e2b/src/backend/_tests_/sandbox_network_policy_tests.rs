@@ -8,7 +8,7 @@ use std::{
 
 use sandbox_interface::{
     BackendCreateSandboxRequest, EgressDestination, Error, OperationId, ResourceOwner,
-    SandboxBackend, SandboxConsumer, SandboxId, SandboxNetworkPolicy,
+    SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -22,10 +22,7 @@ use super::configured::E2bSandboxBackend;
 
 #[tokio::test]
 async fn open_create_preserves_profile_egress_and_omits_policy_metadata() {
-    let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
+    let control = Unimock::new(
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .answers(&|_, request| {
@@ -34,7 +31,7 @@ async fn open_create_preserves_profile_egress_and_omits_policy_metadata() {
                 assert!(!request.metadata.contains_key("sandbox_network_policy"));
                 Ok(access())
             }),
-    ));
+    );
     let backend = backend(config(vec!["203.0.113.10/32"]), control);
 
     backend
@@ -45,10 +42,7 @@ async fn open_create_preserves_profile_egress_and_omits_policy_metadata() {
 
 #[tokio::test]
 async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
-    let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .returns(Ok(Vec::new())),
+    let control = Unimock::new(
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .answers(&|_, request| {
@@ -72,7 +66,7 @@ async fn allowlist_create_forwards_canonical_destinations_and_closed_egress() {
                 );
                 Ok(access())
             }),
-    ));
+    );
     let backend = backend(config(vec!["203.0.113.10/32"]), control);
     let policy = SandboxNetworkPolicy::allowlist(vec![
         EgressDestination::Ip("::ffff:192.0.2.10".parse().expect("mapped public IP")),
@@ -239,6 +233,7 @@ pub(super) fn request(network: SandboxNetworkPolicy) -> BackendCreateSandboxRequ
         operation_id: OperationId::new(),
         owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),
         consumer: SandboxConsumer::Runtime,
+        lifetime: SandboxLifetime::IdleAutoPause,
         deployment_id: "deployment".to_owned(),
         profile: "general".to_owned(),
         network,
@@ -259,6 +254,6 @@ fn access() -> ControlSandboxAccess {
         sandbox_id: "provider-sandbox".to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "envd-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }

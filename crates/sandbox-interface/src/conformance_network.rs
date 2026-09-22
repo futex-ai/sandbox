@@ -1,11 +1,12 @@
 //! Shared deny-by-default outbound allowlist conformance probe.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use crate::{
     BackendCreateSandboxRequest, BackendRunProcessRequest, EgressDestination, Error, OperationId,
     ProviderRef, ResourceOwner, Result, SandboxBackend, SandboxConsumer, SandboxId,
-    SandboxNetworkPolicy, SandboxProcessOutput, conformance_resources::ConformanceResources,
+    SandboxLifetime, SandboxNetworkPolicy, SandboxProcessOutput,
+    conformance_resources::ConformanceResources,
 };
 
 const ALLOWED_FETCH: &str = "curl --disable --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://example.com/";
@@ -22,6 +23,7 @@ pub(crate) async fn exercise(
         operation_id: OperationId::new(),
         owner,
         consumer: SandboxConsumer::Runtime,
+        lifetime: SandboxLifetime::IdleAutoPause,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::allowlist(vec![EgressDestination::domain("example.com")?])?,
@@ -78,6 +80,8 @@ async fn fetch(
             sandbox_provider_ref: sandbox_provider_ref.clone(),
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), script.to_owned()],
+            cwd: None,
+            envs: BTreeMap::new(),
             stdout_limit: 4096,
             stderr_limit: 4096,
             deadline: Duration::from_secs(30),

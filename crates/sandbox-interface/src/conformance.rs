@@ -1,6 +1,6 @@
 //! Reusable backend conformance harness for provider implementations.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use uuid::Uuid;
 
@@ -9,17 +9,21 @@ use crate::{
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
     BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
     BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend,
-    SandboxConsumer, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy, SnapshotId, TerminalId,
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
-const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2";
+const PROCESS_CWD: &str = "/workspace";
+const PROCESS_ENV_VALUE: &str = "environment-map";
+const PROCESS_SCRIPT: &str = "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2";
+const PROCESS_STDERR: &[u8] = b"separate-stderr";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
 /// The target image must provide `/bin/sh`; the split-output probe supplies its
 /// own shell script.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    exercise_one_shot_lifetime(backend, profile).await?;
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
     let outcome = exercise_backend_with_resources(backend, &mut resources, profile).await;
@@ -43,6 +47,28 @@ pub async fn exercise_network_allowlist(backend: &dyn SandboxBackend, profile: &
     finish(outcome, cleanup)
 }
 
+/// Proves that a backend can create, recover, and explicitly destroy a bounded
+/// one-shot sandbox without relying on idle pause or resume behavior.
+pub async fn exercise_one_shot_lifetime(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let request = sandbox_request(
+        owner,
+        profile,
+        None,
+        SandboxLifetime::OneShot {
+            max_lifetime: Duration::from_secs(60),
+        },
+    );
+    let outcome = match resources.create_sandbox(request).await {
+        Ok(sandbox) => backend.destroy_sandbox(sandbox.provider_ref).await,
+        Err(error) => Err(error),
+    };
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
 async fn exercise_backend_with_resources(
     backend: &dyn SandboxBackend,
     resources: &mut ConformanceResources<'_>,
@@ -54,7 +80,12 @@ async fn exercise_backend_with_resources(
     let workspace_id = Uuid::now_v7();
     let owner = ResourceOwner::agent(workspace_id, Uuid::now_v7());
     let source = resources
-        .create_sandbox(sandbox_request(owner, profile, None))
+        .create_sandbox(sandbox_request(
+            owner,
+            profile,
+            None,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await?;
     backend.inspect_sandbox(source.provider_ref.clone()).await?;
     let paused = backend.pause_sandbox(source.provider_ref.clone()).await?;
@@ -117,13 +148,15 @@ async fn exercise_backend_with_resources(
             sandbox_provider_ref: source.provider_ref.clone(),
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), PROCESS_SCRIPT.to_owned()],
+            cwd: Some(PROCESS_CWD.to_owned()),
+            envs: BTreeMap::from([("SANDBOX_PROBE".to_owned(), PROCESS_ENV_VALUE.to_owned())]),
             stdout_limit: 4096,
             stderr_limit: 1024,
             deadline: Duration::from_secs(60),
         })
         .await?;
-    if process.stdout != b"argv-direct"
-        || process.stderr != b"separate-stderr"
+    if process.stdout != b"/workspace\nenvironment-map"
+        || process.stderr != PROCESS_STDERR
         || process.exit_code != Some(0)
         || !process.exited
         || process.stdout_overflowed
@@ -139,6 +172,7 @@ async fn exercise_backend_with_resources(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -149,6 +183,7 @@ async fn exercise_backend_with_resources(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -207,12 +242,14 @@ fn sandbox_request(
     owner: ResourceOwner,
     profile: &str,
     snapshot_provider_ref: Option<crate::ProviderRef>,
+    lifetime: SandboxLifetime,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
         consumer: SandboxConsumer::Runtime,
+        lifetime,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

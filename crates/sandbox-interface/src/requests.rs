@@ -1,8 +1,8 @@
 //! Provider-neutral service requests.
 
 use crate::{
-    ActionId, OperationId, ResourceOwner, SandboxConsumer, SandboxId, SandboxNetworkPolicy,
-    SnapshotId, TerminalId,
+    ActionId, OperationId, ResourceOwner, SandboxConsumer, SandboxId, SandboxLifetime,
+    SandboxNetworkPolicy, SnapshotId, TerminalId,
 };
 
 /// Parent source for one workspace-platform image realization.
@@ -15,7 +15,7 @@ pub enum ImageSource {
 }
 
 /// Request to realize one credential-free workspace-platform image.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct RealizeImageRequest {
     /// Workspace-platform owner.
     pub owner: ResourceOwner,
@@ -32,7 +32,7 @@ pub struct RealizeImageRequest {
 }
 
 /// One credential-free regular file staged before image setup runs.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct RealizeImageFileInput {
     /// Absolute trusted transfer root.
     pub root: String,
@@ -51,6 +51,8 @@ pub struct CreateSandboxRequest {
     pub operation_id: OperationId,
     /// Substrate consumer class recorded on the sandbox row.
     pub consumer: SandboxConsumer,
+    /// Lifetime policy; defaults to idle auto-pause when the caller does not override it.
+    pub lifetime: SandboxLifetime,
     /// Typed per-session network policy validated before provider dispatch.
     pub network: SandboxNetworkPolicy,
     /// Optional deployment-owned logical profile.
@@ -124,7 +126,7 @@ pub struct DeleteSnapshotRequest {
 }
 
 /// Request to create a persistent terminal.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct CreateTerminalRequest {
     /// Caller resource owner.
     pub owner: ResourceOwner,
@@ -185,7 +187,7 @@ pub struct SandboxTerminalReplacementRequest {
 }
 
 /// Request to execute one command in an existing terminal.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ExecuteTerminalRequest {
     /// Caller resource owner.
     pub owner: ResourceOwner,
@@ -232,7 +234,7 @@ pub struct ReadTerminalActionRequest {
 }
 
 /// Request to send exact interactive terminal input.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct WriteTerminalRequest {
     /// Caller resource owner.
     pub owner: ResourceOwner,

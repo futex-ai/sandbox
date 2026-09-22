@@ -61,6 +61,7 @@ fn validation_command(root: String, path: String, allow_missing: bool) -> Proces
         command: "/bin/sh".to_owned(),
         args: vec!["-c".to_owned(), script],
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit {
             max_bytes: 2 * 4096 + 128,
         },

@@ -1,53 +1,21 @@
-//! E2B durable PTY creation, ingestion, input, and restored-helper cleanup.
+//! E2B durable PTY creation, recovery, and inspection.
 
 use sandbox_interface::{
-    BackendInputRequest, BackendTerminal, BackendTerminalCreateRequest, Error,
-    FILE_TRANSFER_MAX_BYTES, ProviderRef, ResourceKind, Result, TerminalState,
+    BackendTerminal, BackendTerminalCreateRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef,
+    Result, TerminalState,
 };
 
-use crate::process::{ProcessConnection, ProcessPtyRequest, ProcessSelector};
+use crate::process::{ProcessConnection, ProcessPtyRequest};
 
 use super::{
     configured::E2bSandboxBackend,
     mapping,
-    terminal_identity::{TerminalIdentity, tagged_terminal, terminal_tag},
-    terminal_storage::{TERMINAL_LOG_DIRECTORY, create_directory_command, restore_cleanup_command},
+    terminal_identity::{TerminalIdentity, terminal_tag},
+    terminal_record,
+    terminal_storage::{TERMINAL_LOG_DIRECTORY, create_directory_command, identity_path},
 };
 
 const TRUSTED_PROCESS_USER: &str = "root";
-
-pub(super) async fn clean_restored(
-    backend: &E2bSandboxBackend,
-    sandbox_ref: ProviderRef,
-) -> Result<()> {
-    let connection = mapping::connection(backend, &sandbox_ref)
-        .await?
-        .with_user(TRUSTED_PROCESS_USER);
-    let processes = backend.processes.list(connection.clone()).await?;
-    let terminal_tag_prefix = backend.config.runtime_conventions().terminal_tag_prefix();
-    for process in processes {
-        if tagged_terminal(&process, terminal_tag_prefix).is_none() {
-            continue;
-        }
-        let Some(tag) = process.tag else {
-            continue;
-        };
-        backend
-            .processes
-            .kill(connection.clone(), ProcessSelector::Tag(tag))
-            .await?;
-    }
-    let cleanup = backend
-        .processes
-        .run(connection, restore_cleanup_command())
-        .await?;
-    if !cleanup.succeeded() {
-        return Err(Error::internal_message(
-            "restored E2B terminal helper cleanup failed",
-        ));
-    }
-    Ok(())
-}
 
 pub(super) async fn create(
     backend: &E2bSandboxBackend,
@@ -57,22 +25,20 @@ pub(super) async fn create(
     let connection = mapping::connection(backend, &request.sandbox_provider_ref)
         .await?
         .with_user(TRUSTED_PROCESS_USER);
-    if let Some(terminal) = recover_connected(backend, &connection, request.terminal_id).await? {
+    if let Some(terminal) = recover_connected(
+        backend,
+        &connection,
+        request.terminal_id,
+        request.operation_id,
+    )
+    .await?
+    {
         return Ok(terminal);
     }
     let tag = terminal_tag(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         request.terminal_id,
     );
-    let directory = backend
-        .processes
-        .run(connection.clone(), create_directory_command())
-        .await?;
-    if !directory.succeeded() {
-        return Err(Error::internal_message(
-            "E2B terminal log directory creation failed",
-        ));
-    }
     let log_path = format!("{TERMINAL_LOG_DIRECTORY}/{}.log", request.terminal_id);
     let process = backend
         .processes
@@ -81,12 +47,15 @@ pub(super) async fn create(
             ProcessPtyRequest {
                 tag,
                 log_path: log_path.clone(),
+                identity_path: identity_path(request.terminal_id),
                 log_limit: request.provider_log_limit,
                 workload_user: backend
                     .config
                     .runtime_conventions()
                     .workload_user()
                     .to_owned(),
+                terminal_id: request.terminal_id,
+                operation_id: request.operation_id,
                 cwd: request.cwd,
             },
         )
@@ -106,7 +75,13 @@ pub(super) async fn recover(
     let connection = mapping::connection(backend, &request.sandbox_provider_ref)
         .await?
         .with_user(TRUSTED_PROCESS_USER);
-    recover_connected(backend, &connection, request.terminal_id).await
+    recover_connected(
+        backend,
+        &connection,
+        request.terminal_id,
+        request.operation_id,
+    )
+    .await
 }
 
 fn validate_transcript_limit(provider_log_limit: usize) -> Result<()> {
@@ -124,29 +99,61 @@ async fn recover_connected(
     backend: &E2bSandboxBackend,
     connection: &ProcessConnection,
     terminal_id: sandbox_interface::TerminalId,
+    operation_id: sandbox_interface::OperationId,
 ) -> Result<Option<BackendTerminal>> {
+    initialize_storage(backend, connection).await?;
     let tag = terminal_tag(
         backend.config.runtime_conventions().terminal_tag_prefix(),
         terminal_id,
     );
-    let matching = backend
-        .processes
-        .list(connection.clone())
-        .await?
-        .into_iter()
+    let processes = backend.processes.list(connection.clone()).await?;
+    let matching = processes
+        .iter()
         .filter(|process| process.tag.as_deref() == Some(tag.as_str()))
         .collect::<Vec<_>>();
-    match matching.as_slice() {
-        [] => Ok(None),
-        [process] => Ok(Some(BackendTerminal {
-            provider_ref: TerminalIdentity::new(process.pid, terminal_id).provider_ref(),
-            provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{terminal_id}.log"),
-            state: TerminalState::Ready,
-        })),
-        _ => Err(Error::internal_message(
+    if matching.len() > 1 {
+        return Err(Error::internal_message(
             "multiple E2B terminal processes matched one consumer handle",
-        )),
+        ));
     }
+    let record = terminal_record::read(
+        backend,
+        connection,
+        terminal_id,
+        terminal_record::IDENTITY_READ_TIMEOUT,
+        None,
+    )
+    .await?;
+    if let Some(record) = record {
+        record.ensure_request(terminal_id, operation_id)?;
+        record.ensure_tag(&tag)?;
+        return Ok(Some(BackendTerminal {
+            provider_ref: record.identity().provider_ref(),
+            provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{terminal_id}.log"),
+            state: record.state(&processes)?,
+        }));
+    }
+    Ok(matching.first().map(|process| BackendTerminal {
+        provider_ref: TerminalIdentity::new(process.pid, terminal_id).provider_ref(),
+        provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{terminal_id}.log"),
+        state: TerminalState::Ready,
+    }))
+}
+
+async fn initialize_storage(
+    backend: &E2bSandboxBackend,
+    connection: &ProcessConnection,
+) -> Result<()> {
+    let directory = backend
+        .processes
+        .run(connection.clone(), create_directory_command())
+        .await?;
+    if !directory.succeeded() {
+        return Err(Error::internal_message(
+            "E2B terminal log directory creation failed",
+        ));
+    }
+    Ok(())
 }
 
 pub(super) async fn inspect(
@@ -158,54 +165,20 @@ pub(super) async fn inspect(
     let connection = mapping::connection(backend, &sandbox_ref)
         .await?
         .with_user(TRUSTED_PROCESS_USER);
-    if identity
-        .resolve(
-            backend.processes.list(connection).await?,
-            backend.config.runtime_conventions().terminal_tag_prefix(),
-        )?
-        .is_none()
-    {
-        return Err(Error::NotFound {
-            resource: ResourceKind::Terminal,
-        });
-    }
+    let processes = backend.processes.list(connection.clone()).await?;
+    let state = terminal_record::resolve_state(
+        backend,
+        &connection,
+        identity,
+        &processes,
+        backend.config.runtime_conventions().terminal_tag_prefix(),
+        terminal_record::IDENTITY_READ_TIMEOUT,
+        None,
+    )
+    .await?;
     Ok(BackendTerminal {
         provider_ref: terminal_ref,
         provider_log_path: format!("{TERMINAL_LOG_DIRECTORY}/{}.log", identity.terminal_id()),
-        state: TerminalState::Ready,
+        state,
     })
-}
-
-pub(super) async fn write(backend: &E2bSandboxBackend, request: BackendInputRequest) -> Result<()> {
-    let identity = TerminalIdentity::parse(&request.terminal_provider_ref)?;
-    let connection = mapping::connection(backend, &request.sandbox_provider_ref)
-        .await?
-        .with_user(TRUSTED_PROCESS_USER);
-    let tag = terminal_tag(
-        backend.config.runtime_conventions().terminal_tag_prefix(),
-        identity.terminal_id(),
-    );
-    backend
-        .processes
-        .send_input(connection, ProcessSelector::Tag(tag), request.input)
-        .await
-}
-
-pub(super) async fn close(
-    backend: &E2bSandboxBackend,
-    sandbox_ref: ProviderRef,
-    terminal_ref: ProviderRef,
-) -> Result<()> {
-    let identity = TerminalIdentity::parse(&terminal_ref)?;
-    let connection = mapping::connection(backend, &sandbox_ref)
-        .await?
-        .with_user(TRUSTED_PROCESS_USER);
-    let tag = terminal_tag(
-        backend.config.runtime_conventions().terminal_tag_prefix(),
-        identity.terminal_id(),
-    );
-    backend
-        .processes
-        .kill(connection, ProcessSelector::Tag(tag))
-        .await
 }

@@ -19,9 +19,11 @@ application -> sandbox-interface <- sandbox-e2b
 Consumers should depend on `sandbox-interface`. Only the process that selects
 and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
 credentials, payloads, access tokens, and errors out of higher-level services.
-Sandbox create requests carry their runtime-or-browser consumer class through
-provider metadata; managed inventory returns that class when present and leaves
-it absent for resources created before the metadata existed.
+Sandbox create requests carry their runtime-or-browser consumer class and typed
+lifetime through provider metadata. Interactive sandboxes keep idle auto-pause;
+bounded one-shot sandboxes remain running until explicit destroy or their
+maximum 3600-second provider timeout and are never resumed. Managed inventory
+returns recognized metadata and leaves missing or malformed values unknown.
 Creates can also select a typed deny-by-default egress allowlist of canonical
 IP, CIDR, and DNS destinations. E2B supports the IP and CIDR forms, rejects DNS
 policies before provider access, preserves private and deployment deny ranges,
@@ -37,11 +39,12 @@ adapter proves exactly one completed snapshot. Both snapshot probes in the
 shared conformance harness accept immediate or asynchronous completion. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
-runs its split-output check through a self-contained `/bin/sh` command available
-in normal backend images. Cleanup always attempts every tracked terminal,
-snapshot, and sandbox; an operation error remains the reported error even if a
-cleanup step also fails. Trusted adapter helpers isolate their interpreter
-startup from sandbox-owned modules and Python environment customization.
+runs its cwd, environment, and split-output check through one self-contained
+`/bin/sh` command available in normal backend images. Cleanup always attempts
+every tracked terminal, snapshot, and sandbox; an operation error remains the
+reported error even if a cleanup step also fails. Trusted adapter helpers
+isolate their interpreter startup from sandbox-owned modules and Python
+environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
 credentials before construction. Sandbox creation and inventory require a
@@ -50,23 +53,40 @@ inventory reject IDs that later control routes cannot use, and snapshot
 inspection verifies that the provider returned the requested ID. Accepted
 creates remain delivery-ambiguous, while malformed inventory remains
 retryable. Snapshot operations also require one nonempty source and correlation
-value. Sandbox create and connect responses require nonblank process and
-private-traffic credentials. Provider mutations accept only their exact
-acknowledgment, including an exact versioned screen-resize object; process
-start and inventory responses must contain a nonzero PID. Connect streaming
+value. Sandbox create and ordinary connect responses require nonblank process
+and private-traffic credentials; one-shot reconnect uses GET-only envd access
+so it cannot refresh the destruction deadline. Provider mutations accept only
+their exact acknowledgment, including an exact versioned screen-resize object;
+process start and inventory responses must contain a nonzero PID. Connect streaming
 collectors keep reading after a process end until they validate the required
 success trailer; a missing, malformed, or unsuccessful trailer cannot look like
 ordinary completion. Envd and private-port hosts always use the configured
 routing domain, never a domain supplied by an injected control response.
 Missing read credentials stay retryable.
+Sandbox creation sends its one provider mutation without an inventory
+preflight; ambiguous delivery can only use recovery reads. Terminal supervisors
+persist a root-owned versioned PID, operation, terminal, and tag record before
+the login shell can exit, allowing recovery and inspection to return the same
+provider reference as `Exited`. Input rejects exited terminals, while close and
+restored cleanup remain idempotent. Close retains trusted identity for final
+output reads; restored cleanup removes it. Record-aware inspection and output
+validate every present identity record, use selector-only fallback for
+record-free live legacy terminals, and keep the retained transcript available
+after unrelated PID reuse. Typed provider absence remains an error, and an
+absolute helper deadline reserves identity-helper termination and return time.
 Caller-controlled process durations are capped before provider access,
 including 30-second terminal output waits and 300-second process operations.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
-output before credentials are acquired. Image preparation validates every input
-path and size before it
-connects, incomplete filesystem-size measurements fail closed, and cache
+output before credentials are acquired. Trusted direct process calls may select
+a validated absolute working directory and bounded environment map, while
+template-owned resolution variables remain protected. Process and terminal
+diagnostics expose selected metadata only; command text, environment entries,
+and output contents are omitted. Terminal output, saved transcripts, and
+returned stdout/stderr remain unmasked. Image failures report exit and capture
+facts without output snippets. Image preparation validates every input path
+and size before it connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A
 replacement payload remains inside a root-owned private directory on the
@@ -164,6 +184,8 @@ copy application orchestration or provider template infrastructure.
   protocol.
 - [`docs/e2b-adapter.md`](docs/e2b-adapter.md) documents adapter guarantees and
   configuration.
+- [`docs/process-diagnostics.md`](docs/process-diagnostics.md) separates exact
+  sensitive process data from metadata-only diagnostics.
 - [`docs/juno-adoption.md`](docs/juno-adoption.md) describes the separate
   consumer cutover.
 - [`plans/README.md`](plans/README.md) indexes implementation plans.

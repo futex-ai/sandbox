@@ -95,6 +95,8 @@ fn command(
     SplitProcessCommand {
         command: command.to_owned(),
         args,
+        cwd: None,
+        envs: Default::default(),
         stdout_limit: 4096,
         stderr_limit: 64 * 1024,
         deadline,

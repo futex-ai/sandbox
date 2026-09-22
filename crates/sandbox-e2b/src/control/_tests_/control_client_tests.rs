@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use sandbox_interface::SandboxLifetime;
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -28,6 +29,7 @@ impl ReqwestE2bControlApi {
             transport,
             sandbox_domain: sandbox_domain.into(),
             idle_timeout_seconds,
+            lifetime_metadata_key: "sandbox_lifetime".to_owned(),
         }
     }
 }
@@ -155,7 +157,7 @@ async fn existing_sandbox_calls_reject_mismatched_response_identity() {
     )]);
     let (connect_client, _) = recording_client(vec![json_response(
         200,
-        r#"{"sandboxID":"different","envdAccessToken":"token","trafficAccessToken":"traffic-token"}"#,
+        r#"{"sandboxID":"different","state":"running"}"#,
     )]);
 
     assert!(matches!(
@@ -189,7 +191,7 @@ fn adapter_debug_output_redacts_all_secrets() {
         sandbox_id: "sandbox-secret".to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "token-secret".to_owned(),
-        traffic_access_token: "traffic-token-secret".to_owned(),
+        traffic_access_token: Some("traffic-token-secret".to_owned()),
     };
 
     let debug = format!("{config:?} {access:?}");
@@ -207,6 +209,7 @@ fn create_request() -> ControlCreateSandbox {
         denied_destinations: Vec::new(),
         allowed_destinations: None,
         idle_timeout_seconds: 600,
+        lifetime: SandboxLifetime::IdleAutoPause,
     }
 }
 

@@ -1,4 +1,5 @@
 import ctypes
+import json
 import os
 import resource
 import shlex
@@ -153,17 +154,42 @@ def open_parent(path):
 
 
 directory = None
+identity = None
+identity_temporary_name = None
 transcript = None
 pipe_reader = None
 pipe_writer = None
 recorder_pid = None
 try:
     path = sys.argv[1]
-    limit = int(sys.argv[2])
-    workload_user = sys.argv[3]
+    identity_path = sys.argv[2]
+    limit = int(sys.argv[3])
+    workload_user = sys.argv[4]
+    terminal_id = sys.argv[5]
+    operation_id = sys.argv[6]
+    tag = sys.argv[7]
     if limit < 0:
         fail()
     directory, name = open_parent(path)
+    identity_directory, identity_name = open_parent(identity_path)
+    identity_parent = os.fstat(identity_directory)
+    transcript_parent = os.fstat(directory)
+    os.close(identity_directory)
+    if (identity_parent.st_dev, identity_parent.st_ino) != (
+        transcript_parent.st_dev,
+        transcript_parent.st_ino,
+    ):
+        fail()
+    if transcript_parent.st_uid != os.geteuid():
+        fail()
+    if stat.S_IMODE(transcript_parent.st_mode) & 0o077:
+        fail()
+    try:
+        os.stat(identity_name, dir_fd=directory, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        fail()
     try:
         metadata = os.stat(name, dir_fd=directory, follow_symlinks=False)
     except FileNotFoundError:
@@ -177,6 +203,45 @@ try:
     if not stat.S_ISREG(os.fstat(transcript).st_mode):
         fail()
     os.fchmod(transcript, 0o600)
+    identity_temporary_name = f'.{identity_name}.{os.getpid()}.tmp'
+    identity_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
+    identity = os.open(identity_temporary_name, identity_flags, 0o600, dir_fd=directory)
+    identity_bytes = (json.dumps(
+        {
+            'schema': 'sandbox-e2b-terminal-identity-v1',
+            'pid': os.getpid(),
+            'terminal_id': terminal_id,
+            'operation_id': operation_id,
+            'tag': tag,
+        },
+        separators=(',', ':'),
+        sort_keys=True,
+    ) + '\n').encode('utf-8')
+    write_all(identity, identity_bytes)
+    os.fchmod(identity, 0o600)
+    identity_metadata = os.fstat(identity)
+    if not stat.S_ISREG(identity_metadata.st_mode) or identity_metadata.st_uid != os.geteuid():
+        fail()
+    os.fsync(identity)
+    os.close(identity)
+    identity = None
+    os.link(
+        identity_temporary_name,
+        identity_name,
+        src_dir_fd=directory,
+        dst_dir_fd=directory,
+        follow_symlinks=False,
+    )
+    published_identity = os.stat(identity_name, dir_fd=directory, follow_symlinks=False)
+    if (published_identity.st_dev, published_identity.st_ino) != (
+        identity_metadata.st_dev,
+        identity_metadata.st_ino,
+    ):
+        fail()
+    os.fsync(directory)
+    os.unlink(identity_temporary_name, dir_fd=directory)
+    identity_temporary_name = None
+    os.fsync(directory)
     os.close(directory)
     directory = None
     _, hard_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
@@ -222,6 +287,11 @@ try:
     recorder_pid = None
     exit_with_status(recorder_status)
 except (IndexError, OSError, ValueError):
+    if identity_temporary_name is not None and directory is not None:
+        try:
+            os.unlink(identity_temporary_name, dir_fd=directory)
+        except OSError:
+            pass
     if recorder_pid not in (None, 0):
         for descriptor in (pipe_reader, pipe_writer):
             if descriptor is not None:
@@ -232,7 +302,7 @@ except (IndexError, OSError, ValueError):
         stop_recorder(recorder_pid)
     fail()
 finally:
-    for descriptor in (pipe_reader, pipe_writer, transcript, directory):
+    for descriptor in (pipe_reader, pipe_writer, identity, transcript, directory):
         if descriptor is not None:
             try:
                 os.close(descriptor)

@@ -8,6 +8,7 @@ use unimock::{MockFn, Unimock, matching};
 use crate::{
     ProcessFileChunk, ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest,
     ProcessRunOutput, ProcessSelector, ProcessSplitOutput, ProcessTransportMock,
+    process::SplitProcessCommand,
 };
 
 pub(super) fn transport() -> Unimock {
@@ -79,6 +80,11 @@ pub(super) fn transport() -> Unimock {
                     })
                 } else {
                     assert_eq!(request.root, "/var/lib/sandbox-e2b/terminals");
+                    if request.path.ends_with(".identity.json") {
+                        return Err(sandbox_interface::Error::NotFound {
+                            resource: sandbox_interface::ResourceKind::File,
+                        });
+                    }
                     assert!(request.path.ends_with(".log"));
                     assert_eq!(request.offset, 0);
                     assert_eq!(request.max_bytes, 4096);
@@ -101,7 +107,7 @@ pub(super) fn transport() -> Unimock {
             }),
         ProcessTransportMock::run_split
             .each_call(matching!(_, _))
-            .answers(&|_, _, command| split_output(&command.command, &command.args)),
+            .answers(&|_, _, command| split_output(command)),
         ProcessTransportMock::kill
             .each_call(matching!(_, _))
             .answers(&|_, _, selector| {
@@ -111,13 +117,18 @@ pub(super) fn transport() -> Unimock {
     ))
 }
 
-fn split_output(command: &str, args: &[String]) -> Result<ProcessSplitOutput> {
-    assert_eq!(command, "/bin/sh");
-    assert_eq!(args.first().map(String::as_str), Some("-c"));
-    match args.get(1).map(String::as_str) {
-        Some("printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2") => {
+fn split_output(request: SplitProcessCommand) -> Result<ProcessSplitOutput> {
+    assert_eq!(request.command, "/bin/sh");
+    assert_eq!(request.args.first().map(String::as_str), Some("-c"));
+    match request.args.get(1).map(String::as_str) {
+        Some("pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2") => {
+            assert_eq!(request.cwd.as_deref(), Some("/workspace"));
+            assert_eq!(
+                request.envs.get("SANDBOX_PROBE").map(String::as_str),
+                Some("environment-map")
+            );
             Ok(ProcessSplitOutput {
-                stdout: b"argv-direct".to_vec(),
+                stdout: b"/workspace\nenvironment-map".to_vec(),
                 stderr: b"separate-stderr".to_vec(),
                 exit_code: Some(0),
                 exited: true,

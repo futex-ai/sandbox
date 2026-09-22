@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, fmt};
 
-use sandbox_interface::EgressDestination;
+use sandbox_interface::{EgressDestination, SandboxLifetime};
 use serde::{Deserialize, Serialize};
 
 /// Opaque, non-secret consumer metadata attached to E2B sandboxes.
@@ -26,9 +26,11 @@ pub struct ControlCreateSandbox {
     pub allowed_destinations: Option<Vec<EgressDestination>>,
     /// Auto-pause timeout in seconds.
     pub idle_timeout_seconds: u32,
+    /// Provider-neutral lifecycle policy for this sandbox.
+    pub lifetime: SandboxLifetime,
 }
 
-/// Call-local access material returned by sandbox create or connect.
+/// Call-local access material returned by sandbox create or lifecycle-safe connect.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ControlSandboxAccess {
     /// Lowercase DNS-route-safe E2B sandbox identifier.
@@ -38,8 +40,8 @@ pub struct ControlSandboxAccess {
     pub domain: String,
     /// Nonblank secret envd access token; never persist or log this value.
     pub envd_access_token: String,
-    /// Nonblank secret traffic access token; never persist or log this value.
-    pub traffic_access_token: String,
+    /// Nonblank secret traffic token when acquired without violating lifetime.
+    pub traffic_access_token: Option<String>,
 }
 
 impl fmt::Debug for ControlSandboxAccess {
