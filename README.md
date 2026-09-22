@@ -35,11 +35,13 @@ cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
-credentials before construction. Snapshot creation and inventory require one
-nonempty source and correlation value, and malformed returned snapshot IDs
-cannot escape recovery. Sandbox create and connect responses require nonblank
-process and private-traffic credentials. Provider mutations accept only their
-exact acknowledgment, including an exact versioned screen-resize object;
+credentials before construction. Sandbox and snapshot creation and inventory
+reject returned IDs that later routes cannot use; accepted creates remain
+delivery-ambiguous, while malformed inventory remains retryable. Snapshot
+operations also require one nonempty source and correlation value. Sandbox
+create and connect responses require nonblank process and private-traffic
+credentials. Provider mutations accept only their exact acknowledgment,
+including an exact versioned screen-resize object;
 missing read credentials stay retryable. Caller-controlled process durations
 are capped before provider access, including 30-second terminal output waits
 and 300-second process operations. Image preparation

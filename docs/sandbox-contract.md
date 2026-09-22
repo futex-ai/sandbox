@@ -110,9 +110,10 @@ a non-HTTPS or non-root API origin, an empty or padded API key, an invalid
 routing domain, and a zero idle timeout before it constructs its credentialed
 transport. Empty opaque provider identifiers and
 identifiers equal to `.` or `..` must fail before authenticated route
-construction. Snapshot creation and inventory must also reject those values in
-provider responses: an accepted mutation remains delivery-ambiguous, while an
-invalid inventory row is provider unavailability. Port zero, empty required
+construction. Sandbox and snapshot creation and inventory must also reject
+those values in provider responses: an accepted mutation remains
+delivery-ambiguous, while an invalid inventory row is provider unavailability.
+Port zero, empty required
 text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A
 direct process command cannot be empty; its command and arguments total at

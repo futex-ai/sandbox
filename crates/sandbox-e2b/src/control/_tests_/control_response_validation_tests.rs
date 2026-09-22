@@ -30,6 +30,22 @@ async fn accepted_create_rejects_blank_credentials_as_ambiguous() {
 }
 
 #[tokio::test]
+async fn accepted_sandbox_create_rejects_unusable_identity_as_ambiguous() {
+    let client = recording_client([
+        r#"{"sandboxID":"","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
+        r#"{"sandboxID":".","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
+        r#"{"sandboxID":"..","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
+    ]);
+
+    for _ in 0..3 {
+        assert!(matches!(
+            client.create_sandbox(create_request()).await,
+            Err(E2bAdapterError::DeliveryAmbiguous)
+        ));
+    }
+}
+
+#[tokio::test]
 async fn connect_rejects_missing_or_blank_credentials_as_unavailable() {
     let client = recording_client([
         r#"{"sandboxID":"sandbox","trafficAccessToken":"traffic"}"#,
@@ -41,6 +57,25 @@ async fn connect_rejects_missing_or_blank_credentials_as_unavailable() {
     for _ in 0..4 {
         assert!(matches!(
             client.connect_sandbox("sandbox").await,
+            Err(E2bAdapterError::Unavailable)
+        ));
+    }
+}
+
+#[tokio::test]
+async fn sandbox_inventory_rejects_unusable_identity_as_unavailable() {
+    let client = recording_client_with_status(
+        200,
+        [
+            r#"[{"sandboxID":"","state":"running"}]"#,
+            r#"[{"sandboxID":".","state":"running"}]"#,
+            r#"[{"sandboxID":"..","state":"running"}]"#,
+        ],
+    );
+
+    for _ in 0..3 {
+        assert!(matches!(
+            client.list_sandboxes(SandboxMetadata::new()).await,
             Err(E2bAdapterError::Unavailable)
         ));
     }
@@ -73,9 +108,16 @@ fn create_request() -> ControlCreateSandbox {
 }
 
 fn recording_client<const N: usize>(bodies: [&str; N]) -> ReqwestE2bControlApi {
+    recording_client_with_status(201, bodies)
+}
+
+fn recording_client_with_status<const N: usize>(
+    status: u16,
+    bodies: [&str; N],
+) -> ReqwestE2bControlApi {
     let responses = Arc::new(Mutex::new(VecDeque::from(bodies.map(|body| {
         HttpResponse {
-            status: 201,
+            status,
             body: body.as_bytes().to_vec(),
             next_token: None,
         }

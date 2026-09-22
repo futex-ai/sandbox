@@ -40,13 +40,16 @@ Deployments that must adopt existing resources can supply an
 cleanup process names are validated before use.
 
 Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. Managed inventory maps recognized consumer
-metadata and leaves it absent for older resources. Create and recover validate
-the same profile and network-policy rules before any control request. Snapshot
-creation and recovery require a nonempty source sandbox and correlation name
-before an authenticated request. Bounded, cursor-safe inventory rejects an
-empty or dot-segment snapshot identity as provider unavailability; an
-accepted create with such an unusable identity remains delivery-ambiguous.
+recover ambiguous delivery. An accepted sandbox create with an empty or
+dot-segment identity remains delivery-ambiguous; managed inventory rejects the
+same unusable identities as provider unavailability, maps recognized consumer
+metadata, and leaves that metadata absent for older resources. Create and
+recover validate the same profile and network-policy rules before any control
+request. Snapshot creation and recovery require a nonempty source sandbox and
+correlation name before an authenticated request. Bounded, cursor-safe
+snapshot inventory rejects an empty or dot-segment identity as provider
+unavailability; an accepted snapshot create with such an unusable identity
+remains delivery-ambiguous.
 Terminal identities combine an E2B PID with the consumer terminal ID; reads
 verify both values,
 while input and close operations use envd's atomic tag selector so PID reuse

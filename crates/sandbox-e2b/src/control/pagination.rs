@@ -34,7 +34,12 @@ pub(super) async fn list_sandboxes(
         let (rows, next): (Vec<ListedSandboxBody>, _) = client
             .json_page(Method::Get, path, None, &[200], false)
             .await?;
-        result.extend(rows.into_iter().map(map_listed_sandbox));
+        for row in rows {
+            if !valid_provider_identity(&row.sandbox_id) {
+                return Err(Error::Unavailable);
+            }
+            result.push(map_listed_sandbox(row));
+        }
         if !pagination.advance(next)? {
             return Ok(result);
         }

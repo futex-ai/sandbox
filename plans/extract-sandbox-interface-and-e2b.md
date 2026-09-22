@@ -902,3 +902,41 @@ identity that later provider routes must reject.
 - [ ] After a clean review, resolve superseded closeout tasks, record plan
       completion, and move this plan from Active to Completed in
       `plans/README.md`.
+
+## Milestone 25: Routable Sandbox Identities
+
+Resolve the sandbox-identity finding from the exact-provider-results review.
+At the end of this milestone, sandbox creation and inventory cannot return an
+identity that later provider operations and cleanup are required to reject.
+
+### Review Items
+
+1. **Severity: medium — reject sandbox identities that cannot be routed.**
+   Sandbox creation and inventory return an opaque provider ID. Later actions,
+   such as inspecting or destroying that sandbox, place the ID in a URL path
+   and correctly reject the special path values `.` and `..`. Creation and
+   inventory currently allow those values through. Doing nothing can make the
+   caller store a paid sandbox that normal operations and cleanup cannot reach.
+   Option A: apply the existing provider-identity check to creation and every
+   inventory row, treating an unusable accepted creation as delivery ambiguity
+   and unusable inventory as provider unavailability. Option B: replace all raw
+   sandbox ID strings with a new validated type. **Recommendation: A**, because
+   it matches the snapshot safety rule without changing the public API.
+
+- [x] Record the review finding with severity, context, impact, options, and a
+      recommendation in simple language that assumes no prior context.
+- [x] Add failing regressions first for unusable sandbox identities returned by
+      accepted creation and inventory.
+- [x] Validate created and listed sandbox identities before they leave the
+      adapter, preserving mutation-safe and read-safe error meanings.
+- [x] Update the public contract, adapter documentation, and crate README for
+      sandbox response identity validation.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, resolve superseded closeout tasks, record plan
+      completion, and move this plan from Active to Completed in
+      `plans/README.md`.

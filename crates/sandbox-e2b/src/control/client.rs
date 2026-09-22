@@ -76,7 +76,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 true,
             )
             .await?;
-        if response.sandbox_id.is_empty() {
+        if !valid_provider_identity(&response.sandbox_id) {
             return Err(Error::DeliveryAmbiguous);
         }
         match map_access(response, &self.sandbox_domain) {
