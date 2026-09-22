@@ -123,6 +123,8 @@ entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
 request and transport debugging, tracing, handled errors, and image-command
 failure output. Read-only execution keeps its existing explicit cwd and passes
 no environment entries; PTY startup keeps its fixed locale and terminal map.
+The shared conformance probe verifies the selected cwd and environment on
+stdout while independently asserting a deterministic stderr token.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Process, read-only, and private-port hosts use the adapter's validated

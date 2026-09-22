@@ -15,7 +15,8 @@ use crate::{
 
 const PROCESS_CWD: &str = "/workspace";
 const PROCESS_ENV_VALUE: &str = "environment-map";
-const PROCESS_SCRIPT: &str = "pwd; printf %s \"$SANDBOX_PROBE\"";
+const PROCESS_SCRIPT: &str = "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2";
+const PROCESS_STDERR: &[u8] = b"separate-stderr";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
@@ -111,7 +112,7 @@ async fn exercise_backend_with_resources(
         })
         .await?;
     if process.stdout != b"/workspace\nenvironment-map"
-        || !process.stderr.is_empty()
+        || process.stderr != PROCESS_STDERR
         || process.exit_code != Some(0)
         || !process.exited
         || process.stdout_overflowed

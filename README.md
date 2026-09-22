@@ -31,11 +31,12 @@ adapter proves exactly one completed snapshot. Both snapshot probes in the
 shared conformance harness accept immediate or asynchronous completion. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
-runs its split-output check through a self-contained `/bin/sh` command available
-in normal backend images. Cleanup always attempts every tracked terminal,
-snapshot, and sandbox; an operation error remains the reported error even if a
-cleanup step also fails. Trusted adapter helpers isolate their interpreter
-startup from sandbox-owned modules and Python environment customization.
+runs its cwd, environment, and split-output check through one self-contained
+`/bin/sh` command available in normal backend images. Cleanup always attempts
+every tracked terminal, snapshot, and sandbox; an operation error remains the
+reported error even if a cleanup step also fails. Trusted adapter helpers
+isolate their interpreter startup from sandbox-owned modules and Python
+environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
 credentials before construction. Sandbox creation and inventory require a

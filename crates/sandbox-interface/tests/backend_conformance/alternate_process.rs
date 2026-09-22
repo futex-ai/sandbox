@@ -6,7 +6,13 @@ use sandbox_interface::{BackendRunProcessRequest, Result, SandboxProcessOutput};
 
 pub(super) fn run(request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
     assert_eq!(request.command, "/bin/sh");
-    assert_eq!(request.args, ["-c", "pwd; printf %s \"$SANDBOX_PROBE\""]);
+    assert_eq!(
+        request.args,
+        [
+            "-c",
+            "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2"
+        ]
+    );
     assert_eq!(request.cwd.as_deref(), Some("/workspace"));
     assert_eq!(
         request.envs,
@@ -14,7 +20,7 @@ pub(super) fn run(request: BackendRunProcessRequest) -> Result<SandboxProcessOut
     );
     Ok(SandboxProcessOutput {
         stdout: b"/workspace\nenvironment-map".to_vec(),
-        stderr: Vec::new(),
+        stderr: b"separate-stderr".to_vec(),
         exit_code: Some(0),
         exited: true,
         ..SandboxProcessOutput::default()

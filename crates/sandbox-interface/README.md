@@ -59,8 +59,8 @@ final status instead of accepting an absent or unsuccessful completion marker.
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.
 Its process probe invokes `/bin/sh` with a self-contained `pwd` and environment
-script, a selected working directory, and one environment entry, so a normal
-backend image needs no test-only executable.
+script, a selected working directory, one environment entry, and an independent
+stderr token, so a normal backend image needs no test-only executable.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so

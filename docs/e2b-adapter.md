@@ -223,9 +223,9 @@ cannot grow beyond what that reader accepts.
 Oversized replacement writes fail before acquiring mutating sandbox access.
 
 The public backend conformance process runs
-`/bin/sh -c 'pwd; printf %s "$SANDBOX_PROBE"'` with `/workspace` and one
-environment entry, then checks the exact output bytes. A normal E2B image does
-not need a test-only executable.
+one `/bin/sh` command with `/workspace` and one environment entry, then checks
+the exact stdout bytes and an independent deterministic stderr token. A normal
+E2B image does not need a test-only executable.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the

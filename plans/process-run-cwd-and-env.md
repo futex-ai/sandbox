@@ -66,3 +66,39 @@ committed, pushed, and independently reviewed against `origin/main`.
       automatically fixing it.
 - [x] Mark every milestone complete and move this plan from Active to
       Completed in `plans/README.md`.
+
+## Milestone 4: Restore Split-Stream Conformance Coverage
+
+At the end of this milestone, the shared cwd and environment probe also
+retains its original independent stderr assertion, so a backend cannot pass
+conformance while dropping, merging, or mislabeling stderr.
+
+### Review Item
+
+1. **Severity: medium — preserve stderr coverage in the conformance probe.**
+   The shared direct-process probe previously emitted and asserted a
+   deterministic stderr value. Replacing it with the cwd and environment probe
+   made stderr empty, so a backend that mishandles every stderr frame could
+   still pass the shared conformance harness. Option A: emit and assert a
+   deterministic stderr token in the existing cwd and environment process.
+   Option B: add a second stderr-only process probe. **Recommendation: A**,
+   because it covers cwd, environment, stdout, and stderr with one provider
+   process; the user selected this option.
+
+- [x] Add failing alternate-backend and E2B conformance expectations for the
+      restored stderr token.
+- [x] Emit the token from the existing shell invocation and assert its exact
+      bytes in the shared harness.
+- [x] Update the contract, adapter documentation, and crate READMEs to describe
+      the combined cwd, environment, stdout, and stderr probe.
+- [x] Run focused conformance tests, formatting, Clippy, the full workspace
+      test suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for secrets, generated artifacts, whitespace errors,
+      stale documentation, and unrelated edits.
+- [ ] Run `git add -A`, commit the completed follow-up with a Conventional
+      Commit, and push the current branch.
+- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+      clean local diff against `origin/main`; report every finding without
+      automatically fixing it.
+- [ ] Mark this milestone complete and move the plan from Active to Completed
+      in `plans/README.md`.

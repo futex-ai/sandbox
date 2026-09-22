@@ -232,7 +232,13 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
             .next_call(matching!(_, _))
             .answers(&|_, _, command| {
                 assert_eq!(command.command, "/bin/sh");
-                assert_eq!(command.args, ["-c", "pwd; printf %s \"$SANDBOX_PROBE\""]);
+                assert_eq!(
+                    command.args,
+                    [
+                        "-c",
+                        "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2"
+                    ]
+                );
                 assert_eq!(command.cwd.as_deref(), Some("/workspace"));
                 assert_eq!(
                     command.envs.get("SANDBOX_PROBE").map(String::as_str),
@@ -240,7 +246,7 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                 );
                 Ok(ProcessSplitOutput {
                     stdout: b"/workspace\nenvironment-map".to_vec(),
-                    stderr: Vec::new(),
+                    stderr: b"separate-stderr".to_vec(),
                     exit_code: Some(0),
                     exited: true,
                     ..ProcessSplitOutput::default()

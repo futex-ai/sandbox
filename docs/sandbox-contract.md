@@ -233,10 +233,10 @@ name.
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
 shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-The process probe runs `/bin/sh -c 'pwd; printf %s "$SANDBOX_PROBE"'` with
-`/workspace` as its working directory and one `SANDBOX_PROBE` entry, then
-checks the exact combined working-directory and environment bytes. Conforming
-images therefore need a standard shell but no harness-only executable.
+The process probe runs one `/bin/sh` command with `/workspace` as its working
+directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
+environment bytes on stdout plus an independent deterministic token on stderr,
+so conforming images need a standard shell but no harness-only executable.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never
