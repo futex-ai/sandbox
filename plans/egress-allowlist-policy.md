@@ -36,23 +36,32 @@ an explicitly credentialed E2B smoke test.
 - [x] Add an ignored `live-e2b` proof using the same shell-level behavior.
 - [x] Run focused interface, adapter, conformance, and live-feature tests.
 
-## Milestone 4: Documentation
+## Milestone 4: Documentation (Completed)
 
 Align the public contract, adapter guarantees, and crate entry points with the
 implemented policy.
 
 - [x] Update `docs/sandbox-contract.md` and `docs/e2b-adapter.md`.
 - [x] Update both crate `README.md` files and relevant live-test commands.
-- [ ] Review the completed diff and move this plan to completed status.
+- [x] Review the completed diff and move this plan to completed status.
 
-## Milestone 5: Validation And Delivery
+## Milestone 5: Validation And Delivery (Completed)
 
 Complete the repository-required validation and review workflow.
 
 - [x] Run Rust formatting, focused linting/tests, and relevant smoke checks.
 - [x] Run `cargo xtask check` with a 100% passing result.
-- [ ] Stage every change, commit with a Conventional Commit, and push the
+- [x] Stage every change, commit with a Conventional Commit, and push the
       current branch.
-- [ ] Run `cargo xtask review` after the push.
-- [ ] Report every review finding with severity, context, impact, lettered
+- [x] Run `cargo xtask review` after the push.
+- [x] Report every review finding with severity, context, impact, lettered
       options, and a recommendation without automatically changing the code.
+
+## Review Outcome
+
+The post-push review identified three findings retained for maintainer choice:
+noncanonical IPv4 spellings can pass domain validation, IPv4-mapped IPv6 rules
+can evade IPv4 deny overlap, and the denied-host conformance command can treat
+an HTTP error response as a successful denial proof. No finding was changed
+automatically; the delivery report includes the required severity, impact,
+options, and recommendation for each item.
