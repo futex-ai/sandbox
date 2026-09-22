@@ -25,7 +25,7 @@ pub struct ControlCreateSandbox {
 /// Call-local access material returned by sandbox create or connect.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ControlSandboxAccess {
-    /// Route-safe opaque E2B sandbox identifier.
+    /// Lowercase DNS-route-safe E2B sandbox identifier.
     pub sandbox_id: String,
     /// E2B shared sandbox routing domain.
     pub domain: String,
@@ -59,7 +59,7 @@ pub enum ControlSandboxState {
 /// Provider sandbox identity and lifecycle state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ControlSandbox {
-    /// Route-safe opaque E2B sandbox identifier.
+    /// Lowercase DNS-route-safe E2B sandbox identifier.
     pub sandbox_id: String,
     /// Current provider lifecycle state.
     pub state: ControlSandboxState,
@@ -70,7 +70,7 @@ pub struct ControlSandbox {
 /// Call-local envd access for a provider-verified running sandbox.
 #[derive(Clone, Eq, PartialEq)]
 pub struct ControlSandboxReadAccess {
-    /// Route-safe opaque E2B sandbox identifier.
+    /// Lowercase DNS-route-safe E2B sandbox identifier.
     pub sandbox_id: String,
     /// E2B shared sandbox routing domain.
     pub domain: String,

@@ -111,17 +111,21 @@ routing domain, and a zero idle timeout before it constructs its credentialed
 transport. Empty opaque provider identifiers and
 identifiers equal to `.` or `..` must fail before authenticated route
 construction. Sandbox and snapshot creation and inventory must also reject
-those values in provider responses: an accepted mutation remains
-delivery-ambiguous, while an invalid inventory row is provider unavailability.
+returned identities that their later provider routes cannot use. For E2B, a
+sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
+remains delivery-ambiguous, while an invalid inventory row is provider
+unavailability. Snapshot inspection must reject a returned provider ID that
+differs from the requested ID.
 Port zero, empty required
 text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A
-direct process command cannot be empty; its command and arguments total at
-most 128 KiB, each requested stream limit is at most 64 MiB, and every direct,
-stateless read-only, or process-transport duration is at most 300 seconds. A
-terminal output long poll is at most 30 seconds. These bounds must be checked
-before acquiring provider sandbox access, and absolute deadlines must use
-checked arithmetic so no caller duration can panic. In particular, an
+direct or stateless process command cannot be empty, and its command and
+arguments total at most 128 KiB. Each direct stream or combined stateless
+output limit is at most 64 MiB. Every direct, stateless read-only, or
+process-transport duration is at most 300 seconds. A terminal output long poll
+is at most 30 seconds. These bounds must be checked before acquiring provider
+sandbox access, and absolute deadlines must use checked arithmetic so no caller
+duration can panic. In particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
 Helper processes may report success only after a normal exit; an exit-code

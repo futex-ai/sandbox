@@ -940,3 +940,66 @@ identity that later provider operations and cleanup are required to reject.
 - [ ] After a clean review, resolve superseded closeout tasks, record plan
       completion, and move this plan from Active to Completed in
       `plans/README.md`.
+
+## Milestone 26: Complete Request And Identity Validation
+
+Resolve every finding from the routable-sandbox review. At the end of this
+milestone, stateless commands cannot request unsafe bounds, every returned
+sandbox ID can be used for E2B's DNS-based process routes, and snapshot
+inspection cannot silently return a different provider resource.
+
+### Review Items
+
+1. **Severity: medium — validate every stateless command bound before provider
+   access.** A stateless command runs once in an already-live sandbox without
+   creating a terminal. Its executable, arguments, and output limit are supplied
+   by the caller. The adapter currently checks only the timeout before it asks
+   E2B for access. An empty executable, more than 128 KiB of command text, or an
+   output limit above 64 MiB can therefore reach E2B. Doing nothing allows an
+   invalid provider request and can permit excessive in-memory output capture.
+   Option A: share the existing direct-process validation code with stateless
+   commands. Option B: copy the same checks into the stateless path.
+   **Recommendation: A**, because one shared implementation keeps both command
+   paths on the same limits.
+2. **Severity: medium — reject sandbox IDs that cannot be used in an envd DNS
+   name.** E2B process and private-port requests address a sandbox through a DNS
+   hostname containing its provider ID. The current response check rejects only
+   empty and special dot IDs, so an ID such as `provider/path` can be accepted
+   even though it cannot form that hostname. Doing nothing can make the caller
+   store and pay for a sandbox that normal process and cleanup work cannot use.
+   Option A: add a sandbox-specific DNS-compatible response check while keeping
+   snapshot IDs opaque. Option B: build a complete envd hostname separately at
+   every sandbox response boundary. **Recommendation: A**, because it protects
+   creation and inventory in one place without incorrectly restricting snapshot
+   IDs.
+3. **Severity: medium — verify the snapshot returned by inspection is the one
+   requested.** Snapshot inspection asks a control transport for one provider
+   ID. A faulty or alternate injected transport can currently return a different
+   ID, and the adapter reports that different snapshot as ready. Doing nothing
+   can attach readiness or later cleanup to the wrong provider resource.
+   Option A: compare the returned ID with the requested ID before mapping the
+   result. Option B: redesign the control trait so inspection returns only proof
+   that the requested ID exists. **Recommendation: A**, because it adds the
+   identity fence without changing the public transport API.
+
+- [x] Record all three review findings with severity, context, impact, options,
+      and recommendations in simple language that assumes no prior context.
+- [x] Add failing regressions first for incomplete stateless-command bounds,
+      DNS-incompatible sandbox response IDs, and mismatched snapshot inspection.
+- [x] Share direct and stateless command validation so executable, argv, output,
+      and duration limits all fail before provider access.
+- [x] Validate sandbox creation and inventory IDs against the DNS label required
+      by envd while preserving the existing mutation-safe and read-safe errors.
+- [x] Reject a snapshot inspection result whose provider ID differs from the
+      requested provider ID.
+- [x] Update the public contract, adapter documentation, and crate READMEs for
+      the completed request and identity guarantees.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, resolve superseded closeout tasks, record plan
+      completion, and move this plan from Active to Completed in
+      `plans/README.md`.

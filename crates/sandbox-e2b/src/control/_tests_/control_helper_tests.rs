@@ -2,7 +2,7 @@
 
 use crate::E2bAdapterError;
 
-use super::{ensure_status, path_segment};
+use super::{ensure_status, path_segment, valid_sandbox_identity};
 
 #[test]
 fn accepted_control_statuses_pass_through() {
@@ -52,4 +52,23 @@ fn opaque_path_segments_cannot_escape_provider_routes() {
             Err(E2bAdapterError::InvalidRequest)
         ));
     }
+}
+
+#[test]
+fn sandbox_identities_fit_the_envd_dns_label() {
+    assert!(valid_sandbox_identity("provider-sandbox-01"));
+    assert!(valid_sandbox_identity(&"a".repeat(57)));
+    for identity in [
+        "",
+        ".",
+        "..",
+        "provider/path",
+        "provider_name",
+        "Provider",
+        "-provider",
+        "provider-",
+    ] {
+        assert!(!valid_sandbox_identity(identity));
+    }
+    assert!(!valid_sandbox_identity(&"a".repeat(58)));
 }

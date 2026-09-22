@@ -30,14 +30,15 @@ async fn accepted_create_rejects_blank_credentials_as_ambiguous() {
 }
 
 #[tokio::test]
-async fn accepted_sandbox_create_rejects_unusable_identity_as_ambiguous() {
+async fn accepted_sandbox_create_rejects_unroutable_identity_as_ambiguous() {
     let client = recording_client([
         r#"{"sandboxID":"","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
         r#"{"sandboxID":".","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
         r#"{"sandboxID":"..","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
+        r#"{"sandboxID":"provider/path","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#,
     ]);
 
-    for _ in 0..3 {
+    for _ in 0..4 {
         assert!(matches!(
             client.create_sandbox(create_request()).await,
             Err(E2bAdapterError::DeliveryAmbiguous)
@@ -63,17 +64,18 @@ async fn connect_rejects_missing_or_blank_credentials_as_unavailable() {
 }
 
 #[tokio::test]
-async fn sandbox_inventory_rejects_unusable_identity_as_unavailable() {
+async fn sandbox_inventory_rejects_unroutable_identity_as_unavailable() {
     let client = recording_client_with_status(
         200,
         [
             r#"[{"sandboxID":"","state":"running"}]"#,
             r#"[{"sandboxID":".","state":"running"}]"#,
             r#"[{"sandboxID":"..","state":"running"}]"#,
+            r#"[{"sandboxID":"provider/path","state":"running"}]"#,
         ],
     );
 
-    for _ in 0..3 {
+    for _ in 0..4 {
         assert!(matches!(
             client.list_sandboxes(SandboxMetadata::new()).await,
             Err(E2bAdapterError::Unavailable)

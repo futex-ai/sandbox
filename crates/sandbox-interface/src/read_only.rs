@@ -79,6 +79,13 @@ pub struct ReadOnlyFileOutput {
 }
 
 /// Provider request for a stateless, non-interactive read-only command.
+///
+/// Backends must reject an empty executable, combined executable and argument
+/// bytes above [`PROCESS_RUN_MAX_ARGV_BYTES`](crate::PROCESS_RUN_MAX_ARGV_BYTES),
+/// an output limit above
+/// [`PROCESS_RUN_MAX_STREAM_BYTES`](crate::PROCESS_RUN_MAX_STREAM_BYTES), and a
+/// timeout above [`PROCESS_RUN_MAX_DEADLINE`](crate::PROCESS_RUN_MAX_DEADLINE)
+/// before acquiring provider access.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackendReadOnlyExecRequest {
     /// Source provider sandbox reference.
@@ -89,7 +96,8 @@ pub struct BackendReadOnlyExecRequest {
     pub executable: String,
     /// Exact argument vector passed to the executable.
     pub args: Vec<String>,
-    /// Maximum combined stdout and stderr bytes returned.
+    /// Maximum combined stdout and stderr bytes returned, capped by
+    /// [`PROCESS_RUN_MAX_STREAM_BYTES`](crate::PROCESS_RUN_MAX_STREAM_BYTES).
     pub output_limit: usize,
     /// Maximum command duration, bounded by
     /// [`PROCESS_RUN_MAX_DEADLINE`](crate::PROCESS_RUN_MAX_DEADLINE).

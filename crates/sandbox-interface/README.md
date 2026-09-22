@@ -31,10 +31,11 @@ Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
 Direct process and stateless read-only execution requests require a non-empty
-command, at most 128 KiB across the command and arguments, at most 64 MiB for
-each captured stream, and a deadline no longer than 300 seconds. A terminal
-output read may wait at most 30 seconds. Backends reject these duration bounds
-before acquiring provider access.
+command, at most 128 KiB across the command and arguments, and a deadline no
+longer than 300 seconds. Each direct-process stream and the combined stateless
+output are capped at 64 MiB. A terminal output read may wait at most 30
+seconds. Backends reject every command, output, and duration bound before
+acquiring provider access.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is

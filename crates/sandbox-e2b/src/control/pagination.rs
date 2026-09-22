@@ -6,7 +6,9 @@ use crate::error::{Error, Result};
 
 use super::{
     ReqwestE2bControlApi,
-    helpers::{map_listed_sandbox, metadata_query, valid_provider_identity},
+    helpers::{
+        map_listed_sandbox, metadata_query, valid_provider_identity, valid_sandbox_identity,
+    },
     http::Method,
     types::{
         ControlSandbox, ControlSnapshot, ListedSandboxBody, SandboxMetadata, SnapshotInfoBody,
@@ -35,7 +37,7 @@ pub(super) async fn list_sandboxes(
             .json_page(Method::Get, path, None, &[200], false)
             .await?;
         for row in rows {
-            if !valid_provider_identity(&row.sandbox_id) {
+            if !valid_sandbox_identity(&row.sandbox_id) {
                 return Err(Error::Unavailable);
             }
             result.push(map_listed_sandbox(row));

@@ -15,9 +15,9 @@ use super::{
 #[unimock::unimock(api = E2bControlApiMock)]
 #[async_trait]
 pub trait E2bControlApi: Send + Sync {
-    /// Lists route-safe running sandboxes matching exact consumer metadata.
+    /// Lists DNS-route-safe running sandboxes matching exact consumer metadata.
     async fn list_sandboxes(&self, metadata: SandboxMetadata) -> Result<Vec<ControlSandbox>>;
-    /// Creates one sandbox and returns a route-safe identity with nonblank
+    /// Creates one sandbox and returns a DNS-route-safe identity with nonblank
     /// access credentials.
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess>;
     /// Gets one sandbox and its provider state.
@@ -38,7 +38,7 @@ pub trait E2bControlApi: Send + Sync {
     /// Lists route-safe snapshots for one nonempty source sandbox and
     /// correlation name.
     async fn list_snapshots(&self, sandbox_id: &str, name: &str) -> Result<Vec<ControlSnapshot>>;
-    /// Inspects a snapshot within its source-and-name-filtered inventory.
+    /// Inspects the exact requested snapshot within source-and-name inventory.
     async fn get_snapshot(
         &self,
         sandbox_id: &str,

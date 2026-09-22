@@ -92,6 +92,24 @@ pub(super) fn valid_provider_identity(value: &str) -> bool {
     !matches!(value, "" | "." | "..")
 }
 
+/// Returns whether a sandbox identity fits the DNS label used by envd routes.
+pub(super) fn valid_sandbox_identity(value: &str) -> bool {
+    const DNS_LABEL_MAX_BYTES: usize = 63;
+    const ROUTING_PREFIX_BYTES: usize = "65535-".len();
+    let bytes = value.as_bytes();
+    !bytes.is_empty()
+        && bytes.len() <= DNS_LABEL_MAX_BYTES - ROUTING_PREFIX_BYTES
+        && bytes
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes
+            .last()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes
+            .iter()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || *byte == b'-')
+}
+
 #[cfg(test)]
 #[path = "_tests_/control_helper_tests.rs"]
 mod control_helper_tests;

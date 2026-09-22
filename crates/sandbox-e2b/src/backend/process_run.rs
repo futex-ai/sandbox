@@ -39,14 +39,21 @@ pub(super) async fn run(
 }
 
 fn validate(request: &BackendRunProcessRequest) -> Result<()> {
-    if request.command.is_empty() {
-        return Err(Error::EmptyText { field: "command" });
+    validate_argv("command", &request.command, &request.args)?;
+    validate_stream_limit("stdout_limit", request.stdout_limit)?;
+    validate_stream_limit("stderr_limit", request.stderr_limit)?;
+    validate_duration("deadline", request.deadline)
+}
+
+pub(super) fn validate_argv(field: &'static str, command: &str, args: &[String]) -> Result<()> {
+    if command.is_empty() {
+        return Err(Error::EmptyText { field });
     }
-    let mut argv_bytes = request.command.len();
+    let mut argv_bytes = command.len();
     if argv_bytes > PROCESS_RUN_MAX_ARGV_BYTES {
         return Err(command_too_large());
     }
-    for argument in &request.args {
+    for argument in args {
         let Some(total) = argv_bytes.checked_add(argument.len()) else {
             return Err(command_too_large());
         };
@@ -55,11 +62,13 @@ fn validate(request: &BackendRunProcessRequest) -> Result<()> {
         }
         argv_bytes = total;
     }
-    validate_stream_limit("stdout_limit", request.stdout_limit)?;
-    validate_stream_limit("stderr_limit", request.stderr_limit)?;
-    if request.deadline > PROCESS_RUN_MAX_DEADLINE {
+    Ok(())
+}
+
+pub(super) fn validate_duration(field: &'static str, duration: std::time::Duration) -> Result<()> {
+    if duration > PROCESS_RUN_MAX_DEADLINE {
         return Err(Error::InvalidSeconds {
-            field: "deadline",
+            field,
             minimum: 0,
             maximum: PROCESS_RUN_MAX_DEADLINE.as_secs(),
         });
@@ -73,7 +82,7 @@ fn command_too_large() -> Error {
     }
 }
 
-fn validate_stream_limit(field: &'static str, limit: usize) -> Result<()> {
+pub(super) fn validate_stream_limit(field: &'static str, limit: usize) -> Result<()> {
     if limit > PROCESS_RUN_MAX_STREAM_BYTES {
         return Err(Error::InvalidLength {
             field,

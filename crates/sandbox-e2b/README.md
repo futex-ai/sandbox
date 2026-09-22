@@ -40,16 +40,17 @@ Deployments that must adopt existing resources can supply an
 cleanup process names are validated before use.
 
 Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. An accepted sandbox create with an empty or
-dot-segment identity remains delivery-ambiguous; managed inventory rejects the
-same unusable identities as provider unavailability, maps recognized consumer
-metadata, and leaves that metadata absent for older resources. Create and
-recover validate the same profile and network-policy rules before any control
-request. Snapshot creation and recovery require a nonempty source sandbox and
-correlation name before an authenticated request. Bounded, cursor-safe
-snapshot inventory rejects an empty or dot-segment identity as provider
-unavailability; an accepted snapshot create with such an unusable identity
-remains delivery-ambiguous.
+recover ambiguous delivery. A sandbox ID must be a lowercase DNS-label
+fragment that fits every envd hostname. An accepted create with an unusable ID
+remains delivery-ambiguous; managed inventory rejects the same ID as provider
+unavailability, maps recognized consumer metadata, and leaves that metadata
+absent for older resources. Create and recover validate the same profile and
+network-policy rules before any control request. Snapshot creation and
+recovery require a nonempty source sandbox and correlation name before an
+authenticated request. Bounded, cursor-safe snapshot inventory rejects an
+empty or dot-segment identity as provider unavailability; an accepted snapshot
+create with such an unusable identity remains delivery-ambiguous. Snapshot
+inspection also rejects a response whose ID differs from the requested ID.
 Terminal identities combine an E2B PID with the consumer terminal ID; reads
 verify both values,
 while input and close operations use envd's atomic tag selector so PID reuse
@@ -85,13 +86,14 @@ One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
 bounded while streaming. Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
-unbounded intermediate buffer. Direct process requests are validated before
-the adapter acquires sandbox access: commands must be non-empty, combined argv
-is capped at 128 KiB, each stream cap is at most 64 MiB, and caller-controlled
-process, read-only execution, and regular-file durations cannot exceed 300
-seconds. Terminal output waits cannot exceed 30 seconds. Every bound is
-checked before provider access, and absolute Tokio deadlines use checked
-arithmetic. Failed image-command diagnostics redact the call-local
+unbounded intermediate buffer. Direct process and stateless read-only requests
+are validated before the adapter acquires sandbox access: commands must be
+non-empty, combined argv is capped at 128 KiB, and each direct stream or
+combined stateless output cap is at most 64 MiB. Caller-controlled process,
+read-only execution, and regular-file durations cannot exceed 300 seconds.
+Terminal output waits cannot exceed 30 seconds. Every bound is checked before
+provider access, and absolute Tokio deadlines use checked arithmetic. Failed
+image-command diagnostics redact the call-local
 opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
 process data with zero or multiple output channels is rejected instead of

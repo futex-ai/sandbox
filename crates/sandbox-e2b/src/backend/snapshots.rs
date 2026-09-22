@@ -122,6 +122,11 @@ pub(super) async fn inspect(
             )
             .await,
     )?;
+    if snapshot.snapshot_id != request.provider_ref.as_str() {
+        return Err(Error::internal_message(
+            "E2B snapshot inspection response identity mismatch",
+        ));
+    }
     Ok(mapping::ready_snapshot(snapshot.snapshot_id))
 }
 

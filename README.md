@@ -35,16 +35,20 @@ cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
-credentials before construction. Sandbox and snapshot creation and inventory
-reject returned IDs that later routes cannot use; accepted creates remain
-delivery-ambiguous, while malformed inventory remains retryable. Snapshot
-operations also require one nonempty source and correlation value. Sandbox
-create and connect responses require nonblank process and private-traffic
-credentials. Provider mutations accept only their exact acknowledgment,
+credentials before construction. Sandbox creation and inventory require a
+lowercase DNS-label ID that every envd route can use. Snapshot creation and
+inventory reject IDs that later control routes cannot use, and snapshot
+inspection verifies that the provider returned the requested ID. Accepted
+creates remain delivery-ambiguous, while malformed inventory remains
+retryable. Snapshot operations also require one nonempty source and correlation
+value. Sandbox create and connect responses require nonblank process and
+private-traffic credentials. Provider mutations accept only their exact acknowledgment,
 including an exact versioned screen-resize object;
 missing read credentials stay retryable. Caller-controlled process durations
 are capped before provider access, including 30-second terminal output waits
-and 300-second process operations. Image preparation
+and 300-second process operations. Stateless commands also reject an empty
+executable, more than 128 KiB of argv, or more than 64 MiB of combined output
+before credentials are acquired. Image preparation
 validates every input path and size before it
 connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers

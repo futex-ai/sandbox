@@ -8,7 +8,7 @@ use super::{
     E2bControlApi,
     helpers::{
         encode, ensure_sandbox_identity, map_access, map_state, path_segment,
-        valid_provider_identity,
+        valid_provider_identity, valid_sandbox_identity,
     },
     http::{E2bHttpTransport, Method},
     pagination,
@@ -76,7 +76,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 true,
             )
             .await?;
-        if !valid_provider_identity(&response.sandbox_id) {
+        if !valid_sandbox_identity(&response.sandbox_id) {
             return Err(Error::DeliveryAmbiguous);
         }
         match map_access(response, &self.sandbox_domain) {

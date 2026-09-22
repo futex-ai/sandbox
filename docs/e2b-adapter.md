@@ -60,11 +60,12 @@ JSON, a non-object response, or an object with any field remains
 delivery-ambiguous instead of being treated as an acknowledgment.
 Empty opaque provider IDs and IDs equal to `.` or `..` are rejected before
 route construction, so URL normalization cannot move an API-key-authenticated
-call outside its intended sandbox or snapshot endpoint. Sandbox and snapshot
-creation and inventory also reject those values in provider responses before
-an unusable identity can leave the adapter. An unusable ID from an accepted
-create remains delivery-ambiguous; an unusable inventory row is retryable
-provider unavailability.
+call outside its intended sandbox or snapshot endpoint. Returned sandbox IDs
+must additionally be lowercase DNS-label fragments no longer than 57 bytes so
+the port prefix and ID fit E2B's 63-byte envd label. Snapshot creation and
+inventory retain the broader opaque route-segment format. An unusable ID from
+an accepted create remains delivery-ambiguous; an unusable inventory row is
+retryable provider unavailability.
 
 Sandbox creation filters on exact configured metadata, including the stable
 runtime-or-browser consumer value. Managed inventory returns a recognized
@@ -74,10 +75,11 @@ walks bounded cursor pagination and adopts exactly one new correlated snapshot.
 Snapshot creation and inventory reject an empty source sandbox or correlation
 name before issuing an authenticated request.
 Repeated cursors, excessive pages, identity mismatches, and multiple candidates
-fail closed. A malformed snapshot identity in inventory is retryable provider
-unavailability. If an accepted create response cannot be decoded or returns an
-unusable identity or credential, the result remains delivery-ambiguous and
-enters recovery.
+fail closed. Snapshot inspection checks that an injected control transport
+returned the exact requested provider ID. A malformed snapshot identity in
+inventory is retryable provider unavailability. If an accepted create response
+cannot be decoded or returns an unusable identity or credential, the result
+remains delivery-ambiguous and enters recovery.
 
 Envd routing is derived from adapter configuration, not a response-provided
 host. The complete HTTPS URL must parse to the exact configured envd hostname
@@ -136,14 +138,15 @@ Process execution is direct-argv and keeps stdout, stderr, deadlines, and
 overflow outcomes separate. Each decoded process-data event must contain
 exactly one of PTY, stdout, or stderr; multiple populated channels fail as
 malformed instead of silently dropping output. Before acquiring sandbox
-access, the adapter rejects an empty command, more than 128 KiB across the
-command and arguments,
-a stdout or stderr limit above 64 MiB, or a deadline above 300 seconds. Public
-Connect waits, combined-output commands, split-stream commands, regular-file
-reads, and stateless read-only execution use the same 300-second ceiling;
-terminal output long polls use a 30-second ceiling. Caller-controlled bounds
-are checked before provider access, and every absolute Tokio deadline uses
-checked arithmetic. File and maintenance helpers require a normal process exit;
+access, both direct and stateless commands reject an empty executable and more
+than 128 KiB across the executable and arguments. Direct stdout and stderr
+limits and the combined stateless output limit are each capped at 64 MiB.
+Public Connect waits, combined-output commands, split-stream commands,
+regular-file reads, and stateless read-only execution use the same 300-second
+ceiling; terminal output long polls use a 30-second ceiling. Caller-controlled
+bounds are checked before provider access, and every absolute Tokio deadline
+uses checked arithmetic. File and maintenance helpers require a normal process
+exit;
 a default zero exit code on
 a signal event is not success. A one-shot process whose collection times out,
 overflows, or fails decoding is killed with a bounded cleanup call once its PID

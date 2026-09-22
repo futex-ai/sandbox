@@ -2,7 +2,10 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use sandbox_interface::{BackendReadOnlyExecRequest, Error, ProviderRef, SandboxBackend};
+use sandbox_interface::{
+    BackendReadOnlyExecRequest, Error, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_STREAM_BYTES,
+    ProviderRef, SandboxBackend,
+};
 use unimock::{MockFn as _, Unimock, matching};
 
 use crate::{
@@ -129,6 +132,75 @@ async fn read_only_exec_rejects_excessive_timeout_before_provider_access() {
             maximum: 300,
         }
     ));
+}
+
+#[tokio::test]
+async fn read_only_exec_rejects_an_empty_executable_before_provider_access() {
+    let mut request = valid_request();
+    request.executable.clear();
+
+    let error = rejected(request).await;
+
+    assert!(matches!(
+        error,
+        Error::EmptyText {
+            field: "executable"
+        }
+    ));
+}
+
+#[tokio::test]
+async fn read_only_exec_rejects_oversized_argv_before_provider_access() {
+    let mut request = valid_request();
+    request.args = vec!["a".repeat(PROCESS_RUN_MAX_ARGV_BYTES)];
+
+    let error = rejected(request).await;
+
+    assert!(matches!(
+        error,
+        Error::CommandTooLarge {
+            limit: PROCESS_RUN_MAX_ARGV_BYTES
+        }
+    ));
+}
+
+#[tokio::test]
+async fn read_only_exec_rejects_an_oversized_output_limit_before_provider_access() {
+    let mut request = valid_request();
+    request.output_limit = PROCESS_RUN_MAX_STREAM_BYTES + 1;
+
+    let error = rejected(request).await;
+
+    assert!(matches!(
+        error,
+        Error::InvalidLength {
+            field: "output_limit",
+            minimum: 0,
+            maximum: PROCESS_RUN_MAX_STREAM_BYTES,
+        }
+    ));
+}
+
+async fn rejected(request: BackendReadOnlyExecRequest) -> Error {
+    E2bSandboxBackend::with_transports(
+        config(),
+        Arc::new(Unimock::new(())),
+        Arc::new(Unimock::new(())),
+    )
+    .read_only_exec(request)
+    .await
+    .expect_err("invalid read-only request should fail before provider access")
+}
+
+fn valid_request() -> BackendReadOnlyExecRequest {
+    BackendReadOnlyExecRequest {
+        sandbox_provider_ref: ProviderRef::new("provider"),
+        cwd: "/tmp/sandbox/repo".to_owned(),
+        executable: "/usr/bin/git".to_owned(),
+        args: vec!["status".to_owned()],
+        output_limit: 4096,
+        timeout: Duration::from_secs(10),
+    }
 }
 
 fn config() -> E2bAdapterConfig {
