@@ -86,7 +86,7 @@ without changing the completed implementation milestones above.
       current branch.
 - [x] Run `cargo xtask review` after the push and report every finding without
       automatically changing it.
-- [ ] Decide whether to update the public `exercise_backend` rustdoc to declare
+- [x] Decide whether to update the public `exercise_backend` rustdoc to declare
       `curl` as a mandatory target-image prerequisite.
 
 ### Remediation Review Outcome
@@ -96,3 +96,15 @@ retained one low-severity documentation finding for maintainer choice: the
 public `exercise_backend` rustdoc still names only `/bin/sh`, while the
 mandatory network probe also invokes `curl`. No review finding was changed
 automatically.
+
+## Milestone 7: Conformance Prerequisite Documentation
+
+Correct the public harness contract after explicit maintainer approval of the
+remediation-review finding.
+
+- [x] Update `exercise_backend` rustdoc to require both `/bin/sh` and `curl`.
+- [x] Validate formatting, generated rustdoc, and the documentation-only diff.
+- [ ] Stage every change, commit with a Conventional Commit, and push the
+      current branch.
+- [ ] Run `cargo xtask review` after the push and report every finding without
+      automatically changing it.
