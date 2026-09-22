@@ -15,7 +15,7 @@ use super::{
 };
 
 const PROVIDER_READ_ALLOWANCE: Duration = Duration::from_secs(5);
-const HELPER_CLEANUP_RESERVE: Duration = Duration::from_secs(3);
+const HELPER_RETURN_RESERVE: Duration = Duration::from_millis(100);
 const TRUSTED_PROCESS_USER: &str = "root";
 
 pub(super) async fn read(
@@ -78,7 +78,8 @@ pub(super) async fn read(
                 identity,
                 &listed,
                 backend.config.runtime_conventions().terminal_tag_prefix(),
-                identity_read_timeout(provider_deadline),
+                terminal_record::IDENTITY_READ_TIMEOUT,
+                Some(identity_completion_deadline(provider_deadline)),
             ),
         )
         .await
@@ -98,6 +99,7 @@ pub(super) async fn read(
                     offset: request.offset,
                     max_bytes: request.max_bytes,
                     timeout: helper_timeout,
+                    completion_deadline: None,
                 },
             ),
         )
@@ -180,9 +182,8 @@ fn provider_read_timeout(backend: &E2bSandboxBackend) -> Error {
     }
 }
 
-fn identity_read_timeout(provider_deadline: tokio::time::Instant) -> Duration {
+fn identity_completion_deadline(provider_deadline: tokio::time::Instant) -> tokio::time::Instant {
     provider_deadline
-        .saturating_duration_since(tokio::time::Instant::now())
-        .saturating_sub(HELPER_CLEANUP_RESERVE)
-        .min(terminal_record::IDENTITY_READ_TIMEOUT)
+        .checked_sub(HELPER_RETURN_RESERVE)
+        .unwrap_or(provider_deadline)
 }

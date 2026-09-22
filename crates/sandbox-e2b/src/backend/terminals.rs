@@ -121,6 +121,7 @@ async fn recover_connected(
         connection,
         terminal_id,
         terminal_record::IDENTITY_READ_TIMEOUT,
+        None,
     )
     .await?;
     if let Some(record) = record {
@@ -172,6 +173,7 @@ pub(super) async fn inspect(
         &processes,
         backend.config.runtime_conventions().terminal_tag_prefix(),
         terminal_record::IDENTITY_READ_TIMEOUT,
+        None,
     )
     .await?;
     Ok(BackendTerminal {

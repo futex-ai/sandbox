@@ -81,10 +81,11 @@ terminal, before using selector-only fallback for a record-free legacy
 terminal. This record-aware resolution means unrelated PID reuse cannot hide
 an exited terminal's retained transcript while same-tag conflicts fail closed.
 Only typed file absence enables legacy fallback; provider terminal absence
-propagates. Output reads also fit identity helpers and their termination reserve
-inside the caller's absolute provider deadline. Input rejects exited terminals,
-explicit close removes the record idempotently, and restored cleanup removes
-all terminal identity state. File
+propagates. Output reads carry an earlier absolute completion deadline into the
+identity helper; the process transport derives its execution cutoff by
+reserving the full termination window and return time. Input rejects exited
+terminals. Explicit close retains the record so final output remains readable,
+and restored cleanup removes all terminal identity state. File
 reads use one descriptor-relative, non-following helper; writes stage their
 payload, bind it to the caller-computed SHA-256
 digest, perform one
@@ -266,6 +267,7 @@ deletable snapshot handle.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/backend/terminal_record.rs` — strict durable terminal identity records.
 - `src/control/` — E2B control API boundary.
+- `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.

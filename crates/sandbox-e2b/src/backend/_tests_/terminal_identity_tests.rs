@@ -10,7 +10,7 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, ProcessFileChunk,
-    ProcessInfo, ProcessRunOutput, ProcessSelector, ProcessTransportMock,
+    ProcessInfo, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -51,7 +51,6 @@ async fn stale_pid_identity_cannot_target_a_differently_tagged_process() {
                 assert_eq!(connection.user(), Some("root"));
                 Ok(())
             }),
-        cleanup_success(),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -199,7 +198,6 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
                 assert_eq!(selector, ProcessSelector::Tag(close_tag.clone()));
                 Ok(())
             })),
-        cleanup_success(),
     ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
@@ -216,17 +214,6 @@ async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
         .close_terminal(ProviderRef::new("sandbox"), terminal_ref)
         .await
         .expect("tag-addressed close");
-}
-
-fn cleanup_success() -> impl unimock::Clause {
-    ProcessTransportMock::run
-        .next_call(matching!(_, _))
-        .returns(Ok(ProcessRunOutput {
-            bytes: Vec::new(),
-            exit_code: Some(0),
-            exited: true,
-            output_truncated: false,
-        }))
 }
 
 fn assert_not_found<T>(result: sandbox_interface::Result<T>) {

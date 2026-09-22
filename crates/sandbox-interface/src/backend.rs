@@ -267,13 +267,15 @@ pub trait SandboxBackend: Send + Sync {
     ) -> Result<BackendTerminal>;
     /// Ingests bytes from the durable provider-side terminal log.
     ///
-    /// Provider-side identity reads must fit inside this operation's bounded
-    /// wait while reserving enough time to terminate any observed helper.
+    /// Provider-side identity reads must carry an earlier absolute completion
+    /// deadline that reserves termination and return time inside this
+    /// operation's bounded wait.
     async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput>;
     /// Sends exact input once; success requires a decoded provider
     /// acknowledgment, and callers fail closed after ambiguous delivery.
     async fn write_terminal(&self, request: BackendInputRequest) -> Result<()>;
-    /// Idempotently closes one provider PTY and cleans up its durable identity.
+    /// Idempotently closes one provider PTY while retaining durable identity
+    /// for final transcript reads.
     async fn close_terminal(
         &self,
         sandbox_provider_ref: ProviderRef,

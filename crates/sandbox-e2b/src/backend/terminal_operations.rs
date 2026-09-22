@@ -8,7 +8,7 @@ use super::{
     configured::E2bSandboxBackend,
     mapping,
     terminal_identity::{TerminalIdentity, tagged_terminal, terminal_tag},
-    terminal_storage::{remove_identity_command, restore_cleanup_command},
+    terminal_storage::restore_cleanup_command,
 };
 
 const TRUSTED_PROCESS_USER: &str = "root";
@@ -87,16 +87,6 @@ pub(super) async fn close(
     );
     backend
         .processes
-        .kill(connection.clone(), ProcessSelector::Tag(tag))
-        .await?;
-    let cleanup = backend
-        .processes
-        .run(connection, remove_identity_command(identity.terminal_id()))
-        .await?;
-    if !cleanup.succeeded() {
-        return Err(Error::internal_message(
-            "E2B terminal identity cleanup failed",
-        ));
-    }
-    Ok(())
+        .kill(connection, ProcessSelector::Tag(tag))
+        .await
 }

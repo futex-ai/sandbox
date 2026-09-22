@@ -78,11 +78,6 @@ pub(super) fn restore_cleanup_command() -> ProcessCommand {
     }
 }
 
-pub(super) fn remove_identity_command(terminal_id: TerminalId) -> ProcessCommand {
-    let path = identity_path(terminal_id);
-    python_command(DIRECTORY_CLEANER, [path.as_str()])
-}
-
 #[cfg(test)]
 fn cleanup_command(paths: &[&str]) -> ProcessCommand {
     python_command(DIRECTORY_CLEANER, paths.iter().copied())

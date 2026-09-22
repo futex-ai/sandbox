@@ -29,6 +29,7 @@ pub(super) async fn read(
                 offset: request.offset,
                 max_bytes: request.max_bytes,
                 timeout: Duration::from_secs(300),
+                completion_deadline: None,
             },
         )
         .await?;

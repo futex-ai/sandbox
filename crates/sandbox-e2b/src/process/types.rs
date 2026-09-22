@@ -4,6 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use sandbox_interface::{OperationId, Result, TerminalId};
+use tokio::time::Instant;
 
 pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
@@ -168,6 +169,8 @@ pub struct ProcessRegularFileRequest {
     pub max_bytes: usize,
     /// Maximum provider-side helper duration, capped at 300 seconds.
     pub timeout: Duration,
+    /// Optional absolute bound that includes helper termination.
+    pub completion_deadline: Option<Instant>,
 }
 
 /// Swappable envd process transport used by the E2B adapter.

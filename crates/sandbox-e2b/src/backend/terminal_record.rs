@@ -84,8 +84,17 @@ pub(super) async fn resolve_state(
     processes: &[ProcessInfo],
     terminal_tag_prefix: &str,
     read_timeout: Duration,
+    completion_deadline: Option<tokio::time::Instant>,
 ) -> Result<TerminalState> {
-    if let Some(record) = read(backend, connection, identity.terminal_id(), read_timeout).await? {
+    if let Some(record) = read(
+        backend,
+        connection,
+        identity.terminal_id(),
+        read_timeout,
+        completion_deadline,
+    )
+    .await?
+    {
         record.ensure_identity(identity)?;
         record.ensure_tag(&terminal_tag(terminal_tag_prefix, identity.terminal_id()))?;
         return record.state(processes);
@@ -107,6 +116,7 @@ pub(super) async fn read(
     connection: &ProcessConnection,
     terminal_id: TerminalId,
     timeout: Duration,
+    completion_deadline: Option<tokio::time::Instant>,
 ) -> Result<Option<TerminalRecord>> {
     let chunk = backend
         .processes
@@ -118,6 +128,7 @@ pub(super) async fn read(
                 offset: 0,
                 max_bytes: IDENTITY_RECORD_MAX_BYTES,
                 timeout,
+                completion_deadline,
             },
         )
         .await;

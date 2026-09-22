@@ -284,6 +284,60 @@ selector fallback.
       and typed-absence behavior.
 - [x] Run focused regressions, formatting, Clippy, the full workspace test
       suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit the final diff, run `git add -A`, commit all work with a
+      Conventional Commit, push the branch, and confirm GitHub CI passes on
+      that exact commit.
+- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+      record any findings without automatically fixing them.
+- [ ] After a clean review, mark the remaining milestones complete and move
+      this plan back to Completed in `plans/README.md`.
+
+## Milestone 8: Preserve Post-Close Output And Absolute Cleanup Bounds
+
+At the end of this milestone, explicit terminal close retains enough trusted
+identity to read final transcript bytes, and output helpers complete or finish
+their termination attempt before an earlier absolute helper deadline.
+
+### Review Findings
+
+9. **Severity: high — preserve identity for post-close transcript reads.** In
+   `crates/sandbox-e2b/src/backend/terminal_operations.rs:94`, explicit close
+   deletes the durable identity record immediately after killing the provider
+   process. A later output read then sees neither a live process nor a record
+   and returns `NotFound` without opening the retained transcript. Doing
+   nothing can lose shell output emitted immediately before close and
+   contradicts the adapter contract that keeps the transcript available for
+   final ingestion. Option A: retain the trusted identity as an exited
+   tombstone until restored-terminal or sandbox cleanup. Option B: make close
+   drain and durably persist all final transcript bytes before deleting the
+   record. **Recommendation: A**, because it preserves the existing cursor-based
+   read API and identity fencing without adding a close-time ingestion path.
+10. **Severity: medium — reserve cleanup from an absolute helper deadline.** In
+    `crates/sandbox-e2b/src/backend/terminal_output.rs:184`, output subtracts
+    the three-second kill timeout from a relative duration before dispatching
+    the identity helper. The production collector starts that relative timer
+    only after request setup, so its execution and full kill attempt can still
+    extend past the outer deadline and be cancelled. Doing nothing means a
+    stalled root-authenticated helper can survive repeated short polls despite
+    the documented cleanup reserve. Option A: carry an earlier absolute helper
+    completion deadline through the regular-file request and collector. Option
+    B: reserve extra timing margin and decline dispatch when the remaining
+    duration is too short. **Recommendation: A**, because an absolute deadline
+    makes the guarantee independent of request-setup time.
+
+- [x] Record both findings with severity, location, context, impact, options,
+      and recommendations.
+- [x] Add failing regressions for final transcript reads after repeated close
+      and for absolute helper-deadline propagation into collection and cleanup.
+- [x] Retain the durable terminal identity through explicit close and remove it
+      only with restored-terminal or sandbox cleanup.
+- [x] Carry an absolute identity-helper completion deadline through the process
+      transport and reserve execution, termination, and return budgets before
+      dispatch.
+- [x] Align protocol, adapter, and crate documentation with post-close reads
+      and absolute helper cleanup bounds.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
 - [ ] Audit the final diff, run `git add -A`, commit all work with a
       Conventional Commit, push the branch, and confirm GitHub CI passes on
       that exact commit.

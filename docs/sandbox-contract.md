@@ -231,8 +231,9 @@ replacement. Unknown record versions, malformed records, identity conflicts,
 and duplicate selectors fail closed. A live legacy terminal without a record
 remains discoverable by its exact selector, but an exited legacy terminal has
 no recoverable provider identity. Input rejects an exited terminal. Explicit
-close stays idempotent and removes its identity record; restored-sandbox
-cleanup removes all retained terminal identity state.
+close stays idempotent and retains its identity record so final transcript
+bytes remain readable; restored-sandbox cleanup removes all retained terminal
+identity state.
 Inspection and output reads must share the same record-aware identity
 resolution. They validate any present record even while its exact process is
 live, and use selector-only compatibility only when no record exists. If an
@@ -241,8 +242,10 @@ proves the original terminal is `Exited` and its retained transcript remains
 readable. A conflicting process using the expected terminal tag still fails
 closed. Only a typed missing-file result may enable the legacy fallback;
 provider-level terminal absence and every other read error must propagate.
-During bounded output polling, the identity helper receives only the remaining
-outer deadline after reserving time to terminate an observed helper process.
+During bounded output polling, the identity helper receives an absolute
+completion deadline earlier than the outer deadline. The provider transport
+derives its execution cutoff by reserving the full termination window, and the
+remaining gap lets the completed helper result return to the caller.
 
 Sandbox create access is valid only when the provider returns both a nonblank
 process credential and a nonblank private-traffic credential. An accepted

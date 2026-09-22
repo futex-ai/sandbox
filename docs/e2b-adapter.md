@@ -239,14 +239,16 @@ durable record classifies the original terminal as `Exited` and output can
 still ingest its retained transcript; reuse of the expected tag by another PID
 fails closed. Only `NotFound(File)` enables record-free legacy lookup;
 provider-level terminal absence propagates instead of masquerading as a missing
-record. Output polling caps the identity helper at the remaining absolute
-deadline minus a three-second termination reserve, while recovery and
-inspection retain their explicit ten-second identity-read limit. Input first
-rejects an absent process, then selects the tag inside the provider mutation;
-close uses the same atomic selector, so PID reuse cannot target an unrelated
-process. Close is idempotent and removes the identity record after a confirmed
-kill. Restored-terminal cleanup also kills by tag and removes every transcript
-and identity record, then requires its maintenance command to exit normally.
+record. Output polling passes an earlier absolute completion deadline to the
+identity helper. The process transport reserves its three-second termination
+window before choosing an execution cutoff, and a final return reserve keeps
+cleanup ahead of the outer deadline. Recovery and inspection retain their
+explicit ten-second identity-read limit. Input first rejects an absent process,
+then selects the tag inside the provider mutation; close uses the same atomic
+selector, so PID reuse cannot target an unrelated process. Close is idempotent
+and retains the identity record for final transcript reads. Restored-terminal
+cleanup kills by tag and removes every transcript and identity record, then
+requires its maintenance command to exit normally.
 Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the
@@ -259,9 +261,9 @@ temporary name, atomically hard-links the final name without replacement,
 fsyncs the directory, removes the temporary name, and syncs the directory
 again before it forks the shell recorder. Recovery therefore cannot observe an
 empty or partial final record. The supervisor gives the transcript descriptor
-only to the tagged root process. The identity record lasts until explicit
-close, restored cleanup, or sandbox destruction; close leaves the transcript
-available for final ingestion. The root recorder writes through a private pipe,
+only to the tagged root process. The identity record lasts until restored
+cleanup or sandbox destruction; explicit close retains it with the transcript
+for final ingestion. The root recorder writes through a private pipe,
 which the supervisor clips to the exact remaining byte count while continuing
 to drain overflow. The recorder's child closes all private descriptors,
 initializes supplementary groups, and drops its UID and GID to the configured
