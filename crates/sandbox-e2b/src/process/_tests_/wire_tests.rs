@@ -101,8 +101,9 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
 }
 
 fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
+    let wrapper = test_wrapper();
     Command::new("/usr/bin/timeout")
-        .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", TERMINAL_WRAPPER])
+        .args(["5s", "/usr/bin/python3", "-I", "-S", "-c", &wrapper])
         .arg(path)
         .arg(limit.to_string())
         .arg(current_username())
@@ -111,6 +112,17 @@ fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
         .stderr(Stdio::null())
         .spawn()
         .expect("start terminal wrapper")
+}
+
+fn test_wrapper() -> String {
+    let production = "os.execv('/bin/bash', ['bash', '-il'])";
+    let deterministic = "os.execv('/bin/bash', ['bash', '--noprofile', '--norc', '-i'])";
+    let wrapper = TERMINAL_WRAPPER.replace(production, deterministic);
+    assert_ne!(
+        wrapper, TERMINAL_WRAPPER,
+        "production shell command changed"
+    );
+    wrapper
 }
 
 fn current_username() -> String {

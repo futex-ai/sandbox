@@ -664,6 +664,8 @@ setup-created symlink outside the intended cache paths.
       transcript creation and reads inside private trusted storage.
 - [x] Authenticate recorder discovery, input, and shutdown as the same trusted
       account that owns the recorder process.
+- [x] Make transcript byte-limit regressions independent of the CI runner's
+      login profile while retaining production login-shell assertions.
 - [x] Replace shell cache deletion with a descriptor-relative helper that
       refuses symlinked parents and never follows child symlinks.
 - [x] Update the public contract, adapter documentation, and crate README for

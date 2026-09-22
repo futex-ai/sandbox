@@ -63,6 +63,7 @@ fn pty_start_caps_only_the_private_provider_log() {
     assert!(wrapper.contains("/proc/self/fd/{LOG_DESCRIPTOR}"));
     assert!(wrapper.contains("os.closerange"));
     assert!(wrapper.contains("os.setuid"));
+    assert!(wrapper.contains("os.execv('/bin/bash', ['bash', '-il'])"));
     assert!(!wrapper.contains("--log-size"));
     assert!(!wrapper.contains("/dev/null"));
 }
