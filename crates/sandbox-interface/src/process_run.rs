@@ -116,7 +116,10 @@ pub struct BackendStreamProcessRequest {
 /// Terminal result of a streaming process run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProcessStreamOutcome {
-    /// A process end and the provider success trailer were both observed.
+    /// A process end and provider success trailer were observed.
+    ///
+    /// This confirms protocol completion, not a successful command exit. The
+    /// preceding [`ProcessStreamEvent::Exited`] event carries that distinction.
     Completed,
     /// Stdout exceeded its requested byte limit.
     StdoutOverflow,
@@ -146,10 +149,12 @@ pub enum ProcessStreamEvent {
     Stdout(Vec<u8>),
     /// Exact stderr bytes, bounded cumulatively by the request.
     Stderr(Vec<u8>),
-    /// The provider reported that the process ended.
+    /// The provider reported that the process ended, normally or by signal.
     Exited {
         /// Provider-reported process exit code.
         exit_code: i32,
+        /// Whether the process exited normally rather than by signal.
+        exited: bool,
     },
     /// Final typed result. No event follows this one.
     Outcome(ProcessStreamOutcome),

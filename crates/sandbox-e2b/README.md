@@ -104,12 +104,16 @@ keep reading after a process end and decode the required Connect trailer
 through one path: a missing trailer or malformed JSON fails closed, an error
 object is retryable provider unavailability, and a present trailer with a
 missing or null error field is a clean close. Incremental execution emits
-ordered start, stdout, stderr, exit, and final outcome events; a successful
-trailer is required for `Completed`. Only stdout or stderr bytes reset its idle
-timer. Direct process, streaming, and stateless read-only requests are validated
-before the adapter acquires sandbox access: commands must be non-empty, combined
-argv is capped at 128 KiB, and each direct stream or combined stateless output
-cap is at most 64 MiB. Existing process, read-only, and regular-file durations
+ordered start, stdout, stderr, exit, and final outcome events. Exit events retain
+envd's normal-exit flag, and a successful trailer is required for `Completed`;
+that outcome does not by itself mean the command succeeded. Only stdout or
+stderr bytes reset the idle timer. The terminal outcome and EOF are delivered
+before best-effort kill cleanup is awaited, so cleanup cannot extend the public
+deadline. Direct process, streaming, and stateless read-only requests are
+validated before the adapter acquires sandbox access: commands must be
+non-empty, combined argv is capped at 128 KiB, and each direct stream or
+combined stateless output cap is at most 64 MiB. Existing process, read-only,
+and regular-file durations
 retain their 300-second ceiling. Only incremental streams accept up to 3,600
 seconds, with a nonzero idle timeout no greater than the deadline. Their envd
 HTTP request timeout is that deadline plus a 10-second transport allowance;

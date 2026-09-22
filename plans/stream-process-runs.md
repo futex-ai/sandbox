@@ -99,3 +99,29 @@ so the maintainer can choose the follow-up.
    and document a cleanup grace period beyond the public deadline.
    **Recommendation: A**, because it keeps the absolute deadline meaningful
    while retaining best-effort cleanup.
+
+## Milestone 4: Resolve Review Findings
+
+At the end of this milestone, exit events preserve normal-versus-signal
+termination and terminal outcomes close the observable stream before bounded
+cleanup can extend its deadline.
+
+- [x] Add failing regressions for a signalled process with a default zero exit
+      code and for a deadline outcome whose process kill remains stalled.
+- [x] Preserve E2B's normal-exit flag in the provider-neutral `Exited` event and
+      update every conformance fake, mock, test, and contract example.
+- [x] Deliver the one terminal outcome and close the event stream before
+      awaiting best-effort cleanup, while retaining consumer-drop cleanup.
+- [x] Update the contract, adapter documentation, crate READMEs, and workspace
+      README with the corrected exit and deadline semantics.
+- [x] Run focused regressions, `cargo fmt --all -- --check`, Clippy, the full
+      workspace test suite, the file-length lint, smoke coverage, and
+      `cargo xtask check`; fix every failure until all checks pass.
+- [x] Audit the complete diff for secrets, artifacts, whitespace errors,
+      unrelated edits, and consistency with the original streaming scope.
+- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+      and push the current branch with every new file tracked.
+- [ ] Run `cargo xtask review` after the push against `origin/main`; record and
+      report every new finding without automatically fixing it.
+- [ ] Mark this milestone complete and move the plan from Active to Completed
+      in `plans/README.md` after the review workflow finishes.

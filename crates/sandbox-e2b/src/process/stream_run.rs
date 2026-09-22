@@ -13,7 +13,9 @@ use super::{
     connect::ConnectProcessTransport,
     framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event},
     mapping::map_result,
-    stream_state::{Completion, Delivery, EventResult, StreamSettings, StreamState, deliver},
+    stream_state::{
+        Completion, Delivery, EventResult, StreamSettings, StreamState, deliver, finish_stream,
+    },
     types::{ProcessConnection, StreamProcessCommand},
     wire::{argv_start, encode},
 };
@@ -76,11 +78,9 @@ impl ConnectProcessTransport {
         let completion = self
             .drive_stream(connection.clone(), &settings, &sender, &mut state)
             .await;
+        finish_stream(sender, completion).await;
         if !state.ended {
             self.kill_best_effort(connection, state.pid).await;
-        }
-        if let Completion::Outcome(outcome) = completion {
-            let _result = sender.send(ProcessStreamEvent::Outcome(outcome)).await;
         }
     }
 
@@ -202,9 +202,9 @@ impl ConnectProcessTransport {
                 state.capture(channel, bytes, settings)
             }
             ProcessEvent::Data { .. } => return EventResult::transport_failure(),
-            ProcessEvent::End { exit_code, .. } if state.started => {
+            ProcessEvent::End { exit_code, exited } if state.started => {
                 state.ended = true;
-                (Some(ProcessStreamEvent::Exited { exit_code }), None)
+                (Some(ProcessStreamEvent::Exited { exit_code, exited }), None)
             }
             ProcessEvent::End { .. } => return EventResult::transport_failure(),
             ProcessEvent::KeepAlive => (None, None),

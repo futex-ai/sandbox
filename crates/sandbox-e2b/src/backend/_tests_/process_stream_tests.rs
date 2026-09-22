@@ -57,7 +57,10 @@ async fn stream_process_forwards_validated_request_and_events() {
         [
             ProcessStreamEvent::Started { pid: 41 },
             ProcessStreamEvent::Stdout(b"streamed".to_vec()),
-            ProcessStreamEvent::Exited { exit_code: 0 },
+            ProcessStreamEvent::Exited {
+                exit_code: 0,
+                exited: true,
+            },
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
         ]
     );
@@ -154,7 +157,10 @@ fn event_stream() -> ProcessEventStream {
     Box::pin(stream::iter([
         ProcessStreamEvent::Started { pid: 41 },
         ProcessStreamEvent::Stdout(b"streamed".to_vec()),
-        ProcessStreamEvent::Exited { exit_code: 0 },
+        ProcessStreamEvent::Exited {
+            exit_code: 0,
+            exited: true,
+        },
         ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
     ]))
 }

@@ -139,11 +139,15 @@ request identifies an owned sandbox; the backend request carries its provider
 reference. Both also carry only direct argv, separate stdout and stderr limits,
 an absolute deadline, and an idle timeout. Once a provider start is decoded,
 events are ordered as `Started { pid }`, zero or more `Stdout(bytes)` and
-`Stderr(bytes)` values, `Exited { exit_code }`, and one final `Outcome`; a
-transport or timer failure before start may emit only the outcome.
+`Stderr(bytes)` values, `Exited { exit_code, exited }`, and one final `Outcome`;
+a transport or timer failure before start may emit only the outcome. The
+`exited` field is true only for a normal process exit, so signal termination
+cannot be mistaken for a successful zero exit code.
 `Exited` is not terminal: `Completed` is valid only after the provider's success
-trailer is decoded. Missing or failed trailers, invalid ordering, malformed
-frames, and provider transport errors end with `TransportFailure`.
+trailer is decoded, and means the provider stream completed rather than that
+the command succeeded. Consumers must inspect both `exit_code` and `exited`.
+Missing or failed trailers, invalid ordering, malformed frames, and provider
+transport errors end with `TransportFailure`.
 `StdoutOverflow` and `StderrOverflow` are distinct, and only the bounded prefix
 may be emitted before either. An absolute deadline produces `DeadlineExpired`;
 an idle timer produces `IdleTimeout` and resets only when stdout or stderr data
@@ -153,8 +157,10 @@ stream consumed to its end contains exactly one `Outcome` as its last item.
 If streaming ends before a process end is observed, the backend makes a bounded
 best-effort kill after it has learned the PID. This includes overflow, idle or
 absolute timeout, transport failure, and a consumer dropping the returned
-stream. A consumer drop cannot receive an outcome because it no longer owns the
-stream, but it still triggers provider cleanup.
+stream. For an owned stream, the backend sends its terminal outcome and closes
+the stream before awaiting cleanup, so the cleanup allowance cannot extend the
+observable absolute deadline. A consumer drop cannot receive an outcome because
+it no longer owns the stream, but it still triggers provider cleanup.
 Port zero, empty required
 text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A

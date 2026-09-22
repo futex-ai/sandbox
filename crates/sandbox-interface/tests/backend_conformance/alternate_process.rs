@@ -37,7 +37,10 @@ pub(super) fn stream(request: BackendStreamProcessRequest) -> Result<ProcessEven
         ProcessStreamEvent::Started { pid: 17 },
         ProcessStreamEvent::Stdout(b"stream-stdout".to_vec()),
         ProcessStreamEvent::Stderr(b"stream-stderr".to_vec()),
-        ProcessStreamEvent::Exited { exit_code: 0 },
+        ProcessStreamEvent::Exited {
+            exit_code: 0,
+            exited: true,
+        },
         ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
     ])))
 }

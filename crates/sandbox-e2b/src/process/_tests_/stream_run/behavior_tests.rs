@@ -45,7 +45,46 @@ async fn stream_preserves_event_order_and_waits_for_success_trailer() {
             ProcessStreamEvent::Started { pid: 11 },
             ProcessStreamEvent::Stdout(b"out".to_vec()),
             ProcessStreamEvent::Stderr(b"err".to_vec()),
-            ProcessStreamEvent::Exited { exit_code: 7 },
+            ProcessStreamEvent::Exited {
+                exit_code: 7,
+                exited: true,
+            },
+            ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn stream_preserves_signal_termination_with_a_default_zero_exit_code() {
+    let events = vec![
+        event_frame(r#"{"event":{"start":{"pid":17}}}"#),
+        event_frame(r#"{"event":{"end":{"exitCode":0,"exited":false}}}"#),
+        success_trailer(),
+    ];
+    let transport = transport(Unimock::new(
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers_arc(Arc::new(move |_, _, _, _, _| {
+                Ok(byte_stream(events.clone()))
+            })),
+    ));
+
+    let stream = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_secs(5), Duration::from_secs(2)),
+        )
+        .await
+        .expect("stream should start");
+
+    assert_eq!(
+        stream.collect::<Vec<_>>().await,
+        [
+            ProcessStreamEvent::Started { pid: 17 },
+            ProcessStreamEvent::Exited {
+                exit_code: 0,
+                exited: false,
+            },
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed),
         ]
     );
@@ -147,7 +186,10 @@ async fn missing_trailer_is_a_terminal_transport_failure_without_second_kill() {
         stream.collect::<Vec<_>>().await,
         [
             ProcessStreamEvent::Started { pid: 23 },
-            ProcessStreamEvent::Exited { exit_code: 0 },
+            ProcessStreamEvent::Exited {
+                exit_code: 0,
+                exited: true,
+            },
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::TransportFailure),
         ]
     );

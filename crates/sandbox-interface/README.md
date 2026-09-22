@@ -49,9 +49,12 @@ empty mutation acknowledgment before reporting delivery success. After a
 process end is observed, an adapter must also validate the provider stream's
 final status instead of accepting an absent or unsuccessful completion marker.
 Incremental process streams emit typed start, stdout, stderr, exit, and final
-outcome events. Only stdout or stderr data resets the idle timer. Every owned
-stream ends with one outcome, and unfinished processes are killed best-effort
-after overflow, timeout, transport failure, or consumer drop.
+outcome events. Exit events preserve whether termination was normal or caused
+by a signal; `Completed` confirms the provider stream trailer, not command
+success. Only stdout or stderr data resets the idle timer. Every owned stream
+ends with one outcome and closes before best-effort cleanup, so cleanup cannot
+extend its absolute deadline. Unfinished processes are still killed after
+overflow, timeout, transport failure, or consumer drop.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, collected and streaming split-output execution, private ingress,

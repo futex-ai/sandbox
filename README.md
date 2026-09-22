@@ -58,9 +58,10 @@ Caller-controlled process durations are capped before provider access.
 Collected process, read-only, file, and terminal-helper operations retain their
 300-second ceiling, while incremental direct process streams accept an absolute
 deadline up to one hour plus a nonzero output-idle timeout no greater than that
-deadline. Each owned stream ends in one typed outcome, and unfinished processes
-are killed best-effort after timeout, overflow, failure, or consumer drop.
-Terminal output waits remain capped at 30 seconds.
+deadline. Exit events distinguish normal and signal termination. Each owned
+stream ends in one typed outcome and closes before cleanup, while unfinished
+processes are still killed best-effort after timeout, overflow, failure, or
+consumer drop. Terminal output waits remain capped at 30 seconds.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined

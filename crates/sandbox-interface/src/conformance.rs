@@ -225,7 +225,10 @@ async fn exercise_process_stream(
             ProcessStreamEvent::Stderr(bytes) if started && !exited => {
                 stderr.extend_from_slice(&bytes);
             }
-            ProcessStreamEvent::Exited { exit_code } if started && !exited && exit_code == 0 => {
+            ProcessStreamEvent::Exited {
+                exit_code,
+                exited: true,
+            } if started && !exited && exit_code == 0 => {
                 exited = true;
             }
             ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed) if exited => {

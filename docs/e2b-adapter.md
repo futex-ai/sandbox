@@ -177,12 +177,15 @@ has been observed; persistent terminal connections are left running
 intentionally.
 
 Incremental execution emits the decoded start, bounded stdout and stderr, and
-process-end events in provider order. A process end becomes `Exited` but does
-not become `Completed` until the success trailer follows. Overflow, idle or
-absolute timeout, malformed or failed transport, and consumer drop stop the
-worker. When no process end was observed, the worker makes the same bounded
-PID-scoped kill attempt; a dropped consumer wakes that worker even while envd is
-silent. Streams that remain owned end with exactly one typed `Outcome`. Envd's
+process-end events in provider order. Its exit event preserves both the exit
+code and envd's normal-exit flag, so signal termination cannot resemble a
+successful zero exit. A process end does not become `Completed` until the
+success trailer follows; that outcome confirms stream completion, not command
+success. Overflow, idle or absolute timeout, malformed or failed transport, and
+consumer drop stop the worker. Streams that remain owned receive their one
+typed `Outcome` and close before cleanup is awaited. When no process end was
+observed, the detached worker then makes the same bounded PID-scoped kill
+attempt; a dropped consumer wakes that worker even while envd is silent. Envd's
 HTTP client keeps its fixed 310-second timeout for existing paths. The new path
 alone applies a per-request timeout equal to the requested deadline plus a
 10-second transport allowance, so the client cannot truncate a valid one-hour

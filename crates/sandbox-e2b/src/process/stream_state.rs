@@ -96,6 +96,13 @@ pub(super) async fn deliver(
     }
 }
 
+/// Sends the terminal outcome and consumes the last worker-side sender.
+pub(super) async fn finish_stream(sender: Sender<ProcessStreamEvent>, completion: Completion) {
+    if let Completion::Outcome(outcome) = completion {
+        let _result = sender.send(ProcessStreamEvent::Outcome(outcome)).await;
+    }
+}
+
 pub(super) enum Completion {
     Outcome(ProcessStreamOutcome),
     ConsumerDropped,

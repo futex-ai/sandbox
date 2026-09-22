@@ -218,7 +218,7 @@ pub trait SandboxBackend: Send + Sync {
     /// Streams one bounded argv-direct non-interactive process.
     ///
     /// A successfully returned stream ends with exactly one terminal outcome.
-    /// Provider completion requires both a process end and final success status.
+    /// Provider completion requires both a process end and successful trailer.
     async fn stream_process(
         &self,
         request: BackendStreamProcessRequest,

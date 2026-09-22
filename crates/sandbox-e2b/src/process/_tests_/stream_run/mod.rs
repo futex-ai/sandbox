@@ -11,6 +11,7 @@ use crate::{ConnectProcessTransport, ProcessConnection, StreamProcessCommand};
 use crate::process::http::{ByteStream, ConnectHttpTransport};
 
 mod behavior_tests;
+mod cleanup_tests;
 mod drop_tests;
 mod timeout_tests;
 
