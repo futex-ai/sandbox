@@ -1,8 +1,8 @@
 //! Provider-neutral service requests.
 
 use crate::{
-    ActionId, OperationId, ResourceOwner, SandboxConsumer, SandboxId, SandboxNetworkPolicy,
-    SnapshotId, TerminalId,
+    ActionId, OperationId, ResourceOwner, SandboxConsumer, SandboxId, SandboxLifetime,
+    SandboxNetworkPolicy, SnapshotId, TerminalId,
 };
 
 /// Parent source for one workspace-platform image realization.
@@ -51,6 +51,8 @@ pub struct CreateSandboxRequest {
     pub operation_id: OperationId,
     /// Substrate consumer class recorded on the sandbox row.
     pub consumer: SandboxConsumer,
+    /// Lifetime policy; defaults to idle auto-pause when the caller does not override it.
+    pub lifetime: SandboxLifetime,
     /// Typed per-session network policy validated before provider dispatch.
     pub network: SandboxNetworkPolicy,
     /// Optional deployment-owned logical profile.

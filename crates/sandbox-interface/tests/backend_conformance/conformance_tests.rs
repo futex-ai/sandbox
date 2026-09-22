@@ -1,6 +1,6 @@
 //! Shared backend conformance-harness coverage.
 
-use sandbox_interface::conformance::exercise_backend;
+use sandbox_interface::conformance::{exercise_backend, exercise_one_shot_lifetime};
 
 use super::alternate_backend::AlternateBackend;
 
@@ -9,6 +9,18 @@ async fn asynchronous_alternate_backend_satisfies_the_shared_conformance_harness
     exercise_backend(&AlternateBackend::default(), "alternate")
         .await
         .expect("alternate backend should conform");
+}
+
+#[tokio::test]
+async fn one_shot_probe_creates_and_destroys_a_bounded_sandbox() {
+    let backend = AlternateBackend::default();
+
+    exercise_one_shot_lifetime(&backend, "alternate")
+        .await
+        .expect("one-shot lifetime probe should conform");
+
+    assert!(backend.faults.one_shot_create_was_exercised());
+    assert!(backend.faults.cleanup_attempted_for_every_resource());
 }
 
 #[tokio::test]

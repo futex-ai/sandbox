@@ -57,6 +57,28 @@ async fn ingress_uses_the_configured_domain() {
 }
 
 #[tokio::test]
+async fn ingress_does_not_invent_a_traffic_token_for_one_shot_read_access() {
+    let mut provider_access = access("provider");
+    provider_access.traffic_access_token = None;
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("provider"))
+            .returns(Ok(provider_access)),
+    );
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(Unimock::new(())));
+
+    let result = backend
+        .port_ingress(BackendPortIngressRequest {
+            sandbox_provider_ref: ProviderRef::new("provider"),
+            port: 4173,
+        })
+        .await;
+
+    assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
+}
+
+#[tokio::test]
 async fn ingress_rejects_port_zero_without_contacting_the_provider() {
     let backend = E2bSandboxBackend::with_transports(
         config(),
@@ -137,6 +159,6 @@ fn access(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "envd-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }

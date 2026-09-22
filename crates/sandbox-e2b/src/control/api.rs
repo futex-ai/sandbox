@@ -25,10 +25,14 @@ pub trait E2bControlApi: Send + Sync {
     /// Gets read access only when the sandbox is already running and provider
     /// auto-resume is disabled; this operation never changes its timeout.
     async fn get_sandbox_read_access(&self, sandbox_id: &str) -> Result<ControlSandboxReadAccess>;
-    /// Connects to or resumes a sandbox and reacquires nonblank call-local
-    /// credentials.
+    /// Reacquires call-local credentials without extending a one-shot lifetime.
+    ///
+    /// Idle auto-pause and legacy sandboxes use provider connect. A running
+    /// one-shot sandbox uses non-mutating read access and carries no traffic
+    /// credential because E2B does not return one from sandbox detail.
     async fn connect_sandbox(&self, sandbox_id: &str) -> Result<ControlSandboxAccess>;
-    /// Pauses a sandbox while retaining memory.
+    /// Pauses an idle-auto-pause or legacy sandbox while retaining memory.
+    /// One-shot metadata must be rejected without sending the mutation.
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()>;
     /// Idempotently kills a sandbox.
     async fn kill_sandbox(&self, sandbox_id: &str) -> Result<()>;

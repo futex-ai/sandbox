@@ -15,6 +15,7 @@ mod domain;
 mod error;
 mod ids;
 mod image_command_failure;
+mod lifetime;
 mod network;
 mod port_ingress;
 mod process_run;
@@ -52,6 +53,7 @@ pub use self::domain::{
 pub use self::error::{Error, QuotaKind, ResourceKind, Result};
 pub use self::ids::{ActionId, OperationId, SandboxId, SnapshotId, TerminalId};
 pub use self::image_command_failure::ImageCommandFailure;
+pub use self::lifetime::{SANDBOX_ONE_SHOT_MAX_LIFETIME, SandboxLifetime};
 pub use self::network::SandboxNetworkPolicy;
 pub use self::port_ingress::{
     BackendPortIngressRequest, PortIngress, PortIngressCredential, PortIngressRequest,

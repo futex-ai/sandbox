@@ -50,6 +50,8 @@ impl SandboxBackend for AlternateBackend {
     }
 
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox> {
+        request.lifetime.validate()?;
+        self.faults.record_sandbox_lifetime(request.lifetime);
         let index = self.next_sandbox.fetch_add(1, Ordering::Relaxed);
         let provider_ref = ProviderRef::new(format!("alternate-sandbox-{index}"));
         self.sandboxes
@@ -71,6 +73,7 @@ impl SandboxBackend for AlternateBackend {
         &self,
         request: BackendCreateSandboxRequest,
     ) -> Result<Option<BackendSandbox>> {
+        request.lifetime.validate()?;
         if self.faults.miss_recovery() {
             return Ok(None);
         }

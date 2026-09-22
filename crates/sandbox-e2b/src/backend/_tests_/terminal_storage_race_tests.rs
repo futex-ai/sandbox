@@ -96,7 +96,7 @@ fn access() -> ControlSandboxAccess {
         sandbox_id: "sandbox".to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
 

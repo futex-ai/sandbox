@@ -13,8 +13,9 @@ use crate::{
     BackendPrepareImageRequest, BackendPreparedImage, BackendReadFileRequest,
     BackendReadOnlyExecRequest, BackendResizeScreenStackRequest, BackendRunProcessRequest,
     BackendWriteFileRequest, OperationId, PortIngress, ProviderRef, ReadOnlyExecOutput,
-    ResourceOwner, Result, SandboxConsumer, SandboxId, SandboxNetworkPolicy, SandboxProcessOutput,
-    SandboxState, ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
+    ResourceOwner, Result, SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy,
+    SandboxProcessOutput, SandboxState, ScreenStackOutcome, ScreenViewportSize, SnapshotId,
+    SnapshotState,
 };
 
 /// Provider request to create a sandbox.
@@ -28,6 +29,8 @@ pub struct BackendCreateSandboxRequest {
     pub owner: ResourceOwner,
     /// Substrate consumer class preserved in provider metadata.
     pub consumer: SandboxConsumer,
+    /// Provider-neutral lifetime policy revalidated before provider dispatch.
+    pub lifetime: SandboxLifetime,
     /// Deployment identity used only as opaque metadata.
     pub deployment_id: String,
     /// Logical profile resolved by the adapter to provider configuration.
@@ -60,6 +63,8 @@ pub struct BackendManagedSandbox {
     pub operation_id: Option<OperationId>,
     /// Consumer class recovered from metadata, absent on legacy resources.
     pub consumer: Option<SandboxConsumer>,
+    /// Lifetime recovered from metadata, absent when missing or malformed.
+    pub lifetime: Option<SandboxLifetime>,
 }
 
 /// Provider snapshot state and opaque identity.
@@ -159,7 +164,10 @@ pub trait SandboxBackend: Send + Sync {
     ) -> Result<Option<BackendSandbox>>;
     /// Inspects one provider sandbox.
     async fn inspect_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
-    /// Resumes or reconnects one paused provider sandbox.
+    /// Resumes or reconnects one provider sandbox.
+    ///
+    /// A one-shot sandbox may be verified only while already running; this
+    /// operation must not resume it or extend its original maximum lifetime.
     async fn resume_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
     /// Resolves one exact port into a call-local authenticated upstream.
     async fn port_ingress(&self, request: BackendPortIngressRequest) -> Result<PortIngress>;
@@ -173,7 +181,7 @@ pub trait SandboxBackend: Send + Sync {
         &self,
         request: BackendResizeScreenStackRequest,
     ) -> Result<ScreenViewportSize>;
-    /// Pauses one provider sandbox when supported.
+    /// Pauses one provider sandbox when supported; one-shot sandboxes reject it.
     async fn pause_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
     /// Idempotently destroys one provider sandbox.
     async fn destroy_sandbox(&self, provider_ref: ProviderRef) -> Result<()>;

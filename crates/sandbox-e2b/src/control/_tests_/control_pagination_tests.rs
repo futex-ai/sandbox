@@ -20,6 +20,7 @@ impl ReqwestE2bControlApi {
             transport,
             sandbox_domain: "e2b.app".to_owned(),
             idle_timeout_seconds: 600,
+            lifetime_metadata_key: "sandbox_lifetime".to_owned(),
         }
     }
 }

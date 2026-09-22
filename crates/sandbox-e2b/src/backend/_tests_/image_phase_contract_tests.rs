@@ -109,6 +109,7 @@ fn source_request() -> BackendCreateSandboxRequest {
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(Uuid::now_v7()),
         consumer: sandbox_interface::SandboxConsumer::Runtime,
+        lifetime: sandbox_interface::SandboxLifetime::IdleAutoPause,
         deployment_id: "deployment".to_owned(),
         profile: "general".to_owned(),
         network: SandboxNetworkPolicy::Open,
@@ -153,7 +154,7 @@ fn access(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
 
