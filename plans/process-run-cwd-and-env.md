@@ -95,10 +95,10 @@ conformance while dropping, merging, or mislabeling stderr.
       test suite, file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for secrets, generated artifacts, whitespace errors,
       stale documentation, and unrelated edits.
-- [ ] Run `git add -A`, commit the completed follow-up with a Conventional
+- [x] Run `git add -A`, commit the completed follow-up with a Conventional
       Commit, and push the current branch.
-- [ ] Run `cargo xtask review` after the push so the AI reviewer checks the
+- [x] Run `cargo xtask review` after the push so the AI reviewer checks the
       clean local diff against `origin/main`; report every finding without
       automatically fixing it.
-- [ ] Mark this milestone complete and move the plan from Active to Completed
+- [x] Mark this milestone complete and move the plan from Active to Completed
       in `plans/README.md`.
