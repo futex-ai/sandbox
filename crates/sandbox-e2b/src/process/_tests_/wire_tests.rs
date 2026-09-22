@@ -99,7 +99,7 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
     let mut child = start_wrapper(&transcript, 1024 * 1024);
     let mut input = child.stdin.take().expect("terminal wrapper stdin");
     input
-        .write_all(b"echo complete\nexit\n")
+        .write_all(b"printf '\\143\\157\\155\\160\\154\\145\\164\\145\\n'\nexit\n")
         .expect("write terminal command");
 
     let status = child.wait().expect("wait for terminal wrapper");
@@ -130,13 +130,20 @@ fn start_wrapper(path: &std::path::Path, limit: usize) -> std::process::Child {
 }
 
 fn test_wrapper() -> String {
-    let production = "os.execv('/bin/bash', ['bash', '-il'])";
-    let deterministic = "os.execv('/bin/bash', ['bash', '--noprofile', '--norc', '-i'])";
-    let wrapper = TERMINAL_WRAPPER.replace(production, deterministic);
+    let production_shell = "os.execv('/bin/bash', ['bash', '-il'])";
+    let deterministic_shell = "os.execv('/bin/bash', ['bash', '--noprofile', '--norc', '-i'])";
+    let production_drop = r#"    os.initgroups(username, account.pw_gid)
+    os.setgid(account.pw_gid)
+    os.setuid(account.pw_uid)"#;
+    let same_user_check = r#"    if os.geteuid() != account.pw_uid or os.getegid() != account.pw_gid:
+        fail()"#;
+    let shell_replaced = TERMINAL_WRAPPER.replace(production_shell, deterministic_shell);
     assert_ne!(
-        wrapper, TERMINAL_WRAPPER,
+        shell_replaced, TERMINAL_WRAPPER,
         "production shell command changed"
     );
+    let wrapper = shell_replaced.replace(production_drop, same_user_check);
+    assert_ne!(wrapper, shell_replaced, "production privilege drop changed");
     wrapper
 }
 

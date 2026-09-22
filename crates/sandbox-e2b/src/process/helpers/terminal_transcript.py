@@ -68,9 +68,9 @@ def descriptor_limit():
 def close_except(kept):
     start = 0
     for descriptor in sorted(kept):
-        if descriptor >= start:
+        if descriptor > start:
             os.closerange(start, descriptor)
-            start = descriptor + 1
+        start = descriptor + 1
     os.closerange(start, descriptor_limit())
 
 

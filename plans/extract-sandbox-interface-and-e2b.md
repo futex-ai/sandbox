@@ -669,6 +669,8 @@ setup-created symlink outside the intended cache paths.
 - [x] Keep transcript regressions deterministic by waiting for the trusted
       drain to reach its cap before ending the shell, while separately asserting
       production login behavior.
+- [x] Keep wrapper regressions runnable as an unprivileged CI account while
+      separately asserting the production supplementary-group and UID/GID drop.
 - [x] Replace shell cache deletion with a descriptor-relative helper that
       refuses symlinked parents and never follows child symlinks.
 - [x] Update the public contract, adapter documentation, and crate README for
