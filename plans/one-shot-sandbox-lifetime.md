@@ -72,10 +72,32 @@ pushed, and independently reviewed against `origin/main`.
       failure until the suite passes.
 - [x] Audit the final diff for secrets, generated artifacts, whitespace
       errors, unrelated edits, and documentation drift.
-- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+- [x] Run `git add -A`, commit all completed work with a Conventional Commit,
       and push the current branch.
-- [ ] Run `cargo xtask review` after the push and record every finding without
+- [x] Run `cargo xtask review` after the push and record every finding without
       automatically changing the implementation.
-- [ ] Mark this plan complete, move it to the completed index, commit and push
-      that bookkeeping, then run a final `cargo xtask review` on the exact
-      clean pushed branch.
+
+### Review Finding
+
+1. **Severity: high — preserve one-shot identity in the public control
+   client.** In `crates/sandbox-e2b/src/control/client.rs:50`, the exported
+   low-level `ReqwestE2bControlApi` accepts a typed one-shot create request but
+   forwards caller-supplied metadata without ensuring that it contains the
+   lifetime marker used by later connect and pause calls. A caller that uses
+   this public client directly can therefore create a one-shot sandbox with
+   empty or inconsistent metadata. A later connect or pause then treats that
+   sandbox as legacy and can reset its timeout or pause it. Doing nothing means
+   this public path can violate the feature's core promise that a one-shot
+   sandbox is destroyed by its original maximum lifetime. Option A: classify
+   later access from E2B's authoritative `lifecycle.onTimeout` detail and add
+   create-to-connect/pause regressions. Option B: have the control client insert
+   and validate the configured lifetime marker itself, and expose a public way
+   to configure that marker key. **Recommendation: A**, because provider detail
+   remains correct across process restarts and custom metadata prefixes without
+   making safety depend on caller-supplied metadata.
+
+- [ ] Resolve or explicitly accept the public-client lifetime finding after a
+      maintainer chooses an option.
+- [ ] After the finding is resolved or accepted, mark this plan complete, move
+      it to the completed index, commit and push that bookkeeping, then run a
+      final `cargo xtask review` on the exact clean pushed branch.
