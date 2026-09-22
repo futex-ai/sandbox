@@ -37,7 +37,10 @@ use bounded connect, read, and total timeouts. Mutating timeouts remain
 delivery-ambiguous; safe reads and idempotent deletes become retryable provider
 unavailability. Control, unary process, and file-response bodies are consumed
 as chunks and stop as soon as their cumulative byte limit is exceeded. Clients
-that carry an API or envd access token never follow HTTP redirects.
+that carry an API or envd access token never follow HTTP redirects. The
+streaming Connect decoder copies only one header and its declared bounded
+payload at a time; an oversized declaration is rejected before the rest of the
+HTTP chunk is copied into decoder state.
 Definitive non-success response headers are mapped without waiting for their
 unused bodies, so a rejected mutation cannot become delivery-ambiguous merely
 because that error body stalls.
@@ -46,10 +49,12 @@ response-stream failures map to retryable provider unavailability for safe
 reads. This includes a successful HTTP response whose JSON does not match the
 safe operation's response type. A failure that can occur after a process start,
 terminal input, or upload was delivered remains delivery-ambiguous until its
-operation-specific recovery fence resolves the outcome.
-Opaque provider IDs equal to `.` or `..` are rejected before route
-construction, so URL normalization cannot move an API-key-authenticated call
-outside its intended sandbox or snapshot endpoint.
+operation-specific recovery fence resolves the outcome. `SendInput` also
+decodes E2B's typed empty response, so a successful HTTP status with malformed
+JSON remains delivery-ambiguous instead of being treated as an acknowledgment.
+Empty opaque provider IDs and IDs equal to `.` or `..` are rejected before
+route construction, so URL normalization cannot move an API-key-authenticated
+call outside its intended sandbox or snapshot endpoint.
 
 Sandbox creation filters on exact configured metadata, including the stable
 runtime-or-browser consumer value. Managed inventory returns a recognized
@@ -170,9 +175,11 @@ scrub, while a symlink at or below a cache leaf is unlinked without deleting
 its target.
 Setup, verification, scrub, and size measurement run through non-login shells,
 so staged files or setup commands cannot install a login profile that skips a
-later safety phase or fabricates the measured size. The measurement propagates
-filesystem traversal and I/O failures rather than accepting `du`'s partial
-output.
+later safety phase or fabricates the measured size. Setup and verification keep
+the configured workload identity. The size-measurement command authenticates
+as root so `du` can traverse private adapter state such as write fences, and it
+propagates filesystem traversal and I/O failures rather than accepting a
+partial total.
 
 The terminal transcript descriptor and byte limit are installed by the trusted
 root supervisor. Its root recorder receives only a private write pipe, and only

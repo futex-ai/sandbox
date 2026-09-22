@@ -683,3 +683,34 @@ setup-created symlink outside the intended cache paths.
       implementation review without changing the worktree.
 - [ ] After a clean review, record plan completion and move this plan from
       Active to Completed in `plans/README.md`.
+
+## Milestone 21: Provider Boundary Completion
+
+Resolve every finding from the post-isolation review. At the end of this
+milestone, image measurement can inspect trusted adapter storage, authenticated
+control routes reject empty identities, terminal mutations require a valid
+provider acknowledgment, and process framing never buffers beyond its declared
+limit.
+
+- [x] Record the four review findings for image measurement privileges, empty
+      provider route segments, mutation acknowledgments, and oversized stream
+      fragments.
+- [x] Add failing regressions first for all four findings.
+- [x] Run image size measurement through the trusted root-authenticated process
+      identity without changing user-authored setup or verification identity.
+- [x] Reject empty, `.`, and `..` provider route segments before constructing
+      authenticated E2B control requests.
+- [x] Decode typed empty Connect mutation responses and preserve ambiguous
+      delivery when a successful HTTP response is malformed.
+- [x] Make the Connect frame decoder reject oversized fragments without first
+      copying them into its retained buffer.
+- [x] Update the public contract, adapter documentation, and crate README for
+      the completed privilege, routing, acknowledgment, and streaming bounds.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, the file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit tracked files for prohibited legacy terms, secrets, artifacts,
+      whitespace errors, and unrelated edits.
+- [ ] Commit and push the fixes, confirm GitHub CI, then run a clean post-push
+      implementation review without changing the worktree.
+- [ ] After a clean review, record plan completion and move this plan from
+      Active to Completed in `plans/README.md`.

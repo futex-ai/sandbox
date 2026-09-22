@@ -173,6 +173,22 @@ fn announced_oversized_frames_are_rejected() {
     ));
 }
 
+#[test]
+fn oversized_fragments_are_rejected_before_they_are_buffered() {
+    let maximum_payload = 1024;
+    let mut fragment = frame(0, &vec![0; maximum_payload + 1]);
+    fragment.extend(vec![0; 8 * 1024 * 1024]);
+    let mut decoder = FrameDecoder::new(maximum_payload);
+
+    let decoded = decoder.push(&fragment);
+
+    assert!(matches!(
+        decoded.terminal_error,
+        Some(E2bAdapterError::ResponseTooLarge)
+    ));
+    assert!(decoder.buffer.len() <= 5);
+}
+
 fn successful(decoded: DecodedFrameBatch) -> Vec<ConnectFrame> {
     assert!(decoded.terminal_error.is_none());
     decoded.frames

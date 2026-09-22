@@ -1,5 +1,7 @@
 //! Incremental Connect streaming envelope and process-event decoding.
 
+use std::mem;
+
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 
@@ -20,15 +22,20 @@ impl FrameDecoder {
         }
     }
 
-    pub(super) fn push(&mut self, fragment: &[u8]) -> DecodedFrameBatch {
-        self.buffer.extend_from_slice(fragment);
+    pub(super) fn push(&mut self, mut fragment: &[u8]) -> DecodedFrameBatch {
         let mut frames = Vec::new();
-        loop {
+        while !fragment.is_empty() {
             if self.buffer.len() < HEADER_BYTES {
-                break;
+                let copied = (HEADER_BYTES - self.buffer.len()).min(fragment.len());
+                self.buffer.extend_from_slice(&fragment[..copied]);
+                fragment = &fragment[copied..];
+                if self.buffer.len() < HEADER_BYTES {
+                    break;
+                }
             }
             let flags = self.buffer[0];
             if flags & !0x02 != 0 {
+                self.buffer.clear();
                 return DecodedFrameBatch::terminal(frames, Error::MalformedFrame);
             }
             let length = u32::from_be_bytes([
@@ -38,14 +45,17 @@ impl FrameDecoder {
                 self.buffer[4],
             ]) as usize;
             if length > self.maximum_payload {
+                self.buffer.clear();
                 return DecodedFrameBatch::terminal(frames, Error::ResponseTooLarge);
             }
             let frame_length = HEADER_BYTES.saturating_add(length);
+            let copied = (frame_length - self.buffer.len()).min(fragment.len());
+            self.buffer.extend_from_slice(&fragment[..copied]);
+            fragment = &fragment[copied..];
             if self.buffer.len() < frame_length {
                 break;
             }
-            let payload = self.buffer[HEADER_BYTES..frame_length].to_vec();
-            self.buffer.drain(..frame_length);
+            let payload = mem::take(&mut self.buffer).split_off(HEADER_BYTES);
             frames.push(ConnectFrame {
                 end_stream: flags & 0x02 != 0,
                 payload,

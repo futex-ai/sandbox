@@ -5,7 +5,7 @@ use std::sync::Arc;
 use sandbox_interface::Error as DomainError;
 use unimock::{MockFn, Unimock, matching};
 
-use crate::{ProcessConnection, ProcessTransport};
+use crate::{ProcessConnection, ProcessSelector, ProcessTransport};
 
 use super::{ConnectProcessTransport, EmptyWire, ListResponseWire};
 use crate::{
@@ -44,6 +44,17 @@ async fn malformed_mutation_response_preserves_delivery_ambiguity() {
         .await;
 
     assert!(matches!(result, Err(Error::DeliveryAmbiguous)));
+}
+
+#[tokio::test]
+async fn malformed_empty_mutation_response_preserves_delivery_ambiguity() {
+    let transport = transport(true);
+
+    let result = transport
+        .send_input(connection(), ProcessSelector::Pid(7), b"input".to_vec())
+        .await;
+
+    assert!(matches!(result, Err(DomainError::DeliveryUnknown)));
 }
 
 fn transport(ambiguous: bool) -> ConnectProcessTransport {

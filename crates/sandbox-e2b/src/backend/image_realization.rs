@@ -18,6 +18,7 @@ use super::{
 
 const HELPER_OUTPUT_LIMIT: usize = 4096;
 const SIZE_MARKER: &str = "__SANDBOX_IMAGE_SIZE__=";
+const TRUSTED_PROCESS_USER: &str = "root";
 const QUIESCE_AND_SCRUB: &str = r#"set -eu
 jobs -pr | xargs -r kill || true
 stop_named_process() {
@@ -156,7 +157,7 @@ async fn prepare_source(
         ImagePhase::Scrub,
     )
     .await?;
-    observe_size(backend, connection).await
+    observe_size(backend, connection.with_user(TRUSTED_PROCESS_USER)).await
 }
 
 fn scrub_command(backend: &E2bSandboxBackend) -> String {

@@ -70,9 +70,7 @@ impl ConnectProcessTransport {
         request: &T,
         ambiguous: bool,
     ) -> Result<()> {
-        self.http
-            .unary(connection, method.to_owned(), encode(request)?, ambiguous)
-            .await?;
+        let _response: EmptyWire = self.unary(connection, method, request, ambiguous).await?;
         Ok(())
     }
 }

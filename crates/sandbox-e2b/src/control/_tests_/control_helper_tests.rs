@@ -46,4 +46,10 @@ fn opaque_path_segments_cannot_escape_provider_routes() {
         path_segment("team/snapshot:tag?x=1").expect("safe opaque identifier"),
         "team%2Fsnapshot%3Atag%3Fx%3D1"
     );
+    for segment in ["", ".", ".."] {
+        assert!(matches!(
+            path_segment(segment),
+            Err(E2bAdapterError::InvalidRequest)
+        ));
+    }
 }

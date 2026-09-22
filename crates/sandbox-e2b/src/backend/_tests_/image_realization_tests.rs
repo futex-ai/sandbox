@@ -63,7 +63,8 @@ async fn image_preparation_precedes_separate_source_cleanup() {
             .returns(Ok(success())),
         ProcessTransportMock::run
             .next_call(matching!(_, _))
-            .answers(&|_, _, command| {
+            .answers(&|_, connection, command| {
+                assert_eq!(connection.user(), Some("root"));
                 assert!(
                     command
                         .args

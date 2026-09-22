@@ -91,18 +91,20 @@ state to finish the intended ownership and mode handoff during reconciliation.
 File transfers are capped at 256 MiB. Every file in a multi-file
 image-preparation request must pass its path and size checks before the backend
 acquires provider access or writes any earlier file. Provider response and
-process output limits are enforced while bytes are consumed. A bounded
-one-shot process must be
+process output limits are enforced while bytes are consumed. A streaming frame
+decoder must validate the bounded frame header before retaining the rest of a
+provider chunk, and its partial-frame buffer may retain only the current
+allowed frame. A bounded one-shot process must be
 terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
-the exact destination host is validated. Opaque provider identifiers equal to
-`.` or `..` must fail before authenticated route construction. Port zero,
-empty required text, oversized values, unknown profiles, and unsupported
-network policies fail before provider dispatch. A direct process command
-cannot be empty; its command and arguments total at most 128 KiB, each
-requested stream limit is at most 64 MiB, and its deadline is at most 300
-seconds. These bounds must be checked before acquiring provider sandbox
-access. In particular, an oversized replacement write must fail before
+the exact destination host is validated. Empty opaque provider identifiers and
+identifiers equal to `.` or `..` must fail before authenticated route
+construction. Port zero, empty required text, oversized values, unknown
+profiles, and unsupported network policies fail before provider dispatch. A
+direct process command cannot be empty; its command and arguments total at
+most 128 KiB, each requested stream limit is at most 64 MiB, and its deadline
+is at most 300 seconds. These bounds must be checked before acquiring provider
+sandbox access. In particular, an oversized replacement write must fail before
 connecting to or resuming its sandbox.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
@@ -116,10 +118,12 @@ and maintenance or image preparation fails unless their exit is confirmed.
 Provider-owned image verification, scrub, and measurement must not load a
 user-controlled login profile before executing; such a profile could otherwise
 skip a safety command or forge its result. Image-size traversal and I/O errors
-must fail the measurement rather than return a partial total. Image cache
-cleanup must open every parent without following symlinks and fail if an
-intermediate component is a symlink; child symlinks may be unlinked but their
-targets must never be traversed.
+must fail the measurement rather than return a partial total. Measurement may
+use a trusted process identity when adapter-private storage is intentionally
+inaccessible to the workload; user-authored setup and verification remain on
+the configured workload identity. Image cache cleanup must open every parent
+without following symlinks and fail if an intermediate component is a symlink;
+child symlinks may be unlinked but their targets must never be traversed.
 Provider terminal storage creation and restored cleanup must traverse absolute
 paths through non-following directory descriptors. An intermediate symlink
 must fail closed without creating or removing anything through its target.
@@ -129,9 +133,12 @@ before an adapter acquires provider access.
 Terminal input and close operations must select the durable terminal identity
 atomically in the provider mutation. A separate list-then-mutate check is not a
 sufficient identity fence because a numeric process ID can be reused between
-the two calls. The same rule applies when killing terminals inherited by a
-restored sandbox. Provider-side transcripts enforce the requested byte count
-exactly, including limits that are smaller than or not aligned to 1 KiB. The
+the two calls. A successful transport status is not enough to prove terminal
+input delivery: the provider's typed acknowledgment must decode successfully,
+and a malformed response remains delivery-ambiguous. The same identity rule
+applies when killing terminals inherited by a restored sandbox. Provider-side
+transcripts enforce the requested byte count exactly, including limits that
+are smaller than or not aligned to 1 KiB. The
 provider must create, retain, and read the transcript as a trusted identity in
 storage inaccessible to the workload. A tagged trusted supervisor keeps the
 storage descriptor, clips bytes from a private recorder pipe, drains overflow,

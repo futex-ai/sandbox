@@ -69,9 +69,11 @@ clips recorder chunks to the remaining limit, keeps draining overflow so the
 interactive terminal stays usable, and waits for the recorder before exiting.
 One-shot processes are killed when collection times out or fails after
 observing their PID. HTTP bodies, process output, and terminal output are
-bounded while streaming. Direct process requests are validated before the
-adapter acquires sandbox access: commands must be non-empty, combined argv is
-capped at 128 KiB, each stream cap is at most 64 MiB, and deadlines cannot
+bounded while streaming. Connect frame headers are validated before the rest
+of an HTTP chunk is retained, so an oversized declared frame cannot force an
+unbounded intermediate buffer. Direct process requests are validated before
+the adapter acquires sandbox access: commands must be non-empty, combined argv
+is capped at 128 KiB, each stream cap is at most 64 MiB, and deadlines cannot
 exceed 300 seconds. Failed image-command diagnostics redact the call-local
 opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
@@ -79,14 +81,14 @@ process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
-attached. Provider IDs equal to `.` or `..` are rejected before an
-API-key-authenticated control request can be built. Definitive rejection
+attached. Empty provider IDs and IDs equal to `.` or `..` are rejected before
+an API-key-authenticated control request can be built. Definitive rejection
 headers are mapped without waiting for an unused response body. DNS,
 connection, timeout, and response-stream failures remain typed as provider
 unavailability; failed mutating delivery remains ambiguous. A successful safe
-response with malformed JSON is also retryable provider unavailability, while
-malformed output after an accepted mutation keeps the delivery outcome
-ambiguous.
+response with malformed JSON is also retryable provider unavailability. A
+terminal-input response must decode E2B's typed empty acknowledgment; malformed
+output after that accepted mutation keeps the delivery outcome ambiguous.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -98,7 +100,9 @@ dispatch. Empty recovery inventory stays in progress instead of replaying
 preparation or allocating another resource. Before measuring a prepared
 source, configured image processes must exit after bounded TERM/KILL
 escalation. Size traversal or I/O failure returns `ImageSizeUnavailable`
-instead of accepting a partial total. Restored-sandbox cleanup and image
+instead of accepting a partial total. The size-measurement command authenticates
+as root so it can traverse private adapter storage; setup and verification
+remain on the configured workload account. Restored-sandbox cleanup and image
 preparation apply the same bounded escalation to inherited drive helpers and
 fail unless those helpers are confirmed gone. Home-directory cache cleanup
 uses non-following directory descriptors; a symlinked parent fails scrub and a

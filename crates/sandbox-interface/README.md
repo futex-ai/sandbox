@@ -36,7 +36,9 @@ deadline no longer than 300 seconds.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is
-split by a bounded-output cutoff.
+split by a bounded-output cutoff. Provider adapters must enforce transport
+frame bounds before retaining provider chunks and must decode typed mutation
+acknowledgments before reporting delivery success.
 
 The public `conformance` module exercises creation, recovery, image
 preparation, split-stream execution, private ingress, and terminal identity.

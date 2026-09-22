@@ -238,7 +238,8 @@ pub trait SandboxBackend: Send + Sync {
     ) -> Result<BackendTerminal>;
     /// Ingests bytes from the durable provider-side terminal log.
     async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput>;
-    /// Sends exact input once; callers fail closed after ambiguous delivery.
+    /// Sends exact input once; success requires a decoded provider
+    /// acknowledgment, and callers fail closed after ambiguous delivery.
     async fn write_terminal(&self, request: BackendInputRequest) -> Result<()>;
     /// Idempotently closes one provider PTY.
     async fn close_terminal(

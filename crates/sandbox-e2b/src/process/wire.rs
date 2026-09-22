@@ -178,7 +178,7 @@ pub(super) struct SignalRequestWire {
     signal: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub(super) struct EmptyWire {}
 
 #[derive(Deserialize)]

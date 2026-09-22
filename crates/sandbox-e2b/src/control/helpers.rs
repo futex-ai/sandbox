@@ -79,7 +79,7 @@ pub(super) fn metadata_query(metadata: &SandboxMetadata) -> String {
 }
 
 pub(super) fn path_segment(value: &str) -> Result<String> {
-    if matches!(value, "." | "..") {
+    if matches!(value, "" | "." | "..") {
         return Err(Error::InvalidRequest);
     }
     Ok(url::form_urlencoded::byte_serialize(value.as_bytes()).collect())
