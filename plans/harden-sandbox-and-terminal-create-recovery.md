@@ -102,7 +102,7 @@ committed, pushed, and independently reviewed against `origin/main`.
 - [x] Run `cargo xtask review` after the push so the AI reviewer checks the
       clean local diff against `origin/main`; record every finding without
       automatically fixing it.
-- [ ] After a clean review, mark all milestones complete and move this plan
+- [x] After a clean review, mark all milestones complete and move this plan
       from Active to Completed in `plans/README.md`.
 
 ### Post-Push Review Findings
@@ -150,9 +150,9 @@ an identity record until its contents have been synced.
       suite, the file-length lint, smoke coverage, and `cargo xtask check`.
 - [x] Audit tracked files for prohibited legacy terms, secrets, generated
       artifacts, whitespace errors, and unrelated edits.
-- [ ] Run `git add -A`, commit all completed work with a Conventional Commit,
+- [x] Run `git add -A`, commit all completed work with a Conventional Commit,
       push the branch, and confirm GitHub CI passes on that exact commit.
-- [ ] Run `cargo xtask review` after the push and record every finding without
+- [x] Run `cargo xtask review` after the push and record every finding without
       automatically fixing it.
-- [ ] After a clean review, mark all milestones complete and move this plan
+- [x] After a clean review, mark all milestones complete and move this plan
       from Active to Completed in `plans/README.md`.
