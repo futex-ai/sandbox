@@ -665,8 +665,8 @@ setup-created symlink outside the intended cache paths.
 - [x] Authenticate recorder discovery, input, and shutdown as the same trusted
       account that owns the recorder process.
 - [x] Keep transcript regressions deterministic by waiting for the recorder to
-      reach its cap before ending the shell, while separately asserting
-      production login behavior.
+      reach its cap before ending the shell, accepting platform-specific recorder
+      exit at that cap, and separately asserting production login behavior.
 - [x] Replace shell cache deletion with a descriptor-relative helper that
       refuses symlinked parents and never follows child symlinks.
 - [x] Update the public contract, adapter documentation, and crate README for

@@ -2,7 +2,7 @@
 
 use std::{
     fs,
-    io::Write,
+    io::{ErrorKind, Write},
     os::unix::fs::symlink,
     process::{Command, Stdio},
     thread,
@@ -24,10 +24,13 @@ fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
             .write_all(b"printf '%010000d' 0\n")
             .expect("write terminal command");
         let observed_size = wait_for_transcript_size(&transcript, limit);
-        input.write_all(b"exit\n").expect("exit terminal shell");
+        let exit_result = input.write_all(b"exit\n");
 
         let status = child.wait().expect("wait for bounded terminal wrapper");
 
+        if let Err(error) = exit_result {
+            assert_eq!(error.kind(), ErrorKind::BrokenPipe);
+        }
         assert_ne!(status.code(), Some(124), "terminal wrapper timed out");
         assert_eq!(observed_size, u64::try_from(limit).expect("test limit"));
         assert_eq!(
