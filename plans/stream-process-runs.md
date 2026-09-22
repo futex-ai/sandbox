@@ -281,9 +281,35 @@ process idle deadline.
 - [x] Confirm the chosen follow-up for the new review finding.
 - [x] Add a regression with a coalesced output batch, a full queue, and a slow
       consumer; verify that old output cannot postpone idle expiry or cleanup.
-- [x] Implement the chosen idle-timing correction and align affected docs.
+- [x] Anchor idle resets within a coalesced HTTP fragment to its receipt time
+      and align affected docs.
 - [x] Run focused tests and `cargo xtask check`, then audit the diff.
-- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
-- [ ] Run `cargo xtask review` after the push and report new findings without
+- [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [x] Run `cargo xtask review` after the push and report new findings without
       automatically fixing them.
+- [ ] Choose how to bound and report producer backpressure while preserving
+      the idle-time guarantee across separately buffered HTTP fragments.
+- [ ] Add a failing multi-fragment regression, implement the chosen bounded
+      arrival-time tracking, align docs, and repeat checks, push, and review.
 - [ ] Complete the milestone and update the plan index after the review cycle.
+
+### Milestone 7 Review Outcome
+
+The coalesced-fragment fix was committed and pushed in `3904502`.
+`cargo xtask check` passed, including 307 tests with three opt-in live tests
+ignored. The post-push review identified a remaining case; do not change the
+implementation until a maintainer chooses how to handle bounded backpressure.
+
+1. **Severity: high — buffered HTTP fragments can still extend idle time.** At
+   `crates/sandbox-e2b/src/process/stream_run.rs:150`, the streaming adapter
+   timestamps each HTTP fragment only after the output queue allows it to poll
+   that fragment. If the transport has already buffered several fragments, a
+   slow consumer draining the 16-slot queue can make old output appear fresh.
+   Doing nothing can keep a quiet process running and postpone cleanup until
+   the absolute deadline. Option A: read and timestamp provider fragments
+   independently of delivery into bounded staging, and terminate with a
+   documented outcome when staging fills; this preserves arrival-based idle
+   semantics but requires a defined backpressure behavior. Option B: end the
+   stream as soon as the delivery queue fills; this is simpler but loses more
+   queued output and changes slow-consumer behavior. **Recommendation: A**,
+   because it preserves more output while enforcing the advertised idle budget.
