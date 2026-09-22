@@ -225,6 +225,65 @@ while record-free legacy terminals retain their selector-only fallback.
 - [x] Align protocol and adapter documentation with live-record validation.
 - [x] Run focused regressions, formatting, Clippy, the full workspace test
       suite, file-length lint, smoke coverage, and `cargo xtask check`.
+- [x] Audit the final diff, run `git add -A`, commit all work with a
+      Conventional Commit, push the branch, and confirm GitHub CI passes on
+      that exact commit.
+- [ ] Run a clean post-push `cargo xtask review` against `origin/main` and
+      record any findings without automatically fixing them.
+- [ ] After a clean review, mark the remaining milestones complete and move
+      this plan back to Completed in `plans/README.md`.
+
+## Milestone 7: Bound And Type Identity Record Reads
+
+At the end of this milestone, terminal identity-file reads finish safely within
+the caller's deadline, and only a confirmed missing file enables legacy
+selector fallback.
+
+### Review Findings
+
+7. **Severity: medium — bound identity reads inside the output deadline.** In
+   `crates/sandbox-e2b/src/backend/terminal_record.rs:118`, every identity-file
+   helper receives a fixed ten-second timeout. A terminal output poll has one
+   outer deadline equal to the requested wait plus five seconds, so common
+   zero-wait reads cancel this helper after roughly five seconds. If the helper
+   stream stalls after reporting its process ID, cancellation drops the
+   collection future before its normal timeout cleanup can kill that one-shot
+   process. Doing nothing lets repeated short polls leave root-authenticated
+   helper processes running in the sandbox and breaks the adapter's bounded
+   process-cleanup guarantee. Option A: pass the remaining outer deadline into
+   the identity read while reserving enough time for confirmed cleanup. Option
+   B: make the process collector cancellation-safe so dropping any caller also
+   terminates an observed helper. **Recommendation: A**, because it preserves
+   the existing single absolute deadline and scopes this fix to the new
+   identity-read path.
+8. **Severity: medium — treat only file absence as a missing identity.** In
+   `crates/sandbox-e2b/src/backend/terminal_record.rs:124`, the wildcard
+   `NotFound` match converts every missing-resource error into `None`. The
+   regular-file helper reports `ResourceKind::File` when the identity leaf is
+   absent, but an envd HTTP 404 while starting that helper is mapped to
+   `ResourceKind::Terminal`. Doing nothing can turn provider-level terminal
+   disappearance into legacy selector fallback during inspection or hide a
+   provider failure as an absent exited terminal during recovery, weakening
+   the fail-closed identity contract. Option A: return `None` only for
+   `NotFound { resource: ResourceKind::File }` and propagate every other typed
+   error. Option B: add a dedicated optional-file-read result at the process
+   boundary. **Recommendation: A**, because the existing typed error already
+   distinguishes these cases without expanding the interface.
+
+- [x] Record both findings with severity, location, context, impact, options,
+      and recommendations.
+- [x] Add failing regressions for a stalled identity helper under a zero-wait
+      output deadline and for provider-level terminal absence during an
+      identity read.
+- [x] Thread the caller's remaining output deadline into identity reads while
+      preserving bounded cleanup time; keep the standalone inspection and
+      recovery read bound explicit.
+- [x] Permit legacy fallback only for a confirmed missing identity file and
+      propagate provider-level absence unchanged.
+- [x] Align protocol, adapter, and crate documentation with the final deadline
+      and typed-absence behavior.
+- [x] Run focused regressions, formatting, Clippy, the full workspace test
+      suite, file-length lint, smoke coverage, and `cargo xtask check`.
 - [ ] Audit the final diff, run `git add -A`, commit all work with a
       Conventional Commit, push the branch, and confirm GitHub CI passes on
       that exact commit.

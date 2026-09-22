@@ -80,8 +80,11 @@ Inspection and output validate every present record, including for a live
 terminal, before using selector-only fallback for a record-free legacy
 terminal. This record-aware resolution means unrelated PID reuse cannot hide
 an exited terminal's retained transcript while same-tag conflicts fail closed.
-Input rejects exited terminals, explicit close removes the record idempotently,
-and restored cleanup removes all terminal identity state. File
+Only typed file absence enables legacy fallback; provider terminal absence
+propagates. Output reads also fit identity helpers and their termination reserve
+inside the caller's absolute provider deadline. Input rejects exited terminals,
+explicit close removes the record idempotently, and restored cleanup removes
+all terminal identity state. File
 reads use one descriptor-relative, non-following helper; writes stage their
 payload, bind it to the caller-computed SHA-256
 digest, perform one

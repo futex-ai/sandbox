@@ -20,7 +20,7 @@ use crate::{
 use super::{configured::E2bSandboxBackend, terminal_identity::TerminalIdentity};
 
 #[tokio::test]
-async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
+async fn terminal_reads_bound_identity_and_log_helpers_within_the_outer_deadline() {
     let terminal_id = TerminalId::new();
     let observed = Arc::new(Mutex::new(Vec::new()));
     let control = Unimock::new(
@@ -37,15 +37,15 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
             .answers_arc({
                 let observed = observed.clone();
                 Arc::new(move |_, _, request: ProcessRegularFileRequest| {
+                    observed
+                        .lock()
+                        .expect("deadline observations")
+                        .push((request.path.clone(), request.timeout));
                     if request.path.ends_with(".identity.json") {
                         return Err(Error::NotFound {
                             resource: ResourceKind::File,
                         });
                     }
-                    observed
-                        .lock()
-                        .expect("deadline observations")
-                        .push(request.timeout);
                     Ok(ProcessFileChunk {
                         bytes: b"output".to_vec(),
                         total_size: 6,
@@ -65,15 +65,19 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
     }
 
     let observed = observed.lock().expect("deadline observations");
-    assert_eq!(observed.len(), 2);
-    for (timeout, wait) in observed
-        .iter()
-        .copied()
-        .zip([Duration::ZERO, Duration::from_secs(30)])
-    {
-        assert!(timeout > wait + Duration::from_secs(4));
-        assert!(timeout <= wait + Duration::from_secs(5));
-    }
+    assert_eq!(observed.len(), 4);
+    assert!(observed[0].0.ends_with(".identity.json"));
+    assert!(observed[0].1 > Duration::from_secs(1));
+    assert!(observed[0].1 <= Duration::from_secs(2));
+    assert!(observed[1].0.ends_with(".log"));
+    assert!(observed[1].1 > Duration::from_secs(4));
+    assert!(observed[1].1 <= Duration::from_secs(5));
+    assert!(observed[2].0.ends_with(".identity.json"));
+    assert!(observed[2].1 > Duration::from_secs(9));
+    assert!(observed[2].1 <= Duration::from_secs(10));
+    assert!(observed[3].0.ends_with(".log"));
+    assert!(observed[3].1 > Duration::from_secs(34));
+    assert!(observed[3].1 <= Duration::from_secs(35));
 }
 
 #[tokio::test]

@@ -116,7 +116,13 @@ async fn recover_connected(
             "multiple E2B terminal processes matched one consumer handle",
         ));
     }
-    let record = terminal_record::read(backend, connection, terminal_id).await?;
+    let record = terminal_record::read(
+        backend,
+        connection,
+        terminal_id,
+        terminal_record::IDENTITY_READ_TIMEOUT,
+    )
+    .await?;
     if let Some(record) = record {
         record.ensure_request(terminal_id, operation_id)?;
         record.ensure_tag(&tag)?;
@@ -165,6 +171,7 @@ pub(super) async fn inspect(
         identity,
         &processes,
         backend.config.runtime_conventions().terminal_tag_prefix(),
+        terminal_record::IDENTITY_READ_TIMEOUT,
     )
     .await?;
     Ok(BackendTerminal {

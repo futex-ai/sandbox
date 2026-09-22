@@ -14,7 +14,7 @@ use super::{
 };
 
 const IDENTITY_RECORD_MAX_BYTES: usize = 1024;
-const IDENTITY_READ_TIMEOUT: Duration = Duration::from_secs(10);
+pub(super) const IDENTITY_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct TerminalRecord {
@@ -83,8 +83,9 @@ pub(super) async fn resolve_state(
     identity: TerminalIdentity,
     processes: &[ProcessInfo],
     terminal_tag_prefix: &str,
+    read_timeout: Duration,
 ) -> Result<TerminalState> {
-    if let Some(record) = read(backend, connection, identity.terminal_id()).await? {
+    if let Some(record) = read(backend, connection, identity.terminal_id(), read_timeout).await? {
         record.ensure_identity(identity)?;
         record.ensure_tag(&terminal_tag(terminal_tag_prefix, identity.terminal_id()))?;
         return record.state(processes);
@@ -105,6 +106,7 @@ pub(super) async fn read(
     backend: &E2bSandboxBackend,
     connection: &ProcessConnection,
     terminal_id: TerminalId,
+    timeout: Duration,
 ) -> Result<Option<TerminalRecord>> {
     let chunk = backend
         .processes
@@ -115,13 +117,15 @@ pub(super) async fn read(
                 path: identity_file_name(terminal_id),
                 offset: 0,
                 max_bytes: IDENTITY_RECORD_MAX_BYTES,
-                timeout: IDENTITY_READ_TIMEOUT,
+                timeout,
             },
         )
         .await;
     let chunk = match chunk {
         Ok(chunk) => chunk,
-        Err(Error::NotFound { .. }) => return Ok(None),
+        Err(Error::NotFound {
+            resource: ResourceKind::File,
+        }) => return Ok(None),
         Err(error) => return Err(error),
     };
     let byte_count = match u64::try_from(chunk.bytes.len()) {

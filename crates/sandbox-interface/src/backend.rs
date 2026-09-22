@@ -266,6 +266,9 @@ pub trait SandboxBackend: Send + Sync {
         terminal_provider_ref: ProviderRef,
     ) -> Result<BackendTerminal>;
     /// Ingests bytes from the durable provider-side terminal log.
+    ///
+    /// Provider-side identity reads must fit inside this operation's bounded
+    /// wait while reserving enough time to terminate any observed helper.
     async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput>;
     /// Sends exact input once; success requires a decoded provider
     /// acknowledgment, and callers fail closed after ambiguous delivery.

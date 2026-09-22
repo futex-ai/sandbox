@@ -15,6 +15,7 @@ use super::{
 };
 
 const PROVIDER_READ_ALLOWANCE: Duration = Duration::from_secs(5);
+const HELPER_CLEANUP_RESERVE: Duration = Duration::from_secs(3);
 const TRUSTED_PROCESS_USER: &str = "root";
 
 pub(super) async fn read(
@@ -77,6 +78,7 @@ pub(super) async fn read(
                 identity,
                 &listed,
                 backend.config.runtime_conventions().terminal_tag_prefix(),
+                identity_read_timeout(provider_deadline),
             ),
         )
         .await
@@ -176,4 +178,11 @@ fn provider_read_timeout(backend: &E2bSandboxBackend) -> Error {
     Error::BackendUnavailable {
         backend_id: backend.config.backend_id().to_owned(),
     }
+}
+
+fn identity_read_timeout(provider_deadline: tokio::time::Instant) -> Duration {
+    provider_deadline
+        .saturating_duration_since(tokio::time::Instant::now())
+        .saturating_sub(HELPER_CLEANUP_RESERVE)
+        .min(terminal_record::IDENTITY_READ_TIMEOUT)
 }

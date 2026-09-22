@@ -237,12 +237,16 @@ process is live. Selector-only lookup remains available only for live legacy
 terminals without a record. If an unrelated process reuses the numeric PID, the
 durable record classifies the original terminal as `Exited` and output can
 still ingest its retained transcript; reuse of the expected tag by another PID
-fails closed. Input first rejects an absent process, then selects the tag inside
-the provider mutation; close uses the same atomic selector, so PID reuse cannot
-target an unrelated process. Close is idempotent and removes the identity
-record after a confirmed kill. Restored-terminal cleanup also kills by tag and
-removes every transcript and identity record, then requires its maintenance
-command to exit normally.
+fails closed. Only `NotFound(File)` enables record-free legacy lookup;
+provider-level terminal absence propagates instead of masquerading as a missing
+record. Output polling caps the identity helper at the remaining absolute
+deadline minus a three-second termination reserve, while recovery and
+inspection retain their explicit ten-second identity-read limit. Input first
+rejects an absent process, then selects the tag inside the provider mutation;
+close uses the same atomic selector, so PID reuse cannot target an unrelated
+process. Close is idempotent and removes the identity record after a confirmed
+kill. Restored-terminal cleanup also kills by tag and removes every transcript
+and identity record, then requires its maintenance command to exit normally.
 Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the

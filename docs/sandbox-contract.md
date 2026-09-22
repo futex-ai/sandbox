@@ -239,7 +239,10 @@ live, and use selector-only compatibility only when no record exists. If an
 unrelated process reuses an exited terminal's numeric PID, the trusted record
 proves the original terminal is `Exited` and its retained transcript remains
 readable. A conflicting process using the expected terminal tag still fails
-closed.
+closed. Only a typed missing-file result may enable the legacy fallback;
+provider-level terminal absence and every other read error must propagate.
+During bounded output polling, the identity helper receives only the remaining
+outer deadline after reserving time to terminate an observed helper process.
 
 Sandbox create access is valid only when the provider returns both a nonblank
 process credential and a nonblank private-traffic credential. An accepted

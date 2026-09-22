@@ -134,6 +134,38 @@ async fn live_terminal_rejects_a_present_unknown_identity_record() {
 }
 
 #[tokio::test]
+async fn provider_absence_during_identity_read_does_not_enable_legacy_fallback() {
+    let terminal_id = TerminalId::new();
+    let provider_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
+    let control = Unimock::new(
+        E2bControlApiMock::connect_sandbox
+            .next_call(matching!("sandbox"))
+            .returns(Ok(access())),
+    );
+    let processes = Unimock::new((
+        ProcessTransportMock::list
+            .next_call(matching!(_))
+            .returns(Ok(vec![ProcessInfo {
+                pid: 41,
+                tag: Some(format!("sandbox-terminal-{terminal_id}")),
+            }])),
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::Terminal,
+            })),
+    ));
+    let backend =
+        E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
+
+    assert_not_found(
+        backend
+            .inspect_terminal(ProviderRef::new("sandbox"), provider_ref)
+            .await,
+    );
+}
+
+#[tokio::test]
 async fn terminal_mutations_use_the_unique_tag_as_the_atomic_selector() {
     let terminal_id = TerminalId::new();
     let terminal_ref = ProviderRef::new(format!("e2b-pty-v1:41:{terminal_id}"));
