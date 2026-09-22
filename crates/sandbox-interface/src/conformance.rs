@@ -2,18 +2,21 @@
 
 use std::time::Duration;
 
+use futures_util::StreamExt;
 use uuid::Uuid;
 
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInputRequest,
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
-    BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
-    BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend,
-    SandboxConsumer, SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    BackendReadFileRequest, BackendRunProcessRequest, BackendStreamProcessRequest,
+    BackendTerminalCreateRequest, BackendWriteFileRequest, Error, OperationId, ProcessStreamEvent,
+    ProcessStreamOutcome, ProviderRef, ResourceOwner, Result, SandboxBackend, SandboxConsumer,
+    SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
 const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2";
+const STREAM_PROCESS_SCRIPT: &str = "printf '%s' 'stream-stdout'; printf '%s' 'stream-stderr' >&2";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
@@ -117,6 +120,7 @@ async fn exercise_backend_with_resources(
             "backend process run changed bounded split output",
         ));
     }
+    exercise_process_stream(backend, source.provider_ref.clone()).await?;
 
     let first = resources
         .create_sandbox(sandbox_request(
@@ -185,6 +189,61 @@ async fn exercise_backend_with_resources(
         .await?;
 
     crate::conformance_image::exercise(backend, profile, workspace_id).await
+}
+
+async fn exercise_process_stream(
+    backend: &dyn SandboxBackend,
+    sandbox_provider_ref: ProviderRef,
+) -> Result<()> {
+    let mut stream = backend
+        .stream_process(BackendStreamProcessRequest {
+            sandbox_provider_ref,
+            command: "/bin/sh".to_owned(),
+            args: vec!["-c".to_owned(), STREAM_PROCESS_SCRIPT.to_owned()],
+            stdout_limit: 4096,
+            stderr_limit: 1024,
+            deadline: Duration::from_secs(60),
+            idle_timeout: Duration::from_secs(10),
+        })
+        .await?;
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let mut started = false;
+    let mut exited = false;
+    let mut completed = false;
+    while let Some(event) = stream.next().await {
+        if completed {
+            return Err(Error::internal_message(
+                "backend process stream emitted an event after its outcome",
+            ));
+        }
+        match event {
+            ProcessStreamEvent::Started { pid } if !started && pid != 0 => started = true,
+            ProcessStreamEvent::Stdout(bytes) if started && !exited => {
+                stdout.extend_from_slice(&bytes);
+            }
+            ProcessStreamEvent::Stderr(bytes) if started && !exited => {
+                stderr.extend_from_slice(&bytes);
+            }
+            ProcessStreamEvent::Exited { exit_code } if started && !exited && exit_code == 0 => {
+                exited = true;
+            }
+            ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed) if exited => {
+                completed = true;
+            }
+            _ => {
+                return Err(Error::internal_message(
+                    "backend process stream changed event ordering or outcome",
+                ));
+            }
+        }
+    }
+    if !completed || stdout != b"stream-stdout" || stderr != b"stream-stderr" {
+        return Err(Error::internal_message(
+            "backend process stream changed split output",
+        ));
+    }
+    Ok(())
 }
 
 fn sandbox_request(

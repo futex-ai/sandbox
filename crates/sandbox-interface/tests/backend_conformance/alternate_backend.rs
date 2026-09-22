@@ -12,10 +12,10 @@ use sandbox_interface::{
     BackendPreparedImage, BackendReadFileRequest, BackendReadOnlyExecRequest,
     BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
-    BackendTerminal, BackendTerminalCreateRequest, BackendTerminalOutput, BackendWriteFileRequest,
-    OperationId, PortIngress, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend,
-    SandboxProcessOutput, SandboxState, ScreenStackCapabilities, ScreenStackOutcome,
-    ScreenViewportSize, SnapshotState, TerminalState,
+    BackendStreamProcessRequest, BackendTerminal, BackendTerminalCreateRequest,
+    BackendTerminalOutput, BackendWriteFileRequest, OperationId, PortIngress, ProcessEventStream,
+    ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend, SandboxProcessOutput, SandboxState,
+    ScreenStackCapabilities, ScreenStackOutcome, ScreenViewportSize, SnapshotState, TerminalState,
 };
 
 use super::{
@@ -206,6 +206,13 @@ impl SandboxBackend for AlternateBackend {
 
     async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
         alternate_process::run(request)
+    }
+
+    async fn stream_process(
+        &self,
+        request: BackendStreamProcessRequest,
+    ) -> Result<ProcessEventStream> {
+        alternate_process::stream(request)
     }
 
     async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent> {

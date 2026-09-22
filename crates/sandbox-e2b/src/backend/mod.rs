@@ -8,6 +8,7 @@ mod image_realization;
 mod mapping;
 mod port_ingress;
 mod process_run;
+mod process_stream;
 mod read_only_exec;
 mod sandboxes;
 mod screen_resize;
@@ -31,12 +32,20 @@ mod sandbox_create_tests;
 mod backend_conformance_tests;
 
 #[cfg(test)]
+#[path = "_tests_/backend_conformance_support.rs"]
+mod backend_conformance_support;
+
+#[cfg(test)]
 #[path = "_tests_/port_ingress_tests.rs"]
 mod port_ingress_tests;
 
 #[cfg(test)]
 #[path = "_tests_/process_run_tests.rs"]
 mod process_run_tests;
+
+#[cfg(test)]
+#[path = "_tests_/process_stream_tests.rs"]
+mod process_stream_tests;
 
 #[cfg(test)]
 #[path = "_tests_/read_only_exec_tests.rs"]

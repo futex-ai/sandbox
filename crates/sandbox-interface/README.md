@@ -30,14 +30,16 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
-Direct process and stateless read-only execution requests require a non-empty
-command, at most 128 KiB across the command and arguments, and a deadline no
-longer than 300 seconds. Each direct-process stream and the combined stateless
-output are capped at 64 MiB. A terminal output read may wait at most 30
-seconds. Terminal create and recovery requests cap the durable transcript at
-the same 256 MiB ceiling as readable regular files. Backends reject every
-command, output, duration, and transcript bound before acquiring provider
-access.
+Direct, streaming, and stateless read-only execution requests require a
+non-empty command and at most 128 KiB across the command and arguments.
+Collected direct execution and stateless execution retain their 300-second
+deadline; only `stream_process` permits up to 3,600 seconds, with a required
+nonzero idle timeout no greater than its deadline. Each direct stdout or stderr
+limit and the combined stateless output limit are capped at 64 MiB. A terminal
+output read may wait at most 30 seconds. Terminal create and recovery requests
+cap the durable transcript at the same 256 MiB ceiling as readable regular
+files. Backends reject every command, output, duration, and transcript bound
+before acquiring provider access.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total, and handled diagnostics redact known sensitive values even when one is
@@ -46,12 +48,16 @@ frame bounds before retaining provider chunks and must decode the exact typed
 empty mutation acknowledgment before reporting delivery success. After a
 process end is observed, an adapter must also validate the provider stream's
 final status instead of accepting an absent or unsuccessful completion marker.
+Incremental process streams emit typed start, stdout, stderr, exit, and final
+outcome events. Only stdout or stderr data resets the idle timer. Every owned
+stream ends with one outcome, and unfinished processes are killed best-effort
+after overflow, timeout, transport failure, or consumer drop.
 
 The public `conformance` module exercises creation, recovery, image
-preparation, split-stream execution, private ingress, and terminal identity.
-Its process probe invokes `/bin/sh` with a self-contained script that emits
-exact stdout and stderr bytes, so a normal backend image needs no test-only
-executable.
+preparation, collected and streaming split-output execution, private ingress,
+and terminal identity. Its process probes invoke `/bin/sh` with self-contained
+scripts that emit exact stdout and stderr bytes, so a normal backend image needs
+no test-only executable.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so

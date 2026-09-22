@@ -8,12 +8,12 @@ use crate::{
     AdoptSandboxRequest, CloseTerminalRequest, CreateSandboxRequest, CreateSnapshotRequest,
     CreateTerminalRequest, DeleteSnapshotRequest, DestroySandboxRequest, EnsureScreenStackRequest,
     ExecuteTerminalRequest, FileContent, ListSandboxesRequest, ListSnapshotsRequest,
-    ListTerminalsRequest, PortIngress, PortIngressRequest, ReadFileRequest,
+    ListTerminalsRequest, PortIngress, PortIngressRequest, ProcessEventStream, ReadFileRequest,
     ReadTerminalActionRequest, ReadTerminalRequest, RealizeImageRequest, RealizedImage,
     ResizeScreenStackRequest, Result, RunProcessRequest, Sandbox, SandboxLifecycleRequest,
     SandboxProcessOutput, SandboxSnapshot, SandboxTerminalReplacementRequest, ScreenStackOutcome,
-    ScreenViewportSize, Terminal, TerminalActionResult, TerminalStatus, TerminalStatusRequest,
-    TranscriptWindow, WriteFileRequest, WriteTerminalRequest,
+    ScreenViewportSize, StreamProcessRequest, Terminal, TerminalActionResult, TerminalStatus,
+    TerminalStatusRequest, TranscriptWindow, WriteFileRequest, WriteTerminalRequest,
 };
 
 /// Lifecycle boundary consumed by trusted environment and fn-run services.
@@ -50,6 +50,8 @@ pub trait SandboxService: Send + Sync {
     async fn delete_snapshot(&self, request: DeleteSnapshotRequest) -> Result<SandboxSnapshot>;
     /// Runs one bounded argv-direct non-interactive process in an owned sandbox.
     async fn run_process(&self, request: RunProcessRequest) -> Result<SandboxProcessOutput>;
+    /// Streams one bounded argv-direct non-interactive process in an owned sandbox.
+    async fn stream_process(&self, request: StreamProcessRequest) -> Result<ProcessEventStream>;
     /// Reads a bounded regular file below a trusted root in an owned sandbox.
     async fn read_file(&self, request: ReadFileRequest) -> Result<FileContent>;
     /// Replaces a bounded regular file below a trusted root in an owned sandbox.

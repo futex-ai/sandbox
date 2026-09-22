@@ -24,6 +24,6 @@ pub use self::process::{
     ProcessConnection, ProcessFileChunk, ProcessFileValidation, ProcessInfo, ProcessOutputCapture,
     ProcessPtyRequest, ProcessRegularFileRequest, ProcessRegularFileWriteRequest, ProcessRunOutput,
     ProcessSelector, ProcessSplitOutput, ProcessTransport, ProcessTransportMock,
-    SplitProcessCommand,
+    SplitProcessCommand, StreamProcessCommand,
 };
 pub use self::runtime_conventions::E2bRuntimeConventions;

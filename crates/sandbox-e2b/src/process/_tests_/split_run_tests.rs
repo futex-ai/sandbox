@@ -29,6 +29,16 @@ impl ConnectHttpTransport for NeverConnectingTransport {
         std::future::pending().await
     }
 
+    async fn stream_with_timeout(
+        &self,
+        _connection: ProcessConnection,
+        _method: String,
+        _request_json: Vec<u8>,
+        _request_timeout: Duration,
+    ) -> Result<ByteStream> {
+        std::future::pending().await
+    }
+
     async fn unary(
         &self,
         _connection: ProcessConnection,

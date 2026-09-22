@@ -12,9 +12,10 @@ use crate::{
     BackendEnsureScreenStackRequest, BackendFileContent, BackendPortIngressRequest,
     BackendPrepareImageRequest, BackendPreparedImage, BackendReadFileRequest,
     BackendReadOnlyExecRequest, BackendResizeScreenStackRequest, BackendRunProcessRequest,
-    BackendWriteFileRequest, OperationId, PortIngress, ProviderRef, ReadOnlyExecOutput,
-    ResourceOwner, Result, SandboxConsumer, SandboxId, SandboxNetworkPolicy, SandboxProcessOutput,
-    SandboxState, ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
+    BackendStreamProcessRequest, BackendWriteFileRequest, OperationId, PortIngress,
+    ProcessEventStream, ProviderRef, ReadOnlyExecOutput, ResourceOwner, Result, SandboxConsumer,
+    SandboxId, SandboxNetworkPolicy, SandboxProcessOutput, SandboxState, ScreenStackOutcome,
+    ScreenViewportSize, SnapshotId, SnapshotState,
 };
 
 /// Provider request to create a sandbox.
@@ -214,6 +215,14 @@ pub trait SandboxBackend: Send + Sync {
     /// A streaming provider may report completion only after both the process
     /// end event and its final stream status have been validated.
     async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput>;
+    /// Streams one bounded argv-direct non-interactive process.
+    ///
+    /// A successfully returned stream ends with exactly one terminal outcome.
+    /// Provider completion requires both a process end and final success status.
+    async fn stream_process(
+        &self,
+        request: BackendStreamProcessRequest,
+    ) -> Result<ProcessEventStream>;
     /// Reads a bounded regular file without exposing provider credentials.
     async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent>;
     /// Runs one bounded non-interactive read-only command without allocating a

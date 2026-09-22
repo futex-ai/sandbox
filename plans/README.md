@@ -7,6 +7,7 @@ milestones are finished.
 ## Active
 
 - [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)
+- [Stream process runs](stream-process-runs.md)
 
 ## Completed
 

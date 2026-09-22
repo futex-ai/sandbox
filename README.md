@@ -31,10 +31,10 @@ adapter proves exactly one completed snapshot. Both snapshot probes in the
 shared conformance harness accept immediate or asynchronous completion. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
-runs its split-output check through a self-contained `/bin/sh` command available
-in normal backend images. Cleanup always attempts every tracked terminal,
-snapshot, and sandbox; an operation error remains the reported error even if a
-cleanup step also fails. Trusted adapter helpers isolate their interpreter
+runs its collected and streaming split-output checks through self-contained
+`/bin/sh` commands available in normal backend images. Cleanup always attempts
+every tracked terminal, snapshot, and sandbox; an operation error remains the
+reported error even if a cleanup step also fails. Trusted adapter helpers isolate their interpreter
 startup from sandbox-owned modules and Python environment customization.
 Authenticated control routes reject dot-segment provider identifiers before
 dispatch, and concrete control clients validate their HTTPS origin and
@@ -47,14 +47,20 @@ retryable. Snapshot operations also require one nonempty source and correlation
 value. Sandbox create and connect responses require nonblank process and
 private-traffic credentials. Provider mutations accept only their exact
 acknowledgment, including an exact versioned screen-resize object; process
-start and inventory responses must contain a nonzero PID. Connect streaming
-collectors keep reading after a process end until they validate the required
-success trailer; a missing, malformed, or unsuccessful trailer cannot look like
-ordinary completion. Envd and private-port hosts always use the configured
-routing domain, never a domain supplied by an injected control response.
+start and inventory responses must contain a nonzero PID. Connect collectors
+and incremental process streams keep reading after a process end until they
+validate the required success trailer; a missing, malformed, or unsuccessful
+trailer cannot look like ordinary completion. Envd and private-port hosts always
+use the configured routing domain, never a domain supplied by an injected
+control response.
 Missing read credentials stay retryable.
-Caller-controlled process durations are capped before provider access,
-including 30-second terminal output waits and 300-second process operations.
+Caller-controlled process durations are capped before provider access.
+Collected process, read-only, file, and terminal-helper operations retain their
+300-second ceiling, while incremental direct process streams accept an absolute
+deadline up to one hour plus a nonzero output-idle timeout no greater than that
+deadline. Each owned stream ends in one typed outcome, and unfinished processes
+are killed best-effort after timeout, overflow, failure, or consumer drop.
+Terminal output waits remain capped at 30 seconds.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined

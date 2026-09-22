@@ -94,21 +94,28 @@ to the sandbox, which keeps every completed transcript readable. A trusted
 supervisor clips recorder chunks to the remaining limit, keeps draining
 overflow so the interactive terminal stays usable, and waits for the recorder
 before exiting.
-One-shot processes are killed when collection times out or fails after
-observing their PID. HTTP bodies, process output, and terminal output are
-bounded while streaming. Connect frame headers are validated before the rest
+One-shot processes are killed when collection or streaming terminates without
+an observed exit after learning their PID, including consumer drop. HTTP
+bodies, process output, and terminal output are bounded while streaming.
+Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors
 keep reading after a process end and decode the required Connect trailer
 through one path: a missing trailer or malformed JSON fails closed, an error
 object is retryable provider unavailability, and a present trailer with a
-missing or null error field is a clean close. Direct process and stateless read-only requests are
-validated before the adapter acquires sandbox access: commands must be
-non-empty, combined argv is capped at 128 KiB, and each direct stream or
-combined stateless output cap is at most 64 MiB. Caller-controlled process,
-read-only execution, and regular-file durations cannot exceed 300 seconds.
-Terminal output waits cannot exceed 30 seconds. Every bound is checked before
-provider access, and absolute Tokio deadlines use checked arithmetic. Failed
+missing or null error field is a clean close. Incremental execution emits
+ordered start, stdout, stderr, exit, and final outcome events; a successful
+trailer is required for `Completed`. Only stdout or stderr bytes reset its idle
+timer. Direct process, streaming, and stateless read-only requests are validated
+before the adapter acquires sandbox access: commands must be non-empty, combined
+argv is capped at 128 KiB, and each direct stream or combined stateless output
+cap is at most 64 MiB. Existing process, read-only, and regular-file durations
+retain their 300-second ceiling. Only incremental streams accept up to 3,600
+seconds, with a nonzero idle timeout no greater than the deadline. Their envd
+HTTP request timeout is that deadline plus a 10-second transport allowance;
+existing paths retain the fixed 310-second client timeout. Terminal output waits
+cannot exceed 30 seconds. Every bound is checked before provider access, and
+absolute Tokio deadlines use checked arithmetic. Failed
 image-command diagnostics redact the call-local
 opaque sandbox ID and envd access token before returning bounded output,
 including a sensitive suffix split by the streaming tail boundary. Malformed
@@ -235,6 +242,7 @@ deletable snapshot handle.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/control/` — E2B control API boundary.
 - `src/process/` — envd Connect framing and operations.
+- `src/process/stream_run.rs` — incremental events, timers, and cleanup.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.
 

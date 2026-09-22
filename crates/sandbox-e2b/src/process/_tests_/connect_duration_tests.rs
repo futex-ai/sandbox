@@ -7,7 +7,8 @@ use unimock::Unimock;
 
 use crate::{
     ProcessCommand, ProcessConnection, ProcessOutputCapture, ProcessRegularFileRequest,
-    ProcessTransport, SplitProcessCommand, process::http::ConnectHttpTransport,
+    ProcessTransport, SplitProcessCommand, StreamProcessCommand,
+    process::http::ConnectHttpTransport,
 };
 
 use super::ConnectProcessTransport;
@@ -60,6 +61,23 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
         )
         .await
         .expect_err("excessive regular-file timeout must fail");
+    let stream_result = transport
+        .stream_process(
+            connection(),
+            StreamProcessCommand {
+                command: "/bin/true".to_owned(),
+                args: Vec::new(),
+                stdout_limit: 0,
+                stderr_limit: 0,
+                deadline: Duration::MAX,
+                idle_timeout: Duration::from_secs(1),
+            },
+        )
+        .await;
+    let stream_error = match stream_result {
+        Err(error) => error,
+        Ok(_) => panic!("excessive stream deadline must fail"),
+    };
 
     for error in [connect_error, run_error, split_error, file_error] {
         assert!(matches!(
@@ -71,6 +89,36 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
             }
         ));
     }
+    assert!(matches!(
+        stream_error,
+        DomainError::InvalidSeconds {
+            field: "deadline",
+            minimum: 0,
+            maximum: 3600,
+        }
+    ));
+}
+
+#[tokio::test]
+async fn process_transport_rejects_invalid_stream_idle_timeout() {
+    let result = process_transport()
+        .stream_process(
+            connection(),
+            StreamProcessCommand {
+                command: "/bin/true".to_owned(),
+                args: Vec::new(),
+                stdout_limit: 0,
+                stderr_limit: 0,
+                deadline: Duration::from_secs(30),
+                idle_timeout: Duration::ZERO,
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(DomainError::InvalidProcessIdleTimeout)
+    ));
 }
 
 fn process_transport() -> ConnectProcessTransport {

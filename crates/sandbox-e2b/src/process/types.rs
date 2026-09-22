@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sandbox_interface::Result;
+use sandbox_interface::{ProcessEventStream, Result};
 
 pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
@@ -68,6 +68,23 @@ pub struct SplitProcessCommand {
     pub stderr_limit: usize,
     /// Execution deadline for the whole run, capped at 300 seconds.
     pub deadline: Duration,
+}
+
+/// Non-interactive process command whose split output is emitted as events.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamProcessCommand {
+    /// Executable path or `PATH`-resolved command name.
+    pub command: String,
+    /// Exact argument vector.
+    pub args: Vec<String>,
+    /// Maximum emitted stdout bytes before the stream terminates.
+    pub stdout_limit: usize,
+    /// Maximum emitted stderr bytes before the stream terminates.
+    pub stderr_limit: usize,
+    /// Absolute execution budget, capped at 3,600 seconds.
+    pub deadline: Duration,
+    /// Maximum duration without stdout or stderr data.
+    pub idle_timeout: Duration,
 }
 
 /// Provider process identity and optional consumer tag.
@@ -194,6 +211,12 @@ pub trait ProcessTransport: Send + Sync {
         connection: ProcessConnection,
         command: SplitProcessCommand,
     ) -> Result<ProcessSplitOutput>;
+    /// Streams one bounded non-interactive process with split output events.
+    async fn stream_process(
+        &self,
+        connection: ProcessConnection,
+        command: StreamProcessCommand,
+    ) -> Result<ProcessEventStream>;
     /// Lists provider processes and their opaque tags.
     async fn list(&self, connection: ProcessConnection) -> Result<Vec<ProcessInfo>>;
     /// Sends exact PTY bytes once.

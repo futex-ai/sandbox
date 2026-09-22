@@ -26,7 +26,8 @@ Every `SandboxBackend` implementation must support:
 - snapshot inventory, creation, ambiguous-delivery recovery, inspection, and
   deletion;
 - bounded regular-file reads and replacement writes below a trusted root;
-- bounded direct-argv process execution with separate stdout and stderr;
+- bounded direct-argv process execution with collected and incremental stdout
+  and stderr variants;
 - terminal create/recovery, exact identity inspection, bounded transcript
   reads, input, close, and restored-terminal cleanup;
 - call-local HTTP port ingress with a redacted optional credential;
@@ -131,18 +132,44 @@ sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
 remains delivery-ambiguous, while an invalid inventory row is provider
 unavailability. Snapshot inspection must reject a returned provider ID that
 differs from the requested ID.
+
+`SandboxBackend::stream_process` and the matching trusted-service method return
+a boxed stream after request validation and sandbox access succeed. The service
+request identifies an owned sandbox; the backend request carries its provider
+reference. Both also carry only direct argv, separate stdout and stderr limits,
+an absolute deadline, and an idle timeout. Once a provider start is decoded,
+events are ordered as `Started { pid }`, zero or more `Stdout(bytes)` and
+`Stderr(bytes)` values, `Exited { exit_code }`, and one final `Outcome`; a
+transport or timer failure before start may emit only the outcome.
+`Exited` is not terminal: `Completed` is valid only after the provider's success
+trailer is decoded. Missing or failed trailers, invalid ordering, malformed
+frames, and provider transport errors end with `TransportFailure`.
+`StdoutOverflow` and `StderrOverflow` are distinct, and only the bounded prefix
+may be emitted before either. An absolute deadline produces `DeadlineExpired`;
+an idle timer produces `IdleTimeout` and resets only when stdout or stderr data
+arrives, not for start, keep-alive, process-end, or transport frames. Every
+stream consumed to its end contains exactly one `Outcome` as its last item.
+
+If streaming ends before a process end is observed, the backend makes a bounded
+best-effort kill after it has learned the PID. This includes overflow, idle or
+absolute timeout, transport failure, and a consumer dropping the returned
+stream. A consumer drop cannot receive an outcome because it no longer owns the
+stream, but it still triggers provider cleanup.
 Port zero, empty required
 text, oversized values, unknown
 profiles, and unsupported network policies fail before provider dispatch. A
-direct or stateless process command cannot be empty, and its command and
-arguments total at most 128 KiB. Each direct stream or combined stateless
-output limit is at most 64 MiB. Every direct, stateless read-only, or
-process-transport duration is at most 300 seconds. A terminal output long poll
-is at most 30 seconds. A terminal create or recovery request cannot set its
-provider transcript limit above the shared 256 MiB regular-file ceiling. These
-bounds must be checked before acquiring provider sandbox access, and absolute
-deadlines must use checked arithmetic so no caller duration can panic. In
-particular, an
+direct, streaming, or stateless process command cannot be empty, and its
+command and arguments total at most 128 KiB. Each direct or streaming stdout
+and stderr limit, and each combined stateless output limit, is at most 64 MiB.
+Collected direct execution, stateless read-only execution, and existing process
+transport helpers retain their 300-second ceiling. Only incremental
+`stream_process` accepts an absolute deadline up to 3,600 seconds; its required
+idle timeout must be nonzero and no greater than that deadline. A terminal
+output long poll is at most 30 seconds. A terminal create or recovery request
+cannot set its provider transcript limit above the shared 256 MiB regular-file
+ceiling. These bounds must be checked before acquiring provider sandbox access,
+and absolute deadlines must use checked arithmetic so no caller duration can
+panic. In particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
 Helper processes may report success only after a normal exit; an exit-code
@@ -220,10 +247,12 @@ be redacted. Unknown profile errors do not echo an untrusted profile name.
 ## Conformance
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
-shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-The process probe uses `/bin/sh` plus a self-contained script that emits exact
-stdout and stderr bytes; conforming images therefore need a standard shell but
-no harness-only executable.
+shared lifecycle, recovery, collected and streaming process execution, ingress,
+image, and terminal guarantees. Both process probes use `/bin/sh` plus
+self-contained scripts that emit exact stdout and stderr bytes; conforming
+images therefore need a standard shell but no harness-only executable. The
+streaming probe also requires a nonzero start PID, output before exit, exit
+before the completed outcome, and no event after that outcome.
 It retains the exact request for every sandbox and snapshot create before
 dispatch. After every create result, including synchronous success, it proves
 the correlated provider identity through recover-only polling; it never

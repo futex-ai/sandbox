@@ -18,7 +18,7 @@ use crate::{
     ProcessSelector, ProcessSplitOutput, ProcessTransportMock, SandboxMetadata,
 };
 
-use super::configured::E2bSandboxBackend;
+use super::{backend_conformance_support, configured::E2bSandboxBackend};
 
 #[tokio::test]
 async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
@@ -247,6 +247,9 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
                     ..ProcessSplitOutput::default()
                 })
             }),
+        ProcessTransportMock::stream_process
+            .next_call(matching!(_, _))
+            .answers(&|_, _, command| backend_conformance_support::stream(command)),
         ProcessTransportMock::kill
             .each_call(matching!(_, _))
             .answers(&|_, _, selector| {

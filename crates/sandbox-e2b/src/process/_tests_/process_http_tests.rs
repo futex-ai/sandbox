@@ -1,8 +1,13 @@
-//! Exhaustive status mapping tests for envd Connect requests.
+//! Exhaustive request construction and status mapping tests for envd Connect.
 
-use crate::{E2bAdapterError, ProcessConnection};
+use std::time::Duration;
 
-use super::{ReqwestConnectHttpTransport, map_status, server_streaming_request_body};
+use crate::{
+    E2bAdapterError, ProcessConnection,
+    process::http_stream::{request as streaming_request, server_streaming_request_body},
+};
+
+use super::{ReqwestConnectHttpTransport, map_status};
 
 #[test]
 fn server_streaming_requests_frame_one_json_message() {
@@ -16,6 +21,30 @@ fn server_streaming_requests_frame_one_json_message() {
         request.len()
     );
     assert_eq!(&body[5..], request);
+}
+
+#[test]
+fn streaming_request_uses_the_caller_owned_transport_timeout() {
+    let transport = ReqwestConnectHttpTransport::new().expect("transport");
+    let connection = ProcessConnection::new(
+        "sandbox-id".to_owned(),
+        "e2b.app".to_owned(),
+        "access-token".to_owned(),
+    );
+    let timeout = Duration::from_secs(3610);
+
+    let request = streaming_request(
+        &transport,
+        &connection,
+        "Start",
+        br#"{"process":{"cmd":"/bin/true"}}"#,
+        Some(timeout),
+    )
+    .expect("streaming request")
+    .build()
+    .expect("built request");
+
+    assert_eq!(request.timeout(), Some(&timeout));
 }
 
 #[test]

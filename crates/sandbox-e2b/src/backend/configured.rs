@@ -10,8 +10,9 @@ use sandbox_interface::{
     BackendPreparedImage, BackendReadFileRequest, BackendReadOnlyExecRequest,
     BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
-    BackendTerminal, BackendTerminalCreateRequest, BackendTerminalOutput, BackendWriteFileRequest,
-    DynSandboxBackend, PortIngress, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend,
+    BackendStreamProcessRequest, BackendTerminal, BackendTerminalCreateRequest,
+    BackendTerminalOutput, BackendWriteFileRequest, DynSandboxBackend, PortIngress,
+    ProcessEventStream, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend,
     SandboxProcessOutput, ScreenStackOutcome, ScreenViewportSize,
 };
 
@@ -22,8 +23,8 @@ use crate::{
 };
 
 use super::{
-    files, image_realization, mapping, port_ingress, process_run, read_only_exec, sandboxes,
-    screen_resize, screen_stack, snapshots, terminal_output, terminals,
+    files, image_realization, mapping, port_ingress, process_run, process_stream, read_only_exec,
+    sandboxes, screen_resize, screen_stack, snapshots, terminal_output, terminals,
 };
 
 /// E2B implementation of the consumer's mandatory sandbox backend contract.
@@ -175,6 +176,13 @@ impl SandboxBackend for E2bSandboxBackend {
 
     async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
         process_run::run(self, request).await
+    }
+
+    async fn stream_process(
+        &self,
+        request: BackendStreamProcessRequest,
+    ) -> Result<ProcessEventStream> {
+        process_stream::stream(self, request).await
     }
 
     async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent> {

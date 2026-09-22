@@ -57,8 +57,10 @@ pub use self::port_ingress::{
     BackendPortIngressRequest, PortIngress, PortIngressCredential, PortIngressRequest,
 };
 pub use self::process_run::{
-    BackendRunProcessRequest, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_DEADLINE,
-    PROCESS_RUN_MAX_STREAM_BYTES, RunProcessRequest, SandboxProcessOutput,
+    BackendRunProcessRequest, BackendStreamProcessRequest, PROCESS_RUN_MAX_ARGV_BYTES,
+    PROCESS_RUN_MAX_DEADLINE, PROCESS_RUN_MAX_STREAM_BYTES, PROCESS_STREAM_MAX_DEADLINE,
+    ProcessEventStream, ProcessStreamEvent, ProcessStreamOutcome, RunProcessRequest,
+    SandboxProcessOutput, StreamProcessRequest,
 };
 pub use self::provider_ref::ProviderRef;
 pub use self::read_only::{

@@ -12,6 +12,8 @@ path = "tests/backend_conformance/mod.rs"
 [dependencies]
 async-trait = "0.1.89"
 chrono = { version = "0.4.45", features = ["serde"] }
+futures-core = "0.3.34"
+futures-util = "0.3.34"
 internal-error.workspace = true
 serde = { version = "1.0.228", features = ["derive"] }
 strip-ansi-escapes = "0.2.1"
