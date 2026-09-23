@@ -2,7 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use futures_util::StreamExt;
+use futures_util::{StreamExt, stream};
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
 use tokio::sync::Notify;
 use unimock::{MockFn, Unimock, matching};
@@ -66,7 +66,9 @@ async fn buffered_output_does_not_extend_idle_timeout_when_the_consumer_is_slow(
         stream_call
             .next_call(matching!(_, "Start", _, _))
             .answers_arc(Arc::new(move |_, _, _, _, _| {
-                Ok(byte_stream(vec![batch.clone()]))
+                Ok(Box::pin(
+                    byte_stream(vec![batch.clone()]).chain(stream::pending()),
+                ))
             })),
         unary_call
             .next_call(matching!(_, "SendSignal", _, false))
@@ -204,7 +206,9 @@ async fn idle_expiry_while_delivering_exit_is_a_transport_failure() {
         stream_call
             .next_call(matching!(_, "Start", _, _))
             .answers_arc(Arc::new(move |_, _, _, _, _| {
-                Ok(byte_stream(events.clone()))
+                Ok(Box::pin(
+                    byte_stream(events.clone()).chain(stream::pending()),
+                ))
             })),
     ));
     let stream = transport

@@ -7,7 +7,7 @@ use sandbox_interface::{
 use crate::{
     control::{ControlSandboxAccess, ControlSandboxState},
     error::Error,
-    process::{ProcessConnection, ProcessInfo},
+    process::ProcessConnection,
 };
 
 use super::configured::E2bSandboxBackend;

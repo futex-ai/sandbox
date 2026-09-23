@@ -234,8 +234,9 @@ are distinct and emit only the bounded prefix.
 The absolute budget begins before sandbox connection. The idle timer starts
 before the process transport opens and resets only on fresh stdout or stderr
 arrivals, never start, keep-alive, exit, or delayed consumer delivery. Coalesced
-HTTP fragments use their receipt time. Bounded staging reports
-`ConsumerBackpressure` when full, so slow consumers cannot postpone timeout or
+HTTP fragments use their receipt time. The provider reader stages at most 32
+decoded events separately from the 16-event consumer queue; when staging is
+full it reports `ConsumerBackpressure`, so slow consumers cannot postpone timeout or
 cleanup. Overflow, backpressure, timeout, transport failure, or consumer drop
 triggers best-effort kill when an unfinished process has a known PID. Queued
 data and any separately retained final overflow prefix precede the terminal

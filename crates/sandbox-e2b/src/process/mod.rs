@@ -20,6 +20,7 @@ mod regular_file_write;
 mod selector;
 mod split_run;
 mod status;
+mod stream_reader;
 mod stream_run;
 mod stream_state;
 mod types;

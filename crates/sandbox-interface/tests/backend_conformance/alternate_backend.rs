@@ -13,15 +13,15 @@ use sandbox_interface::{
     BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
     BackendStreamProcessRequest, BackendTerminal, BackendTerminalCreateRequest,
-    BackendTerminalOutput, BackendWriteFileRequest, OperationId, PortIngress, ProcessEventStream,
-    Error, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend, SandboxNetworkPolicy,
-    SandboxProcessOutput, SandboxState, ScreenStackCapabilities, ScreenStackOutcome,
-    ScreenViewportSize, SnapshotState, TerminalState,
+    BackendTerminalOutput, BackendWriteFileRequest, Error, OperationId, PortIngress,
+    ProcessEventStream, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend,
+    SandboxNetworkPolicy, SandboxProcessOutput, SandboxState, ScreenStackCapabilities,
+    ScreenStackOutcome, ScreenViewportSize, SnapshotState, TerminalState,
 };
 
 use super::{
     alternate_backend_faults::AlternateBackendFaults, alternate_file, alternate_image_realization,
-    alternate_process,
+    alternate_process, alternate_terminal,
 };
 
 #[derive(Default)]
@@ -244,11 +244,8 @@ impl SandboxBackend for AlternateBackend {
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<BackendTerminal> {
-        let terminal = BackendTerminal {
-            provider_ref: ProviderRef::new(request.terminal_id.to_string()),
-            provider_log_path: "/tmp/alternate.log".to_owned(),
-            state: TerminalState::Ready,
-        };
+        let terminal =
+            alternate_terminal::terminal(ProviderRef::new(request.terminal_id.to_string()));
         self.faults.record_terminal_create(&terminal.provider_ref);
         Ok(terminal)
     }
@@ -257,11 +254,9 @@ impl SandboxBackend for AlternateBackend {
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<Option<BackendTerminal>> {
-        Ok(Some(BackendTerminal {
-            provider_ref: ProviderRef::new(request.terminal_id.to_string()),
-            provider_log_path: "/tmp/alternate.log".to_owned(),
-            state: TerminalState::Ready,
-        }))
+        Ok(Some(alternate_terminal::terminal(ProviderRef::new(
+            request.terminal_id.to_string(),
+        ))))
     }
 
     async fn inspect_terminal(
@@ -269,11 +264,7 @@ impl SandboxBackend for AlternateBackend {
         _sandbox_provider_ref: ProviderRef,
         terminal_provider_ref: ProviderRef,
     ) -> Result<BackendTerminal> {
-        Ok(BackendTerminal {
-            provider_ref: terminal_provider_ref,
-            provider_log_path: "/tmp/alternate.log".to_owned(),
-            state: TerminalState::Ready,
-        })
+        Ok(alternate_terminal::terminal(terminal_provider_ref))
     }
 
     async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput> {

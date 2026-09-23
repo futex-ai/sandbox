@@ -88,7 +88,7 @@ fn backend(
                     sandbox_id: "sandbox".to_owned(),
                     domain: "e2b.app".to_owned(),
                     envd_access_token: "token".to_owned(),
-                    traffic_access_token: "traffic".to_owned(),
+                    traffic_access_token: Some("traffic".to_owned()),
                 })
             })),
     );

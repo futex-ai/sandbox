@@ -1,8 +1,8 @@
 //! Incremental split-stream process execution.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
-use futures_util::{StreamExt, stream};
+use futures_util::stream;
 use sandbox_interface::{
     Error as DomainError, ProcessEventStream, ProcessStreamEvent, ProcessStreamOutcome,
     Result as DomainResult,
@@ -14,8 +14,9 @@ use tokio::sync::{
 
 use super::{
     connect::ConnectProcessTransport,
-    framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event},
+    framing::ProcessEvent,
     mapping::map_result,
+    stream_reader::{BufferedReader, StagedEvent},
     stream_state::{
         Completion, Delivery, EventReceiver, EventResult, StreamSettings, StreamState,
         StreamTerminal, deliver, finish_stream,
@@ -25,7 +26,6 @@ use super::{
 };
 
 const EVENT_CHANNEL_CAPACITY: usize = 16;
-const MAX_FRAME_BYTES: usize = 1024 * 1024;
 pub(super) const STREAM_TRANSPORT_ALLOWANCE: Duration = Duration::from_secs(10);
 
 impl ConnectProcessTransport {
@@ -43,7 +43,11 @@ impl ConnectProcessTransport {
             deadline,
             idle_timeout,
         } = command;
-        let request = map_result(encode(&argv_start(command, args)), false, &self.backend_id)?;
+        let request = map_result(
+            encode(&argv_start(command, args, None, BTreeMap::new())),
+            false,
+            &self.backend_id,
+        )?;
         let started_at = tokio::time::Instant::now();
         let absolute_deadline = requested_at
             .checked_add(deadline)
@@ -111,7 +115,7 @@ impl ConnectProcessTransport {
             settings.request.clone(),
             settings.request_timeout,
         );
-        let mut provider_stream = tokio::select! {
+        let provider_stream = tokio::select! {
             biased;
             _ = sender.closed() => return Completion::ConsumerDropped,
             _ = tokio::time::sleep_until(settings.absolute_deadline) => {
@@ -125,68 +129,51 @@ impl ConnectProcessTransport {
                 Err(_) => return Completion::Outcome(ProcessStreamOutcome::TransportFailure),
             },
         };
-        let mut decoder = FrameDecoder::new(MAX_FRAME_BYTES);
+        let mut reader = BufferedReader::new(
+            provider_stream,
+            settings.absolute_deadline,
+            state.idle_deadline,
+            settings.idle_timeout,
+        );
         let mut trailer_received = false;
         loop {
-            let fragment = tokio::select! {
+            let event = tokio::select! {
                 biased;
                 _ = sender.closed() => return Completion::ConsumerDropped,
                 _ = tokio::time::sleep_until(settings.absolute_deadline) => {
                     return Completion::Outcome(state.deadline_outcome());
                 }
-                _ = tokio::time::sleep_until(state.idle_deadline) => {
-                    return Completion::Outcome(state.idle_outcome());
+                _ = reader.outcome.changed(), if state.started => {
+                    let result = (*reader.outcome.borrow()).unwrap_or(ProcessStreamOutcome::TransportFailure);
+                    return Completion::Outcome(result);
                 }
-                item = provider_stream.next() => match item {
-                    Some(Ok(fragment)) => fragment,
+                item = reader.events.recv() => match item {
                     None if trailer_received => {
                         return Completion::Outcome(ProcessStreamOutcome::Completed);
                     }
-                    Some(Err(_)) | None => {
+                    None => {
                         return Completion::Outcome(ProcessStreamOutcome::TransportFailure);
                     }
+                    Some(event) => event,
                 },
             };
-            let arrived_at = tokio::time::Instant::now();
-            let decoded = decoder.push(&fragment);
-            let mut batch_outcome = None;
-            for frame in decoded.frames {
-                if frame.end_stream {
-                    if state.ended && decode_end_stream(&frame.payload).is_ok() {
-                        trailer_received = true;
-                    } else {
-                        batch_outcome = Some(ProcessStreamOutcome::TransportFailure);
-                    }
-                    break;
+            match event {
+                StagedEvent::Trailer if state.ended && !trailer_received => {
+                    trailer_received = true;
                 }
-                if state.ended {
-                    batch_outcome = Some(ProcessStreamOutcome::TransportFailure);
-                    break;
-                }
-                let event = match decode_event(&frame.payload) {
-                    Ok(event) => event,
-                    Err(_) => {
-                        batch_outcome = Some(ProcessStreamOutcome::TransportFailure);
-                        break;
-                    }
-                };
-                match self
-                    .handle_event(event, arrived_at, settings, sender, state)
-                    .await
-                {
-                    EventResult::Continue => {}
-                    EventResult::Complete(completion) => return completion,
-                    EventResult::Outcome(outcome) => {
-                        batch_outcome = Some(outcome);
-                        break;
+                StagedEvent::Process(event) if !trailer_received && !state.ended => {
+                    match self
+                        .handle_event(event, settings, sender, state, &mut reader.outcome)
+                        .await
+                    {
+                        EventResult::Continue => {}
+                        EventResult::Complete(completion) => return completion,
+                        EventResult::Outcome(outcome) => return Completion::Outcome(outcome),
                     }
                 }
-            }
-            if decoded.terminal_error.is_some() {
-                return Completion::Outcome(ProcessStreamOutcome::TransportFailure);
-            }
-            if let Some(outcome) = batch_outcome {
-                return Completion::Outcome(outcome);
+                StagedEvent::Failure | StagedEvent::Trailer | StagedEvent::Process(_) => {
+                    return Completion::Outcome(ProcessStreamOutcome::TransportFailure);
+                }
             }
         }
     }
@@ -194,10 +181,10 @@ impl ConnectProcessTransport {
     async fn handle_event(
         &self,
         event: ProcessEvent,
-        arrived_at: tokio::time::Instant,
         settings: &StreamSettings,
         sender: &Sender<ProcessStreamEvent>,
         state: &mut StreamState,
+        outcome: &mut tokio::sync::watch::Receiver<Option<ProcessStreamOutcome>>,
     ) -> EventResult {
         let (event, overflow) = match event {
             ProcessEvent::Start(pid) if !state.started => {
@@ -207,17 +194,6 @@ impl ConnectProcessTransport {
             }
             ProcessEvent::Start(_) => return EventResult::transport_failure(),
             ProcessEvent::Data { channel, bytes } if state.started => {
-                if !bytes.is_empty()
-                    && matches!(
-                        channel,
-                        ProcessDataChannel::Stdout | ProcessDataChannel::Stderr
-                    )
-                {
-                    let Some(deadline) = arrived_at.checked_add(settings.idle_timeout) else {
-                        return EventResult::transport_failure();
-                    };
-                    state.idle_deadline = deadline;
-                }
                 state.capture(channel, bytes, settings)
             }
             ProcessEvent::Data { .. } => return EventResult::transport_failure(),
@@ -233,7 +209,7 @@ impl ConnectProcessTransport {
             return EventResult::Outcome(outcome);
         }
         if let Some(event) = event {
-            match deliver(event, settings, sender, state).await {
+            match deliver(event, settings, sender, state, outcome).await {
                 Delivery::Sent => {}
                 Delivery::ConsumerDropped => {
                     return EventResult::Complete(Completion::ConsumerDropped);

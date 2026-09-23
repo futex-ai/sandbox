@@ -1,26 +1,33 @@
 //! Call-specific sandbox connection timeout regressions.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use serde_json::Value;
 use unimock::{MockFn, Unimock, matching};
 
-use crate::control::http::{E2bHttpTransport, HttpRequest, HttpResponse, send};
+use crate::control::http::{E2bHttpTransport, HttpRequest, HttpResponse, Method, send};
 use crate::{E2bAdapterError, E2bControlApi};
 
 use super::ReqwestE2bControlApi;
 
 #[tokio::test]
 async fn call_specific_connect_timeout_is_forwarded() {
-    let request = Arc::new(Mutex::new(None));
+    let requests = Arc::new(Mutex::new(Vec::new()));
     let transport: Arc<dyn E2bHttpTransport> = Arc::new(Unimock::new(
-        send.next_call(matching!(_)).answers_arc({
-            let request = request.clone();
+        send.each_call(matching!(_)).answers_arc({
+            let requests = requests.clone();
+            let responses = Mutex::new(VecDeque::from([
+                br#"{"sandboxID":"sandbox","state":"paused"}"#.to_vec(),
+                br#"{"sandboxID":"sandbox","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#.to_vec(),
+            ]));
             Arc::new(move |_, sent: HttpRequest| {
-                *request.lock().expect("request lock") = Some(sent);
+                requests.lock().expect("request lock").push(sent);
                 Ok(HttpResponse {
                     status: 200,
-                    body: br#"{"sandboxID":"sandbox","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#.to_vec(),
+                    body: responses.lock().expect("responses lock").pop_front().expect("unexpected control request"),
                     next_token: None,
                 })
             })
@@ -33,11 +40,13 @@ async fn call_specific_connect_timeout_is_forwarded() {
         .await
         .expect("connect should decode");
 
-    let body = request
-        .lock()
-        .expect("request lock")
-        .as_ref()
-        .and_then(|request| request.body.as_deref())
+    let requests = requests.lock().expect("request lock");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].method, Method::Get);
+    assert_eq!(requests[1].method, Method::Post);
+    let body = requests[1]
+        .body
+        .as_deref()
         .map(serde_json::from_slice::<Value>)
         .transpose()
         .expect("connect body should be JSON")
@@ -59,5 +68,6 @@ fn client(transport: Arc<dyn E2bHttpTransport>) -> ReqwestE2bControlApi {
         transport,
         sandbox_domain: "e2b.app".to_owned(),
         idle_timeout_seconds: 600,
+        lifetime_metadata_key: "runtime-lifetime".to_owned(),
     }
 }

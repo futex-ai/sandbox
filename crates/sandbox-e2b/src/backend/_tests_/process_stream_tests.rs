@@ -25,7 +25,7 @@ async fn stream_process_forwards_validated_request_and_events() {
                 sandbox_id: "provider".to_owned(),
                 domain: "untrusted.example".to_owned(),
                 envd_access_token: "token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     ));
     let processes = Arc::new(Unimock::new(
@@ -82,7 +82,7 @@ async fn stream_process_rounds_up_deadline_without_shortening_configured_ttl() {
                         sandbox_id: "provider".to_owned(),
                         domain: "untrusted.example".to_owned(),
                         envd_access_token: "token".to_owned(),
-                        traffic_access_token: "traffic-token".to_owned(),
+                        traffic_access_token: Some("traffic-token".to_owned()),
                     })
                 })),
         ));

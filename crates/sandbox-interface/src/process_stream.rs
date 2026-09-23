@@ -4,7 +4,7 @@ use std::{pin::Pin, time::Duration};
 
 use futures_core::Stream;
 
-use crate::{BackendRunProcessRequest, ProviderRef, ResourceOwner, SandboxId};
+use crate::{ProviderRef, ResourceOwner, SandboxId};
 
 /// Maximum absolute deadline accepted for one streaming process run.
 pub const PROCESS_STREAM_MAX_DEADLINE: Duration = Duration::from_secs(3600);
@@ -38,7 +38,7 @@ pub struct StreamProcessRequest {
 /// Provider request to stream one bounded non-interactive process.
 ///
 /// Backends must validate argv and stream limits identically to
-/// [`BackendRunProcessRequest`]. They must also reject a deadline above
+/// [`crate::BackendRunProcessRequest`]. They must also reject a deadline above
 /// [`PROCESS_STREAM_MAX_DEADLINE`], a zero idle timeout, or an idle timeout
 /// above the deadline before contacting their provider.
 #[derive(Clone, Debug, Eq, PartialEq)]

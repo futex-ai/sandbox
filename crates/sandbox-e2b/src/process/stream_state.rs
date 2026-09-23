@@ -5,7 +5,7 @@ use std::time::Duration;
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
-    oneshot,
+    oneshot, watch,
 };
 
 use super::framing::ProcessDataChannel;
@@ -152,6 +152,7 @@ pub(super) async fn deliver(
     settings: &StreamSettings,
     sender: &Sender<ProcessStreamEvent>,
     state: &StreamState,
+    outcome: &mut watch::Receiver<Option<ProcessStreamOutcome>>,
 ) -> Delivery {
     tokio::select! {
         biased;
@@ -159,8 +160,8 @@ pub(super) async fn deliver(
         _ = tokio::time::sleep_until(settings.absolute_deadline) => {
             Delivery::Outcome(state.deadline_outcome())
         }
-        _ = tokio::time::sleep_until(state.idle_deadline) => {
-            Delivery::Outcome(state.idle_outcome())
+        _ = outcome.changed() => {
+            Delivery::Outcome((*outcome.borrow()).unwrap_or(ProcessStreamOutcome::TransportFailure))
         }
         result = sender.send(event) => match result {
             Ok(()) => Delivery::Sent,

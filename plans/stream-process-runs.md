@@ -287,10 +287,16 @@ process idle deadline.
 - [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
 - [x] Run `cargo xtask review` after the push and report new findings without
       automatically fixing them.
-- [ ] Choose how to bound and report producer backpressure while preserving
+- [x] Choose how to bound and report producer backpressure while preserving
       the idle-time guarantee across separately buffered HTTP fragments.
-- [ ] Add a failing multi-fragment regression, implement the chosen bounded
-      arrival-time tracking, align docs, and repeat checks, push, and review.
+- [x] Add regressions for buffered fragments, full staging, and fresh output
+      received while delivery is blocked; implement bounded reader-side
+      decoding and idle timing, and align the docs and public outcome.
+- [x] Merge the latest `origin/main`, resolve conflicts, and rerun relevant tests.
+- [x] Run focused tests and `cargo xtask check`, then audit the merge and diff.
+- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [ ] Run `cargo xtask review` after the push and report any findings without
+      automatically fixing them.
 - [ ] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
@@ -313,3 +319,5 @@ implementation until a maintainer chooses how to handle bounded backpressure.
    stream as soon as the delivery queue fills; this is simpler but loses more
    queued output and changes slow-consumer behavior. **Recommendation: A**,
    because it preserves more output while enforcing the advertised idle budget.
+   The maintainer chose A and requested a merge from the latest `origin/main`
+   after implementation.

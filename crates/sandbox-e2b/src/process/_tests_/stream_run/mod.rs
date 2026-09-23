@@ -1,6 +1,7 @@
 //! Incremental process streaming regressions.
 
 mod backend_tests;
+mod backpressure_tests;
 mod behavior_tests;
 mod cleanup_tests;
 mod delayed_control;
