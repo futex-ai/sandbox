@@ -57,6 +57,54 @@ async fn keepalives_do_not_reset_the_idle_timeout() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn idle_expiry_before_start_is_not_a_transport_failure() {
+    let transport = transport(Unimock::new(
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers(&|_, _, _, _, _| Ok(Box::pin(stream::pending()))),
+    ));
+    let events = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_secs(5), Duration::from_secs(1)),
+        )
+        .await
+        .expect("accepted stream")
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(
+        events,
+        [ProcessStreamEvent::Outcome(
+            ProcessStreamOutcome::IdleTimeout
+        )]
+    );
+}
+
+#[tokio::test]
+async fn eof_before_start_without_a_trailer_is_still_a_transport_failure() {
+    let transport = transport(Unimock::new(
+        stream_call
+            .next_call(matching!(_, "Start", _, _))
+            .answers(&|_, _, _, _, _| Ok(byte_stream(Vec::new()))),
+    ));
+    let events = transport
+        .stream_process(
+            connection(),
+            command(64, 64, Duration::from_secs(5), Duration::from_secs(1)),
+        )
+        .await
+        .expect("accepted stream")
+        .collect::<Vec<_>>()
+        .await;
+    assert_eq!(
+        events,
+        [ProcessStreamEvent::Outcome(
+            ProcessStreamOutcome::TransportFailure
+        )]
+    );
+}
+
+#[tokio::test(start_paused = true)]
 async fn buffered_output_does_not_extend_idle_timeout_when_the_consumer_is_slow() {
     let killed = Arc::new(Notify::new());
     let mut frames = vec![event_frame(r#"{"event":{"start":{"pid":43}}}"#)];

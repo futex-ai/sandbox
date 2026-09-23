@@ -274,8 +274,9 @@ process-end events in provider order. Its exit event preserves both the exit
 code and envd's normal-exit flag, so signal termination cannot resemble a
 successful zero exit. A process end does not become `Completed` until the
 success trailer and HTTP EOF follow; that outcome confirms stream completion,
-not command success. Before process end, idle or absolute expiry produces its matching
-timeout outcome. After process end, either timer expiring before HTTP EOF,
+not command success. Before process end, including before a start event, idle
+or absolute expiry produces its matching timeout outcome. EOF without a trailer
+still produces `TransportFailure`. After process end, either timer expiring before HTTP EOF,
 including while a queued exit event is blocked, produces `TransportFailure`
 because provider completion remains unverified. Overflow, timeout, malformed or
 failed transport, and consumer drop stop the worker. Streams that remain owned
@@ -284,11 +285,16 @@ bounded data queue, along with any final bounded prefix from an overflowing
 frame. The producer closes and cleanup starts without waiting for
 consumer capacity; the returned stream preserves ordering by draining queued
 data before the optional final prefix, outcome, and EOF. When no process end was
-observed, the detached worker makes the same bounded PID-scoped kill attempt;
-a dropped consumer wakes
-that worker even while envd is silent. Envd's
-HTTP client keeps its fixed 310-second timeout for existing paths. The new path
-alone applies a per-request timeout equal to the remaining absolute budget plus a
+decoded, the detached worker makes the same bounded PID-scoped kill attempt,
+even for a start event decoded but not delivered. After a consumer drop during
+a polled start request or while awaiting the first start frame, the worker
+retains the pending open and provider reader for up to three seconds after
+the drop, never past the absolute deadline or cut short by ordinary idle
+expiry. It kills if it learns a PID; otherwise it logs a debug event and
+releases the stream. A drop before the open is polled never contacts envd;
+a decoded process end prevents a kill, even if its event was still staged.
+Envd's HTTP client keeps its fixed 310-second timeout for existing paths. The
+new path alone applies a per-request timeout equal to the remaining absolute budget plus a
 10-second transport allowance, so the client cannot truncate a valid one-hour
 stream.
 
@@ -300,8 +306,10 @@ across every name and value are accepted. The adapter rejects `PATH`, `HOME`,
 all `LD_*`, and all `DYLD_*` names so the template remains responsible for
 executable and loader resolution. Validation happens before the control API is
 asked for sandbox access. Process and terminal `Debug` contain only selected
-metadata; they omit command text, paths, environment entries, input, and
-captured output. Validation errors report typed reasons without echoing names
+metadata; streaming commands show argument counts, limits, and timeouts, while
+streamed stdout and stderr events show only their byte counts. Diagnostics omit
+command text, paths, environment entries, input, and captured output.
+Validation errors report typed reasons without echoing names
 or values. Raw process results, PTY output, and saved transcripts remain
 unmasked, including credentials deliberately printed by a command. The
 stateless read-only path still supplies only its existing explicit `cwd` and an empty environment map. PTY startup remains

@@ -230,17 +230,26 @@ Signal termination reports `exited: false`; `Completed` requires a provider
 success trailer and HTTP EOF, not a successful command exit. Missing or failed
 trailers, invalid ordering, malformed frames, bytes after the trailer, or timer
 expiry after `Exited` produces `TransportFailure`. Stdout and stderr overflow
-are distinct and emit only the bounded prefix.
+are distinct and emit only the bounded prefix. Silence before `Started` expires
+with `IdleTimeout`; EOF without a trailer still produces `TransportFailure`.
 The absolute budget begins before sandbox connection. The idle timer starts
 before the process transport opens and resets only on fresh stdout or stderr
 arrivals, never start, keep-alive, exit, or delayed consumer delivery. Coalesced
 HTTP fragments use their receipt time. The provider reader stages at most 32
 decoded events separately from the 16-event consumer queue; when staging is
 full it reports `ConsumerBackpressure`, so slow consumers cannot postpone timeout or
-cleanup. Overflow, backpressure, timeout, transport failure, or consumer drop
-triggers best-effort kill when an unfinished process has a known PID. Queued
-data and any separately retained final overflow prefix precede the terminal
-outcome; cleanup does not wait for consumer capacity.
+cleanup. Overflow, backpressure, timeout, and transport failure trigger a
+bounded best-effort kill when a PID was decoded and no process end was decoded.
+On consumer drop, a decoded but undelivered PID is still eligible for cleanup.
+If the start request may have been sent but no PID is known yet, the adapter
+keeps the pending open and reader alive for at most three seconds after the
+drop, never beyond the absolute deadline, to learn a PID before killing. The
+ordinary idle timer does not cut short this bounded cleanup grace. If none
+arrives, it releases the provider stream without a kill; a drop before
+the open was polled makes no provider call. A decoded process end prevents a
+kill even if its event was not delivered. Queued data and any separately
+retained final overflow prefix precede the terminal outcome; cleanup does
+not wait for consumer capacity.
 Trusted direct-process callers may select an optional working directory and
 environment map. A working directory must be absolute, at most 4,096 UTF-8
 bytes, and contain no NUL or control character. Environment names must match

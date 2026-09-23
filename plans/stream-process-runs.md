@@ -297,8 +297,15 @@ process idle deadline.
 - [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
 - [x] Run `cargo xtask review` after the push and report any findings without
       automatically fixing them.
-- [ ] Decide how to address the four post-merge review findings below, then
+- [x] Decide how to address the four post-merge review findings below, then
       add regressions and resolve the chosen follow-ups.
+- [x] Preserve PID discovery during drop grace even when the ordinary idle
+      timer has expired; prove late starts are killed within the grace window.
+- [x] Run focused regressions, formatting, Clippy, the workspace tests,
+      file-length lint, and `cargo xtask check`; align the contract and READMEs.
+- [x] Commit the fixes locally with all new files tracked.
+- [ ] After independent commit review, push and run `cargo xtask review` against
+      `origin/main`; report findings without automatically fixing them.
 - [ ] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
@@ -341,6 +348,12 @@ follow-up.
    metadata-only `Debug` for all three types. Option B: remove `Debug` entirely.
    **Recommendation: A**, matching the existing non-streaming process requests
    while preserving safe structural diagnostics.
+
+   **Resolution:** Option A replaces derived `Debug` with metadata-only
+   formatting on both streaming requests and the E2B command. Regression
+   tests verify command and argument secrets are absent in normal and pretty
+   formatting while limits, counts, and timeouts remain visible.
+
 2. **Severity: high — redact streamed output in event diagnostics.**
    `ProcessStreamEvent` in `crates/sandbox-interface/src/process_stream.rs`
    derives `Debug` for stdout and stderr byte vectors. Logging those events can
@@ -348,6 +361,11 @@ follow-up.
    ordinary diagnostics. Option A: implement `Debug` that displays the output
    channel and byte count only. Option B: remove `Debug`. **Recommendation: A**,
    so tests retain safe event visibility without printing output data.
+
+   **Resolution:** Option A formats stdout and stderr events with byte counts
+   only; start, exit, and outcome diagnostics retain their existing fields.
+   Regression tests verify secret-looking output bytes never appear.
+
 3. **Severity: high — preserve a staged process ID on consumer drop.**
    `crates/sandbox-e2b/src/process/stream_run.rs` checks for consumer closure
    before consuming staged events. If the reader already staged `Started` but
@@ -356,6 +374,15 @@ follow-up.
    expiry. Option A: publish the observed PID from the reader to shared cleanup
    state. Option B: drain ready start events before honoring closure.
    **Recommendation: A**, removing the scheduling race at its source.
+
+   **Resolution:** Option A publishes the first decoded PID and process end
+   independently of staged delivery. After a polled open, a dropped consumer
+   keeps the pending request and reader alive for at most three seconds or
+   until the absolute deadline to learn a PID, even when ordinary idle expiry
+   would have fired, then uses the existing bounded kill. It releases the
+   provider stream without killing if no PID arrives. Decoded process ends
+   prevent kills, even when undelivered.
+
 4. **Severity: medium — preserve idle timeout before a process starts.**
    `crates/sandbox-e2b/src/process/stream_run.rs` observes reader timeout
    outcomes only after processing `Started`. A provider stream with no start or
@@ -363,3 +390,8 @@ follow-up.
    nothing misreports an idle timeout to callers. Option A: observe the reader
    outcome before start as well. Option B: add a separate pre-start idle timer.
    **Recommendation: A**, retaining one arrival-based timeout source.
+
+   **Resolution:** Option A keeps staged start handling ahead of reader
+   outcomes and uses the reader's recorded outcome when staging closes without
+   a trailer. A silent pre-start stream now reports `IdleTimeout`; EOF without
+   a trailer and expiry after a decoded exit still report `TransportFailure`.

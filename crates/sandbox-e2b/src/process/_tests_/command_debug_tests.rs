@@ -2,7 +2,9 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
-use crate::process::types::{ProcessCommand, ProcessOutputCapture, SplitProcessCommand};
+use crate::process::types::{
+    ProcessCommand, ProcessOutputCapture, SplitProcessCommand, StreamProcessCommand,
+};
 
 #[test]
 fn command_debug_reports_only_approved_metadata() {
@@ -51,4 +53,28 @@ fn command_debug_reports_only_approved_metadata() {
         }
     }
     assert!(!format!("{split:#?}").contains("internal-secret"));
+}
+
+#[test]
+fn stream_command_debug_omits_argv_and_reports_limits() {
+    let command = StreamProcessCommand {
+        command: "credential_alpha".to_owned(),
+        args: vec!["credential_alpha".to_owned()],
+        stdout_limit: 128,
+        stderr_limit: 256,
+        requested_at: tokio::time::Instant::now(),
+        deadline: Duration::from_secs(5),
+        idle_timeout: Duration::from_secs(1),
+    };
+    let diagnostic = format!("{command:?}");
+    assert!(diagnostic.contains("arg_count: 1"), "{diagnostic}");
+    assert!(diagnostic.contains("stdout_limit: 128"), "{diagnostic}");
+    assert!(diagnostic.contains("stderr_limit: 256"), "{diagnostic}");
+    assert!(diagnostic.contains("deadline: 5s"), "{diagnostic}");
+    assert!(diagnostic.contains("idle_timeout: 1s"), "{diagnostic}");
+    for diagnostic in [diagnostic, format!("{command:#?}")] {
+        assert!(!diagnostic.contains("credential_alpha"), "{diagnostic}");
+        assert!(!diagnostic.contains("command:"), "{diagnostic}");
+        assert!(!diagnostic.contains("args:"), "{diagnostic}");
+    }
 }

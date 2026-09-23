@@ -84,7 +84,7 @@ pub struct SplitProcessCommand {
 }
 
 /// Non-interactive process command whose split output is emitted as events.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct StreamProcessCommand {
     /// Executable path or `PATH`-resolved command name.
     pub command: String,

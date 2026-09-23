@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use sandbox_interface::ProcessStreamOutcome;
+use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
 use tokio::{
     sync::{
         mpsc::{self, Receiver, Sender},
@@ -16,6 +16,7 @@ use tokio::{
 use super::{
     framing::{FrameDecoder, ProcessDataChannel, ProcessEvent, decode_end_stream, decode_event},
     http::ByteStream,
+    stream_drop::drop_grace_deadline,
 };
 
 const STAGED_FRAGMENT_BYTES: usize = 64 * 1024;
@@ -28,6 +29,22 @@ pub(super) enum StagedEvent {
     Failure,
 }
 
+/// First decoded process identity and whether its end was decoded, even when
+/// the delivery worker has not received the corresponding staged events.
+#[derive(Clone, Copy, Default)]
+pub(super) struct ReaderObservation {
+    pub(super) pid: Option<u32>,
+    pub(super) ended: bool,
+}
+
+/// Arrival-based timing and bounded PID-discovery grace for one provider reader.
+pub(super) struct ReaderTiming {
+    pub(super) absolute_deadline: Instant,
+    pub(super) idle_deadline: Instant,
+    pub(super) idle_timeout: Duration,
+    pub(super) discovery_deadline: Option<Instant>,
+}
+
 pub(super) struct BufferedReader {
     pub(super) events: Receiver<StagedEvent>,
     pub(super) outcome: watch::Receiver<Option<ProcessStreamOutcome>>,
@@ -37,25 +54,25 @@ pub(super) struct BufferedReader {
 }
 
 impl BufferedReader {
+    /// Stop decoding before cleanup decides whether a decoded end prevents a kill.
+    pub(super) async fn stop(&mut self) {
+        self.worker.abort();
+        let _ = (&mut self.worker).await;
+    }
+
     pub(super) fn new(
         stream: ByteStream,
-        absolute_deadline: Instant,
-        idle_deadline: Instant,
-        idle_timeout: Duration,
+        timing: ReaderTiming,
+        observed: watch::Sender<ReaderObservation>,
+        consumer: Sender<ProcessStreamEvent>,
     ) -> Self {
         let (sender, events) = mpsc::channel(STAGED_FRAGMENT_CAPACITY);
         let (outcome_sender, outcome) = watch::channel(None);
         let keepalive = outcome_sender.clone();
         let worker = tokio::spawn(async move {
-            let finished = Self::read(
-                stream,
-                sender,
-                &outcome_sender,
-                absolute_deadline,
-                idle_deadline,
-                idle_timeout,
-            )
-            .await;
+            let absolute_deadline = timing.absolute_deadline;
+            let finished =
+                Self::read(stream, sender, &outcome_sender, &observed, consumer, timing).await;
             if let Some(idle_deadline) = finished {
                 tokio::select! {
                     _ = outcome_sender.closed() => {}
@@ -80,16 +97,27 @@ impl BufferedReader {
         mut stream: ByteStream,
         sender: Sender<StagedEvent>,
         outcome: &watch::Sender<Option<ProcessStreamOutcome>>,
-        absolute_deadline: Instant,
-        mut idle_deadline: Instant,
-        idle_timeout: Duration,
+        observed: &watch::Sender<ReaderObservation>,
+        consumer: Sender<ProcessStreamEvent>,
+        timing: ReaderTiming,
     ) -> Option<Instant> {
+        let ReaderTiming {
+            absolute_deadline,
+            mut idle_deadline,
+            idle_timeout,
+            mut discovery_deadline,
+        } = timing;
         let mut decoder = FrameDecoder::new(MAX_FRAME_BYTES);
         let mut ended = false;
         loop {
+            let idle_or_grace_deadline = discovery_deadline.unwrap_or(idle_deadline);
             let item = tokio::select! {
                 biased;
                 _ = sender.closed() => return None,
+                _ = consumer.closed(), if discovery_deadline.is_none() => {
+                    discovery_deadline = Some(drop_grace_deadline(absolute_deadline));
+                    continue;
+                }
                 _ = tokio::time::sleep_until(absolute_deadline) => {
                     let result = if ended { ProcessStreamOutcome::TransportFailure } else {
                         ProcessStreamOutcome::DeadlineExpired
@@ -97,7 +125,10 @@ impl BufferedReader {
                     let _ = outcome.send(Some(result));
                     return None;
                 }
-                _ = tokio::time::sleep_until(idle_deadline) => {
+                _ = tokio::time::sleep_until(idle_or_grace_deadline) => {
+                    if discovery_deadline.is_some() {
+                        return None;
+                    }
                     let result = if ended { ProcessStreamOutcome::TransportFailure } else {
                         ProcessStreamOutcome::IdleTimeout
                     };
@@ -129,6 +160,23 @@ impl BufferedReader {
                             Err(_) => StagedEvent::Failure,
                         }
                     };
+                    match &event {
+                        StagedEvent::Process(ProcessEvent::Start(pid)) => {
+                            observed.send_modify(|observation| {
+                                if observation.pid.is_none() {
+                                    observation.pid = Some(*pid);
+                                }
+                            });
+                        }
+                        StagedEvent::Process(ProcessEvent::End { .. }) => {
+                            observed.send_modify(|observation| {
+                                if observation.pid.is_some() {
+                                    observation.ended = true;
+                                }
+                            });
+                        }
+                        _ => {}
+                    }
                     if let StagedEvent::Process(ProcessEvent::Data { channel, ref bytes }) = event
                         && !bytes.is_empty()
                         && matches!(
