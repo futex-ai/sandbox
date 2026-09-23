@@ -294,9 +294,11 @@ process idle deadline.
       decoding and idle timing, and align the docs and public outcome.
 - [x] Merge the latest `origin/main`, resolve conflicts, and rerun relevant tests.
 - [x] Run focused tests and `cargo xtask check`, then audit the merge and diff.
-- [ ] Run `git add -A`, commit with Conventional Commits, and push the branch.
-- [ ] Run `cargo xtask review` after the push and report any findings without
+- [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
+- [x] Run `cargo xtask review` after the push and report any findings without
       automatically fixing them.
+- [ ] Decide how to address the four post-merge review findings below, then
+      add regressions and resolve the chosen follow-ups.
 - [ ] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
@@ -321,3 +323,43 @@ implementation until a maintainer chooses how to handle bounded backpressure.
    because it preserves more output while enforcing the advertised idle budget.
    The maintainer chose A and requested a merge from the latest `origin/main`
    after implementation.
+
+### Post-Merge Review Outcome
+
+The independent provider reader and merge from `origin/main` were pushed in
+`a12b098` and `fa11e0e`, respectively. `cargo xtask check` passed with all
+non-live tests and smoke coverage. The post-push review found four new issues;
+do not change the reviewed implementation until the maintainer chooses the
+follow-up.
+
+1. **Severity: high — redact command details in stream request diagnostics.**
+   `StreamProcessRequest` and `BackendStreamProcessRequest` in
+   `crates/sandbox-interface/src/process_stream.rs` and `StreamProcessCommand`
+   in `crates/sandbox-e2b/src/process/types.rs` derive `Debug`. Logging one
+   currently prints command arguments verbatim, including possible credentials.
+   Doing nothing could expose secrets in diagnostic logs. Option A: implement
+   metadata-only `Debug` for all three types. Option B: remove `Debug` entirely.
+   **Recommendation: A**, matching the existing non-streaming process requests
+   while preserving safe structural diagnostics.
+2. **Severity: high — redact streamed output in event diagnostics.**
+   `ProcessStreamEvent` in `crates/sandbox-interface/src/process_stream.rs`
+   derives `Debug` for stdout and stderr byte vectors. Logging those events can
+   reveal captured credentials. Doing nothing keeps that leak possible through
+   ordinary diagnostics. Option A: implement `Debug` that displays the output
+   channel and byte count only. Option B: remove `Debug`. **Recommendation: A**,
+   so tests retain safe event visibility without printing output data.
+3. **Severity: high — preserve a staged process ID on consumer drop.**
+   `crates/sandbox-e2b/src/process/stream_run.rs` checks for consumer closure
+   before consuming staged events. If the reader already staged `Started` but
+   delivery loses that race, cleanup has no PID and cannot kill the unfinished
+   command. Doing nothing can leave a dropped command running until sandbox
+   expiry. Option A: publish the observed PID from the reader to shared cleanup
+   state. Option B: drain ready start events before honoring closure.
+   **Recommendation: A**, removing the scheduling race at its source.
+4. **Severity: medium — preserve idle timeout before a process starts.**
+   `crates/sandbox-e2b/src/process/stream_run.rs` observes reader timeout
+   outcomes only after processing `Started`. A provider stream with no start or
+   output instead returns `TransportFailure` when the reader closes. Doing
+   nothing misreports an idle timeout to callers. Option A: observe the reader
+   outcome before start as well. Option B: add a separate pre-start idle timer.
+   **Recommendation: A**, retaining one arrival-based timeout source.
