@@ -304,8 +304,10 @@ process idle deadline.
 - [x] Run focused regressions, formatting, Clippy, the workspace tests,
       file-length lint, and `cargo xtask check`; align the contract and READMEs.
 - [x] Commit the fixes locally with all new files tracked.
-- [ ] After independent commit review, push and run `cargo xtask review` against
+- [x] After independent commit review, push and run `cargo xtask review` against
       `origin/main`; report findings without automatically fixing them.
+- [ ] Decide how to address the post-fix review finding below, then add a
+      regression and resolve the chosen follow-up.
 - [ ] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
@@ -395,3 +397,27 @@ follow-up.
    outcomes and uses the reader's recorded outcome when staging closes without
    a trailer. A silent pre-start stream now reports `IdleTimeout`; EOF without
    a trailer and expiry after a decoded exit still report `TransportFailure`.
+
+### Post-Fix Review Outcome
+
+The four fixes were committed in `3853587`, independently reviewed, and
+pushed. `cargo xtask check` passed with 403 tests passing and four opt-in live
+tests ignored. The post-push review reported one new finding; do not change
+the reviewed implementation until the maintainer chooses the follow-up.
+
+1. **Severity: medium — record a coalesced process end before drop cleanup.**
+   The provider reader in `crates/sandbox-e2b/src/process/stream_reader.rs`
+   records start and end observations one frame at a time and yields after
+   staging each frame. When one HTTP chunk carries both the start frame and
+   the process-end frame after the consumer has dropped the stream, drop
+   cleanup in `crates/sandbox-e2b/src/process/stream_drop.rs` sees the PID
+   after the first frame, stops the reader before it records the end, and
+   sends a kill for a process that has already exited. A probe confirmed one
+   `SendSignal` in that case. Doing nothing sends kills that the contract says
+   a decoded process end prevents; the process has already exited, so this is
+   usually harmless, but a reused PID could be signalled. Option A: record
+   start and end observations for every frame in a decoded batch before
+   staging or yielding. Option B: make drop cleanup wait until the reader
+   finishes its current batch before deciding whether to kill.
+   **Recommendation: A**, a small reader-local change that keeps one ordering
+   rule without new coordination between tasks.
