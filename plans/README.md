@@ -6,6 +6,7 @@ milestones are finished.
 
 ## Active
 
+- [Stream process runs](stream-process-runs.md)
 - [Add one-shot sandbox lifetimes](one-shot-sandbox-lifetime.md)
 
 ## Completed

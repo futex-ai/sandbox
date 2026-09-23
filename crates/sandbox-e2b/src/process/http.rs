@@ -9,13 +9,13 @@ use url::Url;
 use crate::error::{Error, Result};
 use crate::response_body::{ResponseByteStream, collect_bounded};
 
-use super::{framing::encode_frame, http_error::request_error, types::ProcessConnection};
+use super::{http_error::request_error, types::ProcessConnection};
 
 pub(crate) type ByteStream = ResponseByteStream;
 
 const MAX_UNARY_RESPONSE_BYTES: usize = 1024 * 1024;
 
-#[unimock::unimock(api = [stream, unary, download, upload])]
+#[unimock::unimock(api = [stream, stream_with_timeout, unary, download, upload])]
 #[async_trait]
 pub(crate) trait ConnectHttpTransport: Send + Sync {
     async fn stream(
@@ -23,6 +23,13 @@ pub(crate) trait ConnectHttpTransport: Send + Sync {
         connection: ProcessConnection,
         method: String,
         request_json: Vec<u8>,
+    ) -> Result<ByteStream>;
+    async fn stream_with_timeout(
+        &self,
+        connection: ProcessConnection,
+        method: String,
+        request_json: Vec<u8>,
+        request_timeout: Duration,
     ) -> Result<ByteStream>;
     async fn unary(
         &self,
@@ -63,7 +70,7 @@ impl ReqwestConnectHttpTransport {
         Ok(Self { client })
     }
 
-    fn request(
+    pub(super) fn request(
         &self,
         connection: &ProcessConnection,
         method: &str,
@@ -142,23 +149,24 @@ impl ConnectHttpTransport for ReqwestConnectHttpTransport {
         method: String,
         request_json: Vec<u8>,
     ) -> Result<ByteStream> {
-        let ambiguous = method == "Start";
-        let request_body = server_streaming_request_body(&request_json)?;
-        let response = match self
-            .request(&connection, &method, "application/connect+json")?
-            .body(request_body)
-            .send()
-            .await
-        {
-            Ok(response) => response,
-            Err(source) => return Err(request_error(source, ambiguous, "open Connect stream")),
-        };
-        map_status(response.status().as_u16(), ambiguous)?;
-        let response_stream = response.bytes_stream().map(move |item| match item {
-            Ok(bytes) => Ok(bytes),
-            Err(source) => Err(request_error(source, ambiguous, "read Connect stream")),
-        });
-        Ok(Box::pin(response_stream))
+        super::http_stream::open(self, connection, method, request_json, None).await
+    }
+
+    async fn stream_with_timeout(
+        &self,
+        connection: ProcessConnection,
+        method: String,
+        request_json: Vec<u8>,
+        request_timeout: Duration,
+    ) -> Result<ByteStream> {
+        super::http_stream::open(
+            self,
+            connection,
+            method,
+            request_json,
+            Some(request_timeout),
+        )
+        .await
     }
 
     async fn unary(
@@ -267,11 +275,7 @@ async fn read_bounded_response(
     }
 }
 
-fn server_streaming_request_body(request_json: &[u8]) -> Result<Vec<u8>> {
-    encode_frame(request_json)
-}
-
-fn map_status(status: u16, ambiguous: bool) -> Result<()> {
+pub(super) fn map_status(status: u16, ambiguous: bool) -> Result<()> {
     match status {
         200..=299 => Ok(()),
         400 => Err(Error::InvalidRequest),

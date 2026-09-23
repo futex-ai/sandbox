@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use sandbox_interface::Result;
 use unimock::{MockFn, Unimock, matching};
 
+use super::backend_conformance_support;
+
 use crate::{
     ProcessFileChunk, ProcessInfo, ProcessRegularFileRequest, ProcessRegularFileWriteRequest,
     ProcessRunOutput, ProcessSelector, ProcessSplitOutput, ProcessTransportMock,
@@ -108,6 +110,9 @@ pub(super) fn transport() -> Unimock {
         ProcessTransportMock::run_split
             .each_call(matching!(_, _))
             .answers(&|_, _, command| split_output(command)),
+        ProcessTransportMock::stream_process
+            .next_call(matching!(_, _))
+            .answers(&|_, _, command| backend_conformance_support::stream(command)),
         ProcessTransportMock::kill
             .each_call(matching!(_, _))
             .answers(&|_, _, selector| {

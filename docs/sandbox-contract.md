@@ -44,7 +44,8 @@ Every `SandboxBackend` implementation must support:
 - snapshot inventory, creation, ambiguous-delivery recovery, inspection, and
   deletion;
 - bounded regular-file reads and replacement writes below a trusted root;
-- bounded direct-argv process execution with separate stdout and stderr;
+- bounded direct-argv process execution with collected and incremental stdout
+  and stderr variants;
 - terminal create/recovery, exact identity inspection, bounded transcript
   reads, input, close, and restored-terminal cleanup;
 - call-local HTTP port ingress with a redacted optional credential;
@@ -177,10 +178,12 @@ decoder must validate the bounded frame header before retaining the rest of a
 provider chunk, and its partial-frame buffer may retain only the current
 allowed frame. A streaming protocol's end marker must also be decoded:
 malformed metadata or a reported application error must fail collection rather
-than look like an ordinary completion. Once a process end event is observed,
-collection must continue until that final marker succeeds; stream exhaustion or
-deadline expiry before the marker is a malformed completion. A bounded one-shot
-process must be terminated when collection fails after its PID is known. Credentialed HTTP
+than look like an ordinary completion, and any bytes following that terminal
+marker are malformed. Once a process end event is observed, collection must
+continue until that final marker succeeds and the underlying transport reaches
+EOF. Later bytes, transport failure, or deadline expiry before that EOF are
+malformed completion, even after a valid marker. A bounded one-shot process
+must be terminated when collection fails after its PID is known. Credentialed HTTP
 clients must not follow redirects, and credentials may be attached only after
 the exact destination host is validated. Provider-returned routing fields are
 not authorities: credentialed process, read-only, and private-port hosts must
@@ -199,17 +202,45 @@ differs from the requested ID.
 Port zero, empty required text, oversized values, unknown profiles, invalid or
 unsupported network policies, and allowlist conflicts with deployment denies
 fail before provider dispatch. A
-direct or stateless process command cannot be empty, and its command and
+direct, streaming, or stateless process command cannot be empty, and its command and
 arguments total at most 128 KiB. Each direct stream or combined stateless
-output limit is at most 64 MiB. Every direct, stateless read-only, or
-process-transport duration is at most 300 seconds. A terminal output long poll
+output limit is at most 64 MiB. Collected direct, stateless read-only, and
+non-streaming process-transport durations are at most 300 seconds. Streaming
+execution instead accepts up to 3,600 seconds and requires a nonzero idle
+timeout no greater than the deadline. A terminal output long poll
 is at most 30 seconds. A terminal create or recovery request cannot set its
-provider transcript limit above the shared 256 MiB regular-file ceiling. These
+provider transcript limit above the shared 256 MiB regular-file ceiling.
+Resumable sandboxes must stay available through accepted streaming deadlines;
+one-shot sandboxes retain their original destruction deadline. These
 bounds must be checked before acquiring provider sandbox access, and absolute
 deadlines must use checked arithmetic so no caller duration can panic. In
 particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
+
+`SandboxBackend::stream_process` and the matching trusted-service method return
+a boxed stream after validation and sandbox access succeed, or a single
+`DeadlineExpired` outcome if connection consumes the budget. The service
+request identifies an owned sandbox; the backend uses its provider reference.
+They carry argv, separate output limits, an absolute deadline, and an idle
+timeout. Events are ordered as `Started { pid }`, zero or more `Stdout(bytes)`
+or `Stderr(bytes)`, `Exited { exit_code, exited }`, then exactly one final
+`Outcome` followed by EOF. Before start, failure may emit only an outcome.
+Signal termination reports `exited: false`; `Completed` requires a provider
+success trailer and HTTP EOF, not a successful command exit. Missing or failed
+trailers, invalid ordering, malformed frames, bytes after the trailer, or timer
+expiry after `Exited` produces `TransportFailure`. Stdout and stderr overflow
+are distinct and emit only the bounded prefix.
+The absolute budget begins before sandbox connection. The idle timer starts
+before the process transport opens and resets only on fresh stdout or stderr
+arrivals, never start, keep-alive, exit, or delayed consumer delivery. Coalesced
+HTTP fragments use their receipt time. The provider reader stages at most 32
+decoded events separately from the 16-event consumer queue; when staging is
+full it reports `ConsumerBackpressure`, so slow consumers cannot postpone timeout or
+cleanup. Overflow, backpressure, timeout, transport failure, or consumer drop
+triggers best-effort kill when an unfinished process has a known PID. Queued
+data and any separately retained final overflow prefix precede the terminal
+outcome; cleanup does not wait for consumer capacity.
 Trusted direct-process callers may select an optional working directory and
 environment map. A working directory must be absolute, at most 4,096 UTF-8
 bytes, and contain no NUL or control character. Environment names must match
@@ -338,6 +369,9 @@ The process probe runs one `/bin/sh` command with `/workspace` as its working
 directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
 environment bytes on stdout plus an independent deterministic token on stderr,
 so conforming images need a standard shell but no harness-only executable.
+The streaming probe uses a separate self-contained `/bin/sh` script and
+checks a nonzero PID, output before exit, a completed outcome after exit,
+and no event after the outcome.
 
 The separate `exercise_network_allowlist` capability probe applies only to
 adapters that support domain destinations. It creates a sandbox that permits

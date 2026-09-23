@@ -9,6 +9,7 @@ mod backend_terminal;
 pub mod conformance;
 mod conformance_image;
 mod conformance_network;
+mod conformance_process_stream;
 mod conformance_resources;
 mod constants;
 mod consumer;
@@ -22,6 +23,7 @@ mod lifetime;
 mod network;
 mod port_ingress;
 mod process_run;
+mod process_stream;
 mod provider_ref;
 mod read_only;
 mod registry;
@@ -68,6 +70,10 @@ pub use self::process_run::{
     BackendRunProcessRequest, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_DEADLINE,
     PROCESS_RUN_MAX_ENV_BYTES, PROCESS_RUN_MAX_ENV_VARS, PROCESS_RUN_MAX_STREAM_BYTES,
     ProcessRunContextError, RunProcessRequest, SandboxProcessOutput,
+};
+pub use self::process_stream::{
+    BackendStreamProcessRequest, PROCESS_STREAM_MAX_DEADLINE, ProcessEventStream,
+    ProcessStreamEvent, ProcessStreamOutcome, StreamProcessRequest,
 };
 pub use self::provider_ref::ProviderRef;
 pub use self::read_only::{

@@ -4,11 +4,13 @@ mod command_debug;
 mod connect;
 mod connect_helpers;
 mod connection;
+mod duration;
 mod file;
 mod framing;
 mod helper_run;
 mod http;
 mod http_error;
+mod http_stream;
 mod mapping;
 mod output_debug;
 mod provider_pid;
@@ -18,6 +20,9 @@ mod regular_file_write;
 mod selector;
 mod split_run;
 mod status;
+mod stream_reader;
+mod stream_run;
+mod stream_state;
 mod types;
 mod wire;
 
@@ -29,7 +34,7 @@ pub use self::types::{
     DynProcessTransport, ProcessCommand, ProcessConnectOutput, ProcessFileChunk,
     ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,
     ProcessRegularFileRequest, ProcessRunOutput, ProcessSplitOutput, ProcessTransport,
-    ProcessTransportMock, SplitProcessCommand,
+    ProcessTransportMock, SplitProcessCommand, StreamProcessCommand,
 };
 
 #[cfg(test)]

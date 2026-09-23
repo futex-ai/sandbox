@@ -149,6 +149,11 @@ pub enum Error {
         /// Inclusive upper bound.
         maximum: u64,
     },
+    /// A process stream idle timeout is zero or exceeds its absolute deadline.
+    #[error(
+        "[sandbox_interface/error] process idle timeout must be nonzero and no greater than its deadline"
+    )]
+    InvalidProcessIdleTimeout,
     /// A bounded text field exceeds its allowed byte length.
     #[error("[sandbox_interface/error] `{field}` exceeds the {limit}-byte limit")]
     TextTooLarge {

@@ -73,6 +73,16 @@ command text, paths, and environment contents are omitted even when no
 explicit environment entries are supplied.
 Stateless read-only execution keeps its explicit working directory and exposes
 no environment map.
+Streaming process execution accepts the same non-empty argv and split 64 MiB
+limits, but its absolute deadline may be up to 3,600 seconds and it requires a
+nonzero idle timeout no greater than that deadline. Only new stdout or stderr
+output resets idle timing; buffered delivery to a slow consumer does not.
+Typed start, stdout, stderr, exit, and one final outcome preserve normal versus
+signal exit. `Completed` requires both a provider success trailer and HTTP EOF,
+not a successful command exit. A bounded staging queue may instead report
+`ConsumerBackpressure` and initiate best-effort termination and cleanup.
+Resumable sandboxes must stay available throughout an accepted stream; a
+one-shot sandbox cannot have its original maximum lifetime extended.
 Multi-file image preparation validates every file path and size bound before
 provider access. Image measurement must fail rather than persist a partial
 total. `ImageCommandFailure` contains only exit status, retained output byte
@@ -94,6 +104,8 @@ one-shot sandbox. Its process probe invokes `/bin/sh` with a self-contained
 `pwd` and environment script, a selected working directory, one environment
 entry, and an independent stderr token, so a normal backend image needs no
 test-only executable.
+The streaming probe uses a separate self-contained `/bin/sh` command and
+checks ordered split output and the final outcome.
 The separate `exercise_network_allowlist` capability probe is for adapters
 that support domain destinations. It requires `/bin/sh` and `curl`, disables
 curl startup configuration before any other option, allows one exact domain,

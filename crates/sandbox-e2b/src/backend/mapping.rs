@@ -4,7 +4,11 @@ use sandbox_interface::{
     Error as DomainError, ProviderRef, ResourceKind, SandboxState, SnapshotState,
 };
 
-use crate::{control::ControlSandboxState, error::Error, process::ProcessConnection};
+use crate::{
+    control::{ControlSandboxAccess, ControlSandboxState},
+    error::Error,
+    process::ProcessConnection,
+};
 
 use super::configured::E2bSandboxBackend;
 
@@ -70,6 +74,30 @@ pub(super) async fn connection(
         backend.config.backend_id(),
         Some(ResourceKind::Sandbox),
     )?;
+    process_connection(backend, sandbox_ref, access)
+}
+
+pub(super) async fn connection_with_timeout(
+    backend: &E2bSandboxBackend,
+    sandbox_ref: &ProviderRef,
+    timeout_seconds: u32,
+) -> Result<ProcessConnection, DomainError> {
+    let access = control_result(
+        backend
+            .control
+            .connect_sandbox_with_timeout(sandbox_ref.as_str(), timeout_seconds)
+            .await,
+        backend.config.backend_id(),
+        Some(ResourceKind::Sandbox),
+    )?;
+    process_connection(backend, sandbox_ref, access)
+}
+
+fn process_connection(
+    backend: &E2bSandboxBackend,
+    sandbox_ref: &ProviderRef,
+    access: ControlSandboxAccess,
+) -> Result<ProcessConnection, DomainError> {
     ensure_sandbox_identity(sandbox_ref, &access.sandbox_id)?;
     Ok(ProcessConnection::new(
         sandbox_ref.as_str().to_owned(),

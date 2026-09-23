@@ -166,6 +166,7 @@ async fn exercise_backend_with_resources(
             "backend process run changed bounded split output",
         ));
     }
+    crate::conformance_process_stream::exercise(backend, source.provider_ref.clone()).await?;
 
     let first = resources
         .create_sandbox(sandbox_request(

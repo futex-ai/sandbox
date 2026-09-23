@@ -148,15 +148,32 @@ to the sandbox, which keeps every completed transcript readable. A trusted
 supervisor clips recorder chunks to the remaining limit, keeps draining
 overflow so the interactive terminal stays usable, and waits for the recorder
 before exiting.
-One-shot processes are killed when collection times out or fails after
-observing their PID. HTTP bodies, process output, and terminal output are
-bounded while streaming. Connect frame headers are validated before the rest
+One-shot processes are killed when collection or streaming terminates without
+an observed exit after learning their PID, including consumer drop. HTTP
+bodies, process output, and terminal output are bounded while streaming.
+Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors
-keep reading after a process end and decode the required Connect trailer
-through one path: a missing trailer or malformed JSON fails closed, an error
+keep reading after a process end and decode the required Connect trailer and
+HTTP EOF through one path: a missing trailer or malformed JSON fails closed, an error
 object is retryable provider unavailability, and a present trailer with a
-missing or null error field is a clean close. Direct process and stateless read-only requests are
+missing or null error field permits a clean close once HTTP EOF follows.
+Collectors keep polling after the trailer and reject later bytes, response
+errors, or timeout before EOF, including across HTTP chunks.
+Incremental execution emits ordered start, stdout, stderr, exit, and final
+outcome events. Exit events retain envd's normal-exit flag, and a successful
+trailer and HTTP EOF are required for `Completed`; that outcome does not by
+itself mean the command succeeded. Timer expiry after exit but before HTTP EOF
+is a transport failure, including while exit-event delivery is blocked. Only
+stdout or stderr bytes reset the idle timer, measured by the independent
+provider reader when the HTTP fragment arrives, even if event delivery stalls.
+The reader bounds decoded-event staging to 32 slots and reports
+`ConsumerBackpressure` if staging fills; it stops the process without waiting
+for a slow consumer. The terminal outcome and any final bounded overflow
+prefix are published through a slot independent from the bounded data queue.
+Queued data drains in order before that optional prefix, outcome, and EOF,
+while cleanup starts without waiting for consumer capacity.
+Direct process, streaming, and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
 combined stateless output cap is at most 64 MiB. Caller-controlled process,
@@ -167,6 +184,13 @@ image-command diagnostics contain only exit and capture metadata. Captured
 text never enters the handled error, so credentials and provider identities
 need no output matching or normalization. Malformed process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
+Incremental streams instead accept up to 3,600 seconds and require a nonzero
+idle timeout no greater than the deadline. Their envd HTTP timeout is the
+remaining budget plus a 10-second transport allowance; the absolute budget
+starts before control connection, and the idle timer starts before envd access.
+For resumable sandboxes the connection timeout is at least the stream deadline;
+one-shot sandboxes retain their original lifetime. Expiry during connection
+returns `DeadlineExpired` without starting a process.
 Direct process starts also forward an optional validated absolute working
 directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
 NUL or control characters. Environment names follow
@@ -310,6 +334,7 @@ deletable snapshot handle.
 - `src/network.rs` — allowlist translation, deny overlap, and recovery identity.
 - `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
 - `src/process/` — envd Connect framing and operations.
+- `src/process/stream_run.rs` — incremental events, timers, and cleanup.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.

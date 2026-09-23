@@ -1,0 +1,73 @@
+//! Call-specific sandbox connection timeout regressions.
+
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
+
+use serde_json::Value;
+use unimock::{MockFn, Unimock, matching};
+
+use crate::control::http::{E2bHttpTransport, HttpRequest, HttpResponse, Method, send};
+use crate::{E2bAdapterError, E2bControlApi};
+
+use super::ReqwestE2bControlApi;
+
+#[tokio::test]
+async fn call_specific_connect_timeout_is_forwarded() {
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let transport: Arc<dyn E2bHttpTransport> = Arc::new(Unimock::new(
+        send.each_call(matching!(_)).answers_arc({
+            let requests = requests.clone();
+            let responses = Mutex::new(VecDeque::from([
+                br#"{"sandboxID":"sandbox","state":"paused"}"#.to_vec(),
+                br#"{"sandboxID":"sandbox","envdAccessToken":"envd","trafficAccessToken":"traffic"}"#.to_vec(),
+            ]));
+            Arc::new(move |_, sent: HttpRequest| {
+                requests.lock().expect("request lock").push(sent);
+                Ok(HttpResponse {
+                    status: 200,
+                    body: responses.lock().expect("responses lock").pop_front().expect("unexpected control request"),
+                    next_token: None,
+                })
+            })
+        }),
+    ));
+    let client = client(transport);
+
+    client
+        .connect_sandbox_with_timeout("sandbox", 3600)
+        .await
+        .expect("connect should decode");
+
+    let requests = requests.lock().expect("request lock");
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].method, Method::Get);
+    assert_eq!(requests[1].method, Method::Post);
+    let body = requests[1]
+        .body
+        .as_deref()
+        .map(serde_json::from_slice::<Value>)
+        .transpose()
+        .expect("connect body should be JSON")
+        .expect("connect body");
+    assert_eq!(body["timeout"], 3600);
+}
+
+#[tokio::test]
+async fn zero_call_specific_connect_timeout_fails_before_transport() {
+    let result = client(Arc::new(Unimock::new(())))
+        .connect_sandbox_with_timeout("sandbox", 0)
+        .await;
+
+    assert!(matches!(result, Err(E2bAdapterError::InvalidRequest)));
+}
+
+fn client(transport: Arc<dyn E2bHttpTransport>) -> ReqwestE2bControlApi {
+    ReqwestE2bControlApi {
+        transport,
+        sandbox_domain: "e2b.app".to_owned(),
+        idle_timeout_seconds: 600,
+        lifetime_metadata_key: "runtime-lifetime".to_owned(),
+    }
+}

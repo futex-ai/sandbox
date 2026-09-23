@@ -3,13 +3,14 @@
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sandbox_interface::{Error as DomainError, PROCESS_RUN_MAX_DEADLINE, Result as DomainResult};
+use sandbox_interface::{Error as DomainError, ProcessEventStream, Result as DomainResult};
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::error::{Error, Result};
 
 use super::{
     connect_helpers::CollectionMode,
+    duration,
     http::{ConnectHttpTransport, ReqwestConnectHttpTransport},
     mapping::{map_file_result, map_result},
     regular_file_write::ProcessRegularFileWriteRequest,
@@ -18,7 +19,7 @@ use super::{
         ProcessCommand, ProcessConnectOutput, ProcessConnection, ProcessFileChunk,
         ProcessFileValidation, ProcessInfo, ProcessOutputCapture, ProcessPtyRequest,
         ProcessRegularFileRequest, ProcessRunOutput, ProcessSplitOutput, ProcessTransport,
-        SplitProcessCommand,
+        SplitProcessCommand, StreamProcessCommand,
     },
     wire::{EmptyWire, ListResponseWire, decode, encode, pty_start, selector, send_input, signal},
 };
@@ -26,6 +27,7 @@ use super::{
 const START_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Connect JSON envd process transport.
+#[derive(Clone)]
 pub struct ConnectProcessTransport {
     pub(super) http: Arc<dyn ConnectHttpTransport>,
     pub(super) backend_id: String,
@@ -113,7 +115,7 @@ impl ProcessTransport for ConnectProcessTransport {
         wait: Duration,
         max_bytes: usize,
     ) -> DomainResult<ProcessConnectOutput> {
-        validate_duration("wait", wait)?;
+        duration::validate("wait", wait)?;
         let events = map_result(
             self.collect(
                 connection,
@@ -140,7 +142,7 @@ impl ProcessTransport for ConnectProcessTransport {
         command: ProcessCommand,
     ) -> DomainResult<ProcessRunOutput> {
         let timeout = command.timeout;
-        validate_duration("timeout", timeout)?;
+        duration::validate("timeout", timeout)?;
         self.run_for(connection, command, timeout).await
     }
 
@@ -149,12 +151,24 @@ impl ProcessTransport for ConnectProcessTransport {
         connection: ProcessConnection,
         command: SplitProcessCommand,
     ) -> DomainResult<ProcessSplitOutput> {
-        validate_duration("deadline", command.deadline)?;
+        duration::validate("deadline", command.deadline)?;
         map_result(
             self.collect_split(connection, command).await,
             false,
             &self.backend_id,
         )
+    }
+
+    async fn stream_process(
+        &self,
+        connection: ProcessConnection,
+        command: StreamProcessCommand,
+    ) -> DomainResult<ProcessEventStream> {
+        duration::validate_stream("deadline", command.deadline)?;
+        if command.idle_timeout.is_zero() || command.idle_timeout > command.deadline {
+            return Err(DomainError::InvalidProcessIdleTimeout);
+        }
+        self.stream_events(connection, command)
     }
 
     async fn list(&self, connection: ProcessConnection) -> DomainResult<Vec<ProcessInfo>> {
@@ -206,7 +220,7 @@ impl ProcessTransport for ConnectProcessTransport {
         connection: ProcessConnection,
         request: ProcessRegularFileRequest,
     ) -> DomainResult<ProcessFileChunk> {
-        validate_duration("timeout", request.timeout)?;
+        duration::validate("timeout", request.timeout)?;
         super::regular_file::read(self, connection, request).await
     }
 
@@ -254,17 +268,6 @@ impl ProcessTransport for ConnectProcessTransport {
             &self.backend_id,
         )
     }
-}
-
-fn validate_duration(field: &'static str, duration: Duration) -> DomainResult<()> {
-    if duration > PROCESS_RUN_MAX_DEADLINE {
-        return Err(DomainError::InvalidSeconds {
-            field,
-            minimum: 0,
-            maximum: PROCESS_RUN_MAX_DEADLINE.as_secs(),
-        });
-    }
-    Ok(())
 }
 
 #[cfg(test)]

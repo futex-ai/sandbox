@@ -14,6 +14,8 @@ const HEADER_BYTES: usize = 5;
 pub(super) struct FrameDecoder {
     buffer: Vec<u8>,
     maximum_payload: usize,
+    /// A terminal envelope makes every subsequently supplied byte malformed.
+    end_stream_seen: bool,
 }
 
 impl FrameDecoder {
@@ -21,10 +23,14 @@ impl FrameDecoder {
         Self {
             buffer: Vec::new(),
             maximum_payload,
+            end_stream_seen: false,
         }
     }
 
     pub(super) fn push(&mut self, mut fragment: &[u8]) -> DecodedFrameBatch {
+        if self.end_stream_seen && !fragment.is_empty() {
+            return DecodedFrameBatch::terminal(Vec::new(), Error::MalformedFrame);
+        }
         let mut frames = Vec::new();
         while !fragment.is_empty() {
             if self.buffer.len() < HEADER_BYTES {
@@ -58,10 +64,18 @@ impl FrameDecoder {
                 break;
             }
             let payload = mem::take(&mut self.buffer).split_off(HEADER_BYTES);
+            let end_stream = flags & 0x02 != 0;
             frames.push(ConnectFrame {
-                end_stream: flags & 0x02 != 0,
+                end_stream,
                 payload,
             });
+            if end_stream {
+                self.end_stream_seen = true;
+                if !fragment.is_empty() {
+                    return DecodedFrameBatch::terminal(frames, Error::MalformedFrame);
+                }
+                break;
+            }
         }
         DecodedFrameBatch {
             frames,

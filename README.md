@@ -39,8 +39,9 @@ adapter proves exactly one completed snapshot. Both snapshot probes in the
 shared conformance harness accept immediate or asynchronous completion. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
-runs its cwd, environment, and split-output check through one self-contained
-`/bin/sh` command available in normal backend images. Cleanup always attempts
+runs its cwd, environment, and collected and streaming split-output checks
+through self-contained `/bin/sh` commands available in normal backend images.
+Cleanup always attempts
 every tracked terminal, snapshot, and sandbox; an operation error remains the
 reported error even if a cleanup step also fails. Trusted adapter helpers
 isolate their interpreter startup from sandbox-owned modules and Python
@@ -76,6 +77,15 @@ after unrelated PID reuse. Typed provider absence remains an error, and an
 absolute helper deadline reserves identity-helper termination and return time.
 Caller-controlled process durations are capped before provider access,
 including 30-second terminal output waits and 300-second process operations.
+Incremental process streams additionally accept a deadline up to one hour and
+a nonzero idle timeout no greater than the deadline. Their absolute budget
+starts before connection; only newly arrived stdout or stderr resets idle
+timing, independent of consumer speed. Completion requires the success trailer
+and HTTP EOF; later bytes and expiry after exit are transport failures.
+Bounded staging protects cleanup against slow consumers. Unfinished processes
+are killed best-effort after timeout, overflow, failure, backpressure, or
+consumer drop. Resumable sandboxes are connected for at least the stream
+deadline; one-shot sandboxes retain their original destruction deadline.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined

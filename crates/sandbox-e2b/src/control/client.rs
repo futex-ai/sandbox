@@ -32,6 +32,32 @@ pub struct ReqwestE2bControlApi {
     pub(super) lifetime_metadata_key: String,
 }
 
+impl ReqwestE2bControlApi {
+    async fn connect_with_timeout(
+        &self,
+        sandbox_id: &str,
+        timeout_seconds: u32,
+    ) -> Result<ControlSandboxAccess> {
+        if timeout_seconds == 0 {
+            return Err(Error::InvalidRequest);
+        }
+        let body = encode(&ConnectBody {
+            timeout: timeout_seconds,
+        })?;
+        let response: SandboxAccessBody = self
+            .json(
+                Method::Post,
+                format!("/sandboxes/{}/connect", path_segment(sandbox_id)?),
+                Some(body),
+                &[200, 201],
+                false,
+            )
+            .await?;
+        ensure_sandbox_identity(sandbox_id, &response.sandbox_id)?;
+        map_access(response, &self.sandbox_domain)
+    }
+}
+
 #[async_trait]
 impl E2bControlApi for ReqwestE2bControlApi {
     async fn list_sandboxes(&self, metadata: SandboxMetadata) -> Result<Vec<ControlSandbox>> {
@@ -102,6 +128,18 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn connect_sandbox(&self, sandbox_id: &str) -> Result<ControlSandboxAccess> {
+        self.connect_sandbox_with_timeout(sandbox_id, self.idle_timeout_seconds)
+            .await
+    }
+
+    async fn connect_sandbox_with_timeout(
+        &self,
+        sandbox_id: &str,
+        timeout_seconds: u32,
+    ) -> Result<ControlSandboxAccess> {
+        if timeout_seconds == 0 {
+            return Err(Error::InvalidRequest);
+        }
         let detail = self.sandbox_detail(sandbox_id).await?;
         ensure_sandbox_identity(sandbox_id, &detail.sandbox_id)?;
         if is_one_shot(&detail, &self.lifetime_metadata_key) {
@@ -113,20 +151,7 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 traffic_access_token: None,
             });
         }
-        let body = encode(&ConnectBody {
-            timeout: self.idle_timeout_seconds,
-        })?;
-        let response: SandboxAccessBody = self
-            .json(
-                Method::Post,
-                format!("/sandboxes/{}/connect", path_segment(sandbox_id)?),
-                Some(body),
-                &[200, 201],
-                false,
-            )
-            .await?;
-        ensure_sandbox_identity(sandbox_id, &response.sandbox_id)?;
-        map_access(response, &self.sandbox_domain)
+        self.connect_with_timeout(sandbox_id, timeout_seconds).await
     }
 
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()> {
@@ -239,6 +264,9 @@ fn is_one_shot(response: &super::types::SandboxDetailBody, lifetime_metadata_key
 #[path = "_tests_/control_client_tests.rs"]
 mod control_client_tests;
 
+#[cfg(test)]
+#[path = "_tests_/control_connect_timeout_tests.rs"]
+mod control_connect_timeout_tests;
 #[cfg(test)]
 #[path = "_tests_/control_create_body_tests.rs"]
 mod control_create_body_tests;

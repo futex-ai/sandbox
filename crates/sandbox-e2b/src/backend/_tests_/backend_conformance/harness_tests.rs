@@ -93,6 +93,9 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
         E2bControlApiMock::connect_sandbox
             .each_call(matching!(_))
             .answers(&|_, sandbox_id| Ok(access(sandbox_id))),
+        E2bControlApiMock::connect_sandbox_with_timeout
+            .each_call(matching!(_, 600))
+            .answers(&|_, sandbox_id, _| Ok(access(sandbox_id))),
         E2bControlApiMock::list_snapshots
             .each_call(matching!(_, _))
             .answers_arc({
