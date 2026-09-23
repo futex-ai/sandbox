@@ -2,7 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    network,
+};
 
 use super::{
     E2bControlApi,
@@ -19,24 +22,14 @@ use super::{
     },
 };
 
-const PRIVATE_NETWORK_DENIES: &[&str] = &[
-    "10.0.0.0/8",
-    "100.64.0.0/10",
-    "127.0.0.0/8",
-    "169.254.0.0/16",
-    "172.16.0.0/12",
-    "192.168.0.0/16",
-    "224.0.0.0/4",
-    "::1/128",
-    "fc00::/7",
-    "fe80::/10",
-];
-
 /// Reqwest-backed E2B control API implementation.
+///
+/// Sandbox creates revalidate typed network input before transport.
 pub struct ReqwestE2bControlApi {
     pub(super) transport: std::sync::Arc<dyn E2bHttpTransport>,
     pub(super) sandbox_domain: String,
     pub(super) idle_timeout_seconds: u32,
+    pub(super) lifetime_metadata_key: String,
 }
 
 impl ReqwestE2bControlApi {
@@ -72,13 +65,19 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess> {
-        let mut denies = PRIVATE_NETWORK_DENIES
-            .iter()
-            .map(|value| (*value).to_owned())
-            .collect::<Vec<_>>();
-        denies.extend(request.denied_destinations);
-        denies.sort();
-        denies.dedup();
+        let network = network::validate_control_create(
+            request.allow_public_egress,
+            request.allowed_destinations,
+            request.denied_destinations,
+        )?;
+        let one_shot_timeout = match request.lifetime.one_shot_timeout_seconds() {
+            Ok(timeout) => timeout,
+            Err(_) => return Err(Error::InvalidRequest),
+        };
+        let (auto_pause, auto_pause_memory, timeout) = match one_shot_timeout {
+            Some(timeout) => (false, false, timeout),
+            None => (true, true, request.idle_timeout_seconds),
+        };
         let body = encode(&CreateSandboxBody {
             template_id: request.template_id,
             metadata: request.metadata,
@@ -86,12 +85,13 @@ impl E2bControlApi for ReqwestE2bControlApi {
             allow_internet_access: request.allow_public_egress,
             network: NetworkBody {
                 allow_public_traffic: false,
-                deny_out: denies,
+                deny_out: network.deny_out,
+                allow_out: network.allow_out,
             },
-            auto_pause: true,
-            auto_pause_memory: true,
+            auto_pause,
+            auto_pause_memory,
             auto_resume: AutoResumeBody { enabled: false },
-            timeout: request.idle_timeout_seconds,
+            timeout,
         })?;
         let response: SandboxAccessBody = self
             .json(
@@ -124,30 +124,11 @@ impl E2bControlApi for ReqwestE2bControlApi {
     async fn get_sandbox_read_access(&self, sandbox_id: &str) -> Result<ControlSandboxReadAccess> {
         let response = self.sandbox_detail(sandbox_id).await?;
         ensure_sandbox_identity(sandbox_id, &response.sandbox_id)?;
-        if map_state(response.state) != ControlSandboxState::Running {
-            return Err(Error::Unavailable);
-        }
-        let Some(lifecycle) = response.lifecycle else {
-            return Err(Error::Unavailable);
-        };
-        if lifecycle.auto_resume {
-            return Err(Error::Unavailable);
-        }
-        let Some(token) = response
-            .envd_access_token
-            .filter(|token| !token.trim().is_empty())
-        else {
-            return Err(Error::Unavailable);
-        };
-        Ok(ControlSandboxReadAccess {
-            sandbox_id: response.sandbox_id,
-            domain: self.sandbox_domain.clone(),
-            envd_access_token: token,
-        })
+        read_access(response, &self.sandbox_domain)
     }
 
     async fn connect_sandbox(&self, sandbox_id: &str) -> Result<ControlSandboxAccess> {
-        self.connect_with_timeout(sandbox_id, self.idle_timeout_seconds)
+        self.connect_sandbox_with_timeout(sandbox_id, self.idle_timeout_seconds)
             .await
     }
 
@@ -156,10 +137,29 @@ impl E2bControlApi for ReqwestE2bControlApi {
         sandbox_id: &str,
         timeout_seconds: u32,
     ) -> Result<ControlSandboxAccess> {
+        if timeout_seconds == 0 {
+            return Err(Error::InvalidRequest);
+        }
+        let detail = self.sandbox_detail(sandbox_id).await?;
+        ensure_sandbox_identity(sandbox_id, &detail.sandbox_id)?;
+        if is_one_shot(&detail, &self.lifetime_metadata_key) {
+            let access = read_access(detail, &self.sandbox_domain)?;
+            return Ok(ControlSandboxAccess {
+                sandbox_id: access.sandbox_id,
+                domain: access.domain,
+                envd_access_token: access.envd_access_token,
+                traffic_access_token: None,
+            });
+        }
         self.connect_with_timeout(sandbox_id, timeout_seconds).await
     }
 
     async fn pause_sandbox(&self, sandbox_id: &str) -> Result<()> {
+        let detail = self.sandbox_detail(sandbox_id).await?;
+        ensure_sandbox_identity(sandbox_id, &detail.sandbox_id)?;
+        if is_one_shot(&detail, &self.lifetime_metadata_key) {
+            return Err(Error::Unavailable);
+        }
         self.empty(
             Method::Post,
             format!("/sandboxes/{}/pause", path_segment(sandbox_id)?),
@@ -227,6 +227,39 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 }
 
+fn read_access(
+    response: super::types::SandboxDetailBody,
+    sandbox_domain: &str,
+) -> Result<ControlSandboxReadAccess> {
+    if map_state(response.state) != ControlSandboxState::Running {
+        return Err(Error::Unavailable);
+    }
+    let Some(lifecycle) = response.lifecycle else {
+        return Err(Error::Unavailable);
+    };
+    if lifecycle.auto_resume {
+        return Err(Error::Unavailable);
+    }
+    let Some(token) = response
+        .envd_access_token
+        .filter(|token| !token.trim().is_empty())
+    else {
+        return Err(Error::Unavailable);
+    };
+    Ok(ControlSandboxReadAccess {
+        sandbox_id: response.sandbox_id,
+        domain: sandbox_domain.to_owned(),
+        envd_access_token: token,
+    })
+}
+
+fn is_one_shot(response: &super::types::SandboxDetailBody, lifetime_metadata_key: &str) -> bool {
+    response
+        .metadata
+        .get(lifetime_metadata_key)
+        .is_some_and(|value| value == "one_shot")
+}
+
 #[cfg(test)]
 #[path = "_tests_/control_client_tests.rs"]
 mod control_client_tests;
@@ -234,6 +267,9 @@ mod control_client_tests;
 #[cfg(test)]
 #[path = "_tests_/control_connect_timeout_tests.rs"]
 mod control_connect_timeout_tests;
+#[cfg(test)]
+#[path = "_tests_/control_create_body_tests.rs"]
+mod control_create_body_tests;
 
 #[cfg(test)]
 #[path = "_tests_/control_pagination_tests.rs"]
@@ -250,3 +286,7 @@ mod control_route_tests;
 #[cfg(test)]
 #[path = "_tests_/control_response_validation_tests.rs"]
 mod control_response_validation_tests;
+
+#[cfg(test)]
+#[path = "_tests_/sandbox_lifetime_tests.rs"]
+mod sandbox_lifetime_tests;

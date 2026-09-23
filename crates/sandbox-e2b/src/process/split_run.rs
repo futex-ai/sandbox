@@ -22,6 +22,8 @@ impl ConnectProcessTransport {
         let SplitProcessCommand {
             command,
             args,
+            cwd,
+            envs,
             stdout_limit,
             stderr_limit,
             deadline,
@@ -33,7 +35,7 @@ impl ConnectProcessTransport {
             stdout: stdout_limit,
             stderr: stderr_limit,
         };
-        let request = encode(&argv_start(command, args))?;
+        let request = encode(&argv_start(command, args, cwd, envs))?;
         let stream = self
             .http
             .stream(connection.clone(), "Start".to_owned(), request);

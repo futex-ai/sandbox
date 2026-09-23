@@ -6,6 +6,7 @@ mod backend;
 mod config;
 mod control;
 mod error;
+mod network;
 mod process;
 mod response_body;
 mod runtime_conventions;

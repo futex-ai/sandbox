@@ -241,6 +241,8 @@ fn command(stdout_limit: usize, stderr_limit: usize, deadline: Duration) -> Spli
     SplitProcessCommand {
         command: "bowser".to_owned(),
         args: vec!["capture".to_owned()],
+        cwd: None,
+        envs: Default::default(),
         stdout_limit,
         stderr_limit,
         deadline,

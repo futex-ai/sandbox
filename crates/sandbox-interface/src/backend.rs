@@ -14,8 +14,8 @@ use crate::{
     BackendReadOnlyExecRequest, BackendResizeScreenStackRequest, BackendRunProcessRequest,
     BackendStreamProcessRequest, BackendWriteFileRequest, OperationId, PortIngress,
     ProcessEventStream, ProviderRef, ReadOnlyExecOutput, ResourceOwner, Result, SandboxConsumer,
-    SandboxId, SandboxNetworkPolicy, SandboxProcessOutput, SandboxState, ScreenStackOutcome,
-    ScreenViewportSize, SnapshotId, SnapshotState,
+    SandboxId, SandboxLifetime, SandboxNetworkPolicy, SandboxProcessOutput, SandboxState,
+    ScreenStackOutcome, ScreenViewportSize, SnapshotId, SnapshotState,
 };
 
 /// Provider request to create a sandbox.
@@ -29,6 +29,8 @@ pub struct BackendCreateSandboxRequest {
     pub owner: ResourceOwner,
     /// Substrate consumer class preserved in provider metadata.
     pub consumer: SandboxConsumer,
+    /// Provider-neutral lifetime policy revalidated before provider dispatch.
+    pub lifetime: SandboxLifetime,
     /// Deployment identity used only as opaque metadata.
     pub deployment_id: String,
     /// Logical profile resolved by the adapter to provider configuration.
@@ -61,6 +63,8 @@ pub struct BackendManagedSandbox {
     pub operation_id: Option<OperationId>,
     /// Consumer class recovered from metadata, absent on legacy resources.
     pub consumer: Option<SandboxConsumer>,
+    /// Lifetime recovered from metadata, absent when missing or malformed.
+    pub lifetime: Option<SandboxLifetime>,
 }
 
 /// Provider snapshot state and opaque identity.
@@ -150,17 +154,28 @@ pub trait SandboxBackend: Send + Sync {
     ) -> Result<Vec<BackendManagedSandbox>>;
     /// Dispatches a new sandbox create after the caller records create intent.
     ///
+    /// After local validation, the backend must send its one create mutation
+    /// without a fallible provider inventory preflight. Ambiguous delivery may
+    /// use recovery reads but must not dispatch a second mutation.
+    ///
     /// Once invocation starts, retries must call `recover_sandbox_create`
     /// instead of this method until the outcome is reconciled.
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox>;
     /// Reconciles a correlated sandbox create without dispatching a new create.
+    ///
+    /// Recovery revalidates the request's network policy and returns
+    /// [`crate::Error::SandboxNetworkPolicyMismatch`] rather than adopting a
+    /// correlated sandbox created under a different policy.
     async fn recover_sandbox_create(
         &self,
         request: BackendCreateSandboxRequest,
     ) -> Result<Option<BackendSandbox>>;
     /// Inspects one provider sandbox.
     async fn inspect_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
-    /// Resumes or reconnects one paused provider sandbox.
+    /// Resumes or reconnects one provider sandbox.
+    ///
+    /// A one-shot sandbox may be verified only while already running; this
+    /// operation must not resume it or extend its original maximum lifetime.
     async fn resume_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
     /// Resolves one exact port into a call-local authenticated upstream.
     async fn port_ingress(&self, request: BackendPortIngressRequest) -> Result<PortIngress>;
@@ -174,7 +189,7 @@ pub trait SandboxBackend: Send + Sync {
         &self,
         request: BackendResizeScreenStackRequest,
     ) -> Result<ScreenViewportSize>;
-    /// Pauses one provider sandbox when supported.
+    /// Pauses one provider sandbox when supported; one-shot sandboxes reject it.
     async fn pause_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox>;
     /// Idempotently destroys one provider sandbox.
     async fn destroy_sandbox(&self, provider_ref: ProviderRef) -> Result<()>;
@@ -239,31 +254,40 @@ pub trait SandboxBackend: Send + Sync {
     ///
     /// Durable transcript capture must be active before a user login profile
     /// can run so startup output and exits cannot bypass terminal bookkeeping.
+    /// The provider identity must also be durably recoverable before that shell
+    /// can exit.
     /// The transcript limit must be validated before provider access and cannot
     /// exceed [`crate::FILE_TRANSFER_MAX_BYTES`].
     async fn create_terminal(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<BackendTerminal>;
-    /// Recovers a correlated terminal create without allocating a new PTY.
+    /// Recovers a correlated terminal create without allocating a new PTY,
+    /// including the original provider reference in `Exited` state when only
+    /// trusted identity state remains.
     ///
     /// The transcript limit has the same pre-provider-access bound as create.
     async fn recover_terminal_create(
         &self,
         request: BackendTerminalCreateRequest,
     ) -> Result<Option<BackendTerminal>>;
-    /// Inspects one provider PTY.
+    /// Inspects one provider PTY, including a durably recorded exited PTY.
     async fn inspect_terminal(
         &self,
         sandbox_provider_ref: ProviderRef,
         terminal_provider_ref: ProviderRef,
     ) -> Result<BackendTerminal>;
     /// Ingests bytes from the durable provider-side terminal log.
+    ///
+    /// Provider-side identity reads must carry an earlier absolute completion
+    /// deadline that reserves termination and return time inside this
+    /// operation's bounded wait.
     async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput>;
     /// Sends exact input once; success requires a decoded provider
     /// acknowledgment, and callers fail closed after ambiguous delivery.
     async fn write_terminal(&self, request: BackendInputRequest) -> Result<()>;
-    /// Idempotently closes one provider PTY.
+    /// Idempotently closes one provider PTY while retaining durable identity
+    /// for final transcript reads.
     async fn close_terminal(
         &self,
         sandbox_provider_ref: ProviderRef,

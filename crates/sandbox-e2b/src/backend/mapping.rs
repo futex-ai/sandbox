@@ -1,7 +1,7 @@
 //! E2B control-plane to provider-neutral state and error mapping.
 
 use sandbox_interface::{
-    Error as DomainError, ProviderRef, ResourceKind, SandboxState, SnapshotState, TerminalState,
+    Error as DomainError, ProviderRef, ResourceKind, SandboxState, SnapshotState,
 };
 
 use crate::{
@@ -50,14 +50,6 @@ pub(super) fn ready_snapshot(provider_ref: String) -> sandbox_interface::Backend
     sandbox_interface::BackendSnapshot {
         provider_ref: sandbox_interface::ProviderRef::new(provider_ref),
         state: SnapshotState::Ready,
-    }
-}
-
-pub(super) fn terminal_state(process: Option<&ProcessInfo>) -> TerminalState {
-    if process.is_some() {
-        TerminalState::Ready
-    } else {
-        TerminalState::Exited
     }
 }
 

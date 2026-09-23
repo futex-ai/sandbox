@@ -24,7 +24,11 @@ conventions only with an already validated value.
 `ReqwestE2bControlApi::new` applies the same safety checks at its public
 boundary: it rejects a non-HTTPS or non-root API origin, an empty or padded API
 key, an invalid sandbox routing domain, and a zero idle timeout before building
-the authenticated transport.
+the authenticated transport. Its public create request accepts typed allow
+destinations. The concrete client independently canonicalizes IP/CIDR allow and
+deny rules, enforces the 64-entry pre-deduplication bound, rejects domains and
+deny overlaps, and rejects an allowlist paired with ordinary internet access
+before sending an authenticated request.
 
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
 prefix, absolute screen-helper path, exact helper and agent process names
@@ -34,6 +38,73 @@ their current values so recovery and snapshot cleanup find the right resources
 and commands use the account present in their templates. Root, unsafe account
 names, unsafe prefixes or paths, shell characters, whitespace, and process
 names longer than Linux's 15-byte task-name limit are rejected.
+
+## Network Policies
+
+The adapter preserves the existing `Open` request exactly: the profile's
+`allow_public_egress` value becomes `allow_internet_access`, `allowOut` is
+omitted, and `denyOut` remains the sorted, deduplicated merge of built-in
+private ranges and profile `denied_destinations`.
+
+For `Allowlist`, `allow_internet_access` is always `false`, the same merged
+`denyOut` is retained, and canonical IP and CIDR values are sent in
+`network.allowOut`. E2B lets explicit allow rules take precedence over deny
+rules. The adapter therefore rejects an allowed IP or CIDR that overlaps any
+built-in private or profile deny range instead of letting provider precedence
+weaken deployment policy. Representable IPv4-mapped IPv6 values canonicalize
+to IPv4, and broader IPv6 ranges are compared against mapped IPv4 denies.
+
+The E2B adapter rejects every otherwise valid allowlist containing a `Domain`
+destination with `UnsupportedNetworkPolicy` before any control request. E2B
+matches domains from the sandbox-controlled HTTP `Host` header or TLS SNI,
+while allow rules outrank denied IP ranges. A sandbox could therefore connect
+to a denied address while presenting an allowed hostname. Rejecting the whole
+policy prevents domain rules from bypassing the adapter's private and
+deployment deny guarantees. Callers that require named destinations must use
+an adapter that can jointly verify the hostname and destination IP, or route
+through a trusted enforcing proxy represented by an allowed IP/CIDR. A caller
+using the public concrete control client directly receives
+`E2bAdapterError::InvalidRequest` for the same unsafe values before transport.
+See E2B's current
+[internet-access documentation](https://docs.e2b.dev/network/internet-access)
+for the underlying provider semantics.
+
+Allowlist creates add a versioned hash of the canonical policy to provider
+metadata. Recovery queries by the unchanged stable operation identity, then
+compares that hash before adopting the sandbox. A missing or different hash
+returns `SandboxNetworkPolicyMismatch`. Open creates add no policy metadata,
+which preserves their prior request body and lets existing Open resources
+recover unchanged. Create and recovery both rerun shape, bound,
+supported-destination, canonical, and deny-overlap validation before any
+provider call.
+
+## Sandbox Lifetimes
+
+E2B creation maps `SandboxLifetime` without changing the existing interactive
+payload:
+
+- `IdleAutoPause` sends `autoPause: true`, `autoPauseMemory: true`,
+  `autoResume: { enabled: false }`, and the configured idle timeout.
+- `OneShot { max_lifetime }` sends `autoPause: false`,
+  `autoPauseMemory: false`, `autoResume: { enabled: false }`, and that validated
+  whole-second maximum as `timeout`.
+
+The one-shot maximum is 3600 seconds, inclusive. Create and recover apply the
+same validation before provider access. Exact recovery metadata includes
+`lifetime`; one-shot metadata also includes
+`one_shot_max_lifetime_seconds`, under the configured metadata prefix. Managed
+inventory returns a lifetime only when those values form a complete valid
+policy. Older, missing, unknown, or malformed metadata stays unknown.
+
+Before E2B connect or pause, the concrete control client reads sandbox detail.
+An idle-auto-pause or legacy resource keeps the existing POST behavior. A
+running one-shot resource reacquires envd access from that GET only, provided
+automatic resume is disabled; it never sends connect, resume, pause, or timeout
+updates. A paused one-shot resource is unavailable rather than resumed. E2B
+does not return its private-traffic token from sandbox detail, so private-port
+ingress also returns backend unavailability instead of extending a one-shot
+deadline. The consumer remains responsible for explicit destruction after
+work, with E2B's original timeout as the final cleanup bound.
 
 ## Transport And Reconciliation
 
@@ -75,10 +146,14 @@ inventory retain the broader opaque route-segment format. An unusable ID from
 an accepted create remains delivery-ambiguous; an unusable inventory row is
 retryable provider unavailability.
 
-Sandbox creation filters on exact configured metadata, including the stable
-runtime-or-browser consumer value. Managed inventory returns a recognized
-consumer class, rejects an unusable sandbox identity, and leaves the consumer
-absent for resources created before that metadata was added. Snapshot recovery
+Sandbox creation sends its single provider mutation directly after request
+validation; it does not perform a fallible inventory preflight. The mutation
+carries exact configured metadata, including the stable runtime-or-browser
+consumer and lifetime values. Ambiguous delivery performs inventory-only
+recovery and never dispatches another create. Allowlist policy identity is
+compared on the returned row, not included in the inventory filter. Managed
+inventory returns recognized consumer and lifetime values, rejects an unusable
+sandbox identity, and leaves missing or malformed metadata absent. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
 The source stays paused when recovery sees no new snapshot or more than one
 candidate; only a synchronous completed create or exactly one recovered
@@ -99,22 +174,25 @@ validated configured sandbox domain. The complete HTTPS URL must parse to the
 exact configured envd hostname before the access-token header is added. Access
 tokens and private-traffic credentials stay inside call-local types and are
 redacted from debug output.
-Sandbox create and connect responses require nonblank envd and
+Sandbox create and ordinary connect responses require nonblank envd and
 private-traffic credentials. Missing or blank credentials keep an accepted
-create delivery-ambiguous and make connect retryable provider unavailability.
-Read-only lookup also requires a nonblank envd access token from an already
-running sandbox with automatic resume disabled. A missing or blank token maps
-to retryable provider unavailability before any envd request is attempted.
+create delivery-ambiguous and make ordinary connect retryable provider
+unavailability. One-shot read access requires only a nonblank envd token from
+an already running sandbox with automatic resume disabled; it deliberately has
+no traffic token. A missing or blank envd token maps to retryable provider
+unavailability before any envd request is attempted.
 Process and file requests explicitly authenticate the configured workload
 account. Only storage and reconciliation helpers override that identity with
 the trusted root account.
-Failed setup and verification diagnostics also redact the active opaque
-sandbox ID and envd access token before the final 4 KiB tail is selected. A
-known value split by the streaming tail boundary has its visible suffix
-redacted as well.
-Creation and recovery share validation. An unconfigured logical profile or
-unsupported network policy returns a handled provider-neutral error before any
-provider request.
+Failed setup and verification errors expose only the phase/index, exit status,
+retained raw output byte count, capture truncation, and optional retained
+sandbox. The adapter drains the existing 4 KiB capture window without copying
+its contents into errors or serialized failure metadata. It does not scan,
+normalize, or mask captured text. See [process diagnostics](process-diagnostics.md).
+Creation and recovery share validation. An invalid one-shot lifetime,
+unconfigured logical profile, invalid or unsupported network policy, or
+deployment-deny conflict returns a handled provider-neutral error before any
+provider request. Recovery rejects a mismatched network policy.
 
 ## Files, Processes, Terminals, And Screens
 
@@ -211,6 +289,22 @@ alone applies a per-request timeout equal to the remaining absolute budget plus 
 10-second transport allowance, so the client cannot truncate a valid one-hour
 stream.
 
+Direct-process requests pass their validated optional `cwd` and `envs` to
+envd's `Start` request. The working directory must be absolute, no longer than
+4,096 UTF-8 bytes, and free of NUL and control characters. Environment names
+use `[A-Za-z_][A-Za-z0-9_]*`; values reject NUL. At most 256 entries and 64 KiB
+across every name and value are accepted. The adapter rejects `PATH`, `HOME`,
+all `LD_*`, and all `DYLD_*` names so the template remains responsible for
+executable and loader resolution. Validation happens before the control API is
+asked for sandbox access. Process and terminal `Debug` contain only selected
+metadata; they omit command text, paths, environment entries, input, and
+captured output. Validation errors report typed reasons without echoing names
+or values. Raw process results, PTY output, and saved transcripts remain
+unmasked, including credentials deliberately printed by a command. The
+stateless read-only path still supplies only its existing explicit `cwd` and an empty environment map. PTY startup remains
+separate and keeps its fixed `LANG`, `LC_ALL`, and `TERM` values plus its
+existing optional `cwd`.
+
 The adapter starts every trusted Python file and terminal helper with isolated
 module lookup and without Python site initialization. Sandbox files in the
 working directory, `PYTHONPATH`, user-site packages, and startup customization
@@ -222,19 +316,56 @@ adapter rejects a root that is not an absolute normalized path and a target
 that is not a normalized relative path. Both fields are byte-bounded and
 reject empty components, dot components, parent traversal, and NUL bytes.
 
-Terminal recovery lists processes by the configured stable tag and never
-starts a replacement when recovery finds no match. Inspection and output reads
-bind the stored PID to that exact tag. Input and close requests select the tag
-inside the provider operation itself, so a process that reuses the stored PID
-cannot receive input or be killed. Restored-terminal cleanup also kills by tag,
-then requires its maintenance command to exit normally. Terminal log-directory
+Terminal recovery first lists processes by the configured stable tag and never
+starts a replacement. A live terminal remains compatible with older sandboxes
+that have no durable identity record. New terminals also store
+`<terminal-id>.identity.json` beside the transcript. The strict JSON record has
+schema `sandbox-e2b-terminal-identity-v1` plus the nonzero PID, terminal ID,
+operation ID, and exact process tag. Unknown schemas, extra fields, malformed
+content, request mismatches, and tag conflicts fail closed. When only a valid
+record remains, recovery and inspection reconstruct the same `e2b-pty-v1`
+provider reference and report `Exited`; an exited legacy terminal without a
+record remains unrecoverable.
+
+Create and recover run the same root-authenticated, ownership- and
+symlink-validating directory initializer before they list or read terminal
+identity state. This makes a missing directory on a fresh sandbox an
+idempotent initialization case while unsafe existing storage still fails
+closed.
+
+Inspection and output reads share one record-aware resolver that validates any
+present record and binds its stored PID to the exact tag, even while that
+process is live. Selector-only lookup remains available only for live legacy
+terminals without a record. If an unrelated process reuses the numeric PID, the
+durable record classifies the original terminal as `Exited` and output can
+still ingest its retained transcript; reuse of the expected tag by another PID
+fails closed. Only `NotFound(File)` enables record-free legacy lookup;
+provider-level terminal absence propagates instead of masquerading as a missing
+record. Output polling passes an earlier absolute completion deadline to the
+identity helper. The process transport reserves its three-second termination
+window before choosing an execution cutoff, and a final return reserve keeps
+cleanup ahead of the outer deadline. Recovery and inspection retain their
+explicit ten-second identity-read limit. Input first rejects an absent process,
+then selects the tag inside the provider mutation; close uses the same atomic
+selector, so PID reuse cannot target an unrelated process. Close is idempotent
+and retains the identity record for final transcript reads. Restored-terminal
+cleanup kills by tag and removes every transcript and identity record, then
+requires its maintenance command to exit normally.
+Terminal log-directory
 creation and restored cleanup open every path component relative to a directory
 descriptor with symlink following disabled. An intermediate symlink fails the
 operation without creating or deleting content through its target. The
 root-authenticated transcript wrapper traverses
 `/var/lib/sandbox-e2b/terminals` through non-following directory descriptors,
-creates a root-owned regular leaf exclusively, and gives that descriptor only
-to the tagged root supervisor. The root recorder writes through a private pipe,
+creates a root-owned `0600` identity record and transcript below the root-owned
+`0700` directory. It writes and fsyncs the identity JSON through a private
+temporary name, atomically hard-links the final name without replacement,
+fsyncs the directory, removes the temporary name, and syncs the directory
+again before it forks the shell recorder. Recovery therefore cannot observe an
+empty or partial final record. The supervisor gives the transcript descriptor
+only to the tagged root process. The identity record lasts until restored
+cleanup or sandbox destruction; explicit close retains it with the transcript
+for final ingestion. The root recorder writes through a private pipe,
 which the supervisor clips to the exact remaining byte count while continuing
 to drain overflow. The recorder's child closes all private descriptors,
 initializes supplementary groups, and drops its UID and GID to the configured
@@ -249,9 +380,11 @@ Terminal creation and recovery reject a provider log limit above the shared
 cannot grow beyond what that reader accepts.
 Oversized replacement writes fail before acquiring mutating sandbox access.
 
-The public backend conformance collected and streaming process probes use
-`/bin/sh` with self-contained scripts that emit exact stdout and stderr bytes,
-so a normal E2B image does not need a test-only executable.
+The public backend conformance process runs use `/bin/sh` with self-contained
+scripts: the collected run verifies `/workspace`, one environment entry, and
+an independent stderr token; the streaming run verifies ordered split output.
+A normal E2B image needs no test-only executable. The lifetime probe creates
+and destroys a bounded one-shot sandbox without pausing or resuming it.
 
 Image preparation accepts the caller's durably stored source provider
 reference. It stages files, runs setup and ordered verification, scrubs the
@@ -280,13 +413,6 @@ as root so `du` can traverse private adapter state such as write fences, and it
 propagates filesystem traversal and I/O failures rather than accepting a
 partial total.
 
-The terminal transcript descriptor and byte limit are installed by the trusted
-root supervisor. Its root recorder receives only a private write pipe, and only
-the recorder's child drops to the configured workload account before starting
-the intended interactive login shell. This keeps profile output and early exits
-inside terminal bookkeeping without giving the shell any way to replace,
-truncate, or forge earlier transcript bytes.
-
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only the exact version, width, and height
 object with no extra fields and requires a normal helper exit before reporting
@@ -308,6 +434,10 @@ cleanup retries every still-pending sandbox request before destroying the
 recovered or already tracked resource. The lifecycle test applies the same
 ownership to snapshot requests, polls recovery after an in-progress or
 delivery-ambiguous response, and retries that recovery during cleanup when no
-provider snapshot handle was obtained. Live
+provider snapshot handle was obtained. A separate ignored probe creates,
+recovers, and destroys one one-shot sandbox. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.
+Default and all-feature test runs never read credentials or contact E2B unless
+ignored tests are explicitly selected. There is no live E2B domain-allowlist
+probe because the adapter rejects domain destinations before provider access.

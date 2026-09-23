@@ -35,6 +35,7 @@ async fn ambiguous_sandbox_create_recovers_by_exact_metadata() {
             request.operation_id.to_string(),
         ),
         ("sandbox_consumer".to_owned(), "runtime".to_owned()),
+        ("sandbox_lifetime".to_owned(), "idle_auto_pause".to_owned()),
         ("sandbox_owner_kind".to_owned(), "agent".to_owned()),
         (
             "sandbox_sandbox_id".to_owned(),
@@ -45,15 +46,8 @@ async fn ambiguous_sandbox_create_recovers_by_exact_metadata() {
             request.owner.workspace_id.to_string(),
         ),
     ]);
-    let listed_metadata = expected_metadata.clone();
     let created_metadata = expected_metadata.clone();
     let control = Unimock::new((
-        E2bControlApiMock::list_sandboxes
-            .next_call(matching!(_))
-            .answers_arc(Arc::new(move |_, metadata| {
-                assert_eq!(metadata, listed_metadata);
-                Ok(Vec::new())
-            })),
         E2bControlApiMock::create_sandbox
             .next_call(matching!(_))
             .answers_arc(Arc::new(move |_, create| {
@@ -270,6 +264,7 @@ fn sandbox_request(snapshot_provider_ref: Option<ProviderRef>) -> BackendCreateS
             agent_id: Some(Uuid::now_v7()),
         },
         consumer: sandbox_interface::SandboxConsumer::Runtime,
+        lifetime: sandbox_interface::SandboxLifetime::IdleAutoPause,
         deployment_id: "deployment".to_owned(),
         profile: "general".to_owned(),
         snapshot_provider_ref,
@@ -291,6 +286,6 @@ fn access(sandbox_id: &str) -> ControlSandboxAccess {
         sandbox_id: sandbox_id.to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }

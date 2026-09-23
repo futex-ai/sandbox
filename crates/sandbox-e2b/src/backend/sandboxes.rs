@@ -4,17 +4,18 @@ use std::collections::BTreeMap;
 
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendManagedSandbox, BackendSandbox, Error, ProviderRef,
-    ResourceKind, Result, SandboxConsumer, SandboxNetworkPolicy,
+    ResourceKind, Result, SandboxConsumer, SandboxNetworkPolicy, SandboxState,
 };
 
 use crate::{
     config::E2bProfile,
     control::{ControlCreateSandbox, ControlSandbox, SandboxMetadata},
-    error::Error as AdapterError,
+    error::{Error as AdapterError, Result as AdapterResult},
+    network,
     runtime_conventions::E2bRuntimeConventions,
 };
 
-use super::{configured::E2bSandboxBackend, mapping};
+use super::{configured::E2bSandboxBackend, mapping, sandbox_metadata};
 
 pub(super) async fn managed(
     backend: &E2bSandboxBackend,
@@ -43,6 +44,7 @@ fn managed_sandbox(
             .metadata
             .get(&conventions.metadata_key("consumer"))
             .and_then(|value| SandboxConsumer::from_metadata(value)),
+        lifetime: sandbox_metadata::lifetime(&sandbox.metadata, conventions),
     }
 }
 
@@ -57,15 +59,8 @@ pub(super) async fn create(
     backend: &E2bSandboxBackend,
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
-    let profile = validate_request(backend, &request)?;
-    let metadata = metadata(backend, &request);
-    let existing = control_result(
-        backend,
-        backend.control.list_sandboxes(metadata.clone()).await,
-    )?;
-    if let Some(existing) = exactly_one(existing)? {
-        return Ok(map_sandbox(existing));
-    }
+    let (profile, network) = validate_request(backend, &request)?;
+    let metadata = sandbox_metadata::for_create(backend.config.runtime_conventions(), &request);
     let template_id = request.snapshot_provider_ref.map_or_else(
         || profile.template.clone(),
         |reference| reference.as_str().to_owned(),
@@ -74,25 +69,30 @@ pub(super) async fn create(
         .control
         .create_sandbox(ControlCreateSandbox {
             template_id,
-            metadata: metadata.clone(),
-            allow_public_egress: profile.allow_public_egress,
+            metadata: create_metadata(backend, metadata.clone(), &network),
+            allow_public_egress: network::allow_public_egress(
+                &network,
+                profile.allow_public_egress,
+            ),
             denied_destinations: profile.denied_destinations.clone(),
+            allowed_destinations: network::destinations(&network),
             idle_timeout_seconds: backend.config.idle_timeout_seconds(),
+            lifetime: request.lifetime,
         })
         .await;
     match created {
         Ok(created) => Ok(BackendSandbox {
             provider_ref: ProviderRef::new(created.sandbox_id),
-            state: sandbox_interface::SandboxState::Ready,
+            state: SandboxState::Ready,
         }),
         Err(AdapterError::DeliveryAmbiguous) => {
             let recovered =
                 control_result(backend, backend.control.list_sandboxes(metadata).await)?;
-            exactly_one(recovered)?
-                .map(map_sandbox)
-                .ok_or_else(|| Error::BackendUnavailable {
-                    backend_id: backend.config.backend_id().to_owned(),
-                })
+            let recovered = exactly_one(recovered)?.ok_or_else(|| Error::BackendUnavailable {
+                backend_id: backend.config.backend_id().to_owned(),
+            })?;
+            ensure_network_match(backend, &recovered, &network)?;
+            Ok(map_sandbox(recovered))
         }
         Err(error) => Err(map_control(backend, error)),
     }
@@ -102,38 +102,35 @@ pub(super) async fn recover(
     backend: &E2bSandboxBackend,
     request: BackendCreateSandboxRequest,
 ) -> Result<Option<BackendSandbox>> {
-    validate_request(backend, &request)?;
+    let (_, network) = validate_request(backend, &request)?;
     let existing = control_result(
         backend,
         backend
             .control
-            .list_sandboxes(metadata(backend, &request))
+            .list_sandboxes(sandbox_metadata::for_create(
+                backend.config.runtime_conventions(),
+                &request,
+            ))
             .await,
     )?;
-    Ok(exactly_one(existing)?.map(map_sandbox))
+    let Some(existing) = exactly_one(existing)? else {
+        return Ok(None);
+    };
+    ensure_network_match(backend, &existing, &network)?;
+    Ok(Some(map_sandbox(existing)))
 }
 
 fn validate_request<'a>(
     backend: &'a E2bSandboxBackend,
     request: &BackendCreateSandboxRequest,
-) -> Result<&'a E2bProfile> {
-    validate_network(request.network)?;
-    backend
+) -> Result<(&'a E2bProfile, SandboxNetworkPolicy)> {
+    request.lifetime.validate()?;
+    let profile = backend
         .config
         .profile(&request.profile)
-        .ok_or(Error::UnknownProfile)
-}
-
-/// `open` applies no additional per-session restriction; the deployment-owned
-/// profile egress policy is threaded unchanged. Any other typed policy fails
-/// before any provider dispatch.
-fn validate_network(network: SandboxNetworkPolicy) -> Result<()> {
-    match network {
-        SandboxNetworkPolicy::Open => Ok(()),
-        unsupported => Err(Error::UnsupportedNetworkPolicy {
-            policy: unsupported,
-        }),
-    }
+        .ok_or(Error::UnknownProfile)?;
+    let network = network::validate(&request.network, &profile.denied_destinations)?;
+    Ok((profile, network))
 }
 
 pub(super) async fn inspect(
@@ -162,7 +159,7 @@ pub(super) async fn resume(
     mapping::ensure_sandbox_identity(&provider_ref, &access.sandbox_id)?;
     Ok(BackendSandbox {
         provider_ref,
-        state: sandbox_interface::SandboxState::Ready,
+        state: SandboxState::Ready,
     })
 }
 
@@ -176,7 +173,7 @@ pub(super) async fn pause(
     )?;
     Ok(BackendSandbox {
         provider_ref,
-        state: sandbox_interface::SandboxState::Paused,
+        state: SandboxState::Paused,
     })
 }
 
@@ -187,43 +184,37 @@ pub(super) async fn destroy(backend: &E2bSandboxBackend, provider_ref: ProviderR
     )
 }
 
-fn metadata(backend: &E2bSandboxBackend, request: &BackendCreateSandboxRequest) -> SandboxMetadata {
-    let conventions = backend.config.runtime_conventions();
-    let mut metadata = BTreeMap::from([
-        (
-            conventions.metadata_key("deployment_id"),
-            request.deployment_id.clone(),
-        ),
-        (
-            conventions.metadata_key("operation_id"),
-            request.operation_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("sandbox_id"),
-            request.sandbox_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("workspace_id"),
-            request.owner.workspace_id.to_string(),
-        ),
-        (
-            conventions.metadata_key("consumer"),
-            request.consumer.as_str().to_owned(),
-        ),
-    ]);
-    match request.owner.agent_id {
-        Some(agent_id) => {
-            metadata.insert(conventions.metadata_key("agent_id"), agent_id.to_string());
-            metadata.insert(conventions.metadata_key("owner_kind"), "agent".to_owned());
-        }
-        None => {
-            metadata.insert(
-                conventions.metadata_key("owner_kind"),
-                "platform".to_owned(),
-            );
-        }
+fn create_metadata(
+    backend: &E2bSandboxBackend,
+    mut metadata: SandboxMetadata,
+    policy: &SandboxNetworkPolicy,
+) -> SandboxMetadata {
+    if let Some(fingerprint) = network::fingerprint(policy) {
+        metadata.insert(
+            backend
+                .config
+                .runtime_conventions()
+                .metadata_key("network_policy"),
+            fingerprint,
+        );
     }
     metadata
+}
+
+fn ensure_network_match(
+    backend: &E2bSandboxBackend,
+    sandbox: &ControlSandbox,
+    policy: &SandboxNetworkPolicy,
+) -> Result<()> {
+    let key = backend
+        .config
+        .runtime_conventions()
+        .metadata_key("network_policy");
+    let actual = sandbox.metadata.get(&key).map(String::as_str);
+    if network::fingerprint(policy).as_deref() != actual {
+        return Err(Error::SandboxNetworkPolicyMismatch);
+    }
+    Ok(())
 }
 
 fn exactly_one(mut sandboxes: Vec<ControlSandbox>) -> Result<Option<ControlSandbox>> {
@@ -251,7 +242,7 @@ fn map_control(backend: &E2bSandboxBackend, error: AdapterError) -> Error {
     )
 }
 
-fn control_result<T>(backend: &E2bSandboxBackend, result: crate::error::Result<T>) -> Result<T> {
+fn control_result<T>(backend: &E2bSandboxBackend, result: AdapterResult<T>) -> Result<T> {
     match result {
         Ok(value) => Ok(value),
         Err(error) => Err(map_control(backend, error)),

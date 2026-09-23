@@ -1,30 +1,37 @@
 //! Provider-process types and swappable transport trait.
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
-use sandbox_interface::{ProcessEventStream, Result};
+use sandbox_interface::{OperationId, ProcessEventStream, Result, TerminalId};
+use tokio::time::Instant;
 
 pub(super) use super::connection::ProcessConnection;
 use super::{regular_file_write::ProcessRegularFileWriteRequest, selector::ProcessSelector};
 
 /// Request for one persistent PTY wrapped by a bounded transcript helper.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessPtyRequest {
     /// Provider process correlation tag.
     pub tag: String,
     /// Provider-side transcript path.
     pub log_path: String,
+    /// Trusted provider-side terminal identity record path.
+    pub identity_path: String,
     /// Provider-side transcript hard cap.
     pub log_limit: usize,
     /// Unprivileged account used for the interactive login shell.
     pub workload_user: String,
+    /// Stable consumer terminal correlation handle.
+    pub terminal_id: TerminalId,
+    /// Durable create-operation correlation handle.
+    pub operation_id: OperationId,
     /// Optional initial working directory.
     pub cwd: Option<String>,
 }
 
 /// Non-interactive process command used for maintenance and file ingestion.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessCommand {
     /// Executable path.
     pub command: String,
@@ -32,6 +39,8 @@ pub struct ProcessCommand {
     pub args: Vec<String>,
     /// Optional initial working directory.
     pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Explicit output overflow behavior for this command.
     pub output_capture: ProcessOutputCapture,
     /// Maximum command execution duration, capped at 300 seconds.
@@ -56,12 +65,16 @@ pub enum ProcessOutputCapture {
 }
 
 /// Non-interactive process command with separate stream capture bounds.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct SplitProcessCommand {
     /// Executable path or `PATH`-resolved command name.
     pub command: String,
     /// Exact argument vector.
     pub args: Vec<String>,
+    /// Optional initial working directory.
+    pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Maximum captured stdout bytes before overflow is reported.
     pub stdout_limit: usize,
     /// Maximum captured stderr bytes before overflow is reported.
@@ -100,7 +113,7 @@ pub struct ProcessInfo {
 }
 
 /// Bounded result of a non-interactive provider process.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessRunOutput {
     /// Combined bounded stdout/stderr bytes.
     pub bytes: Vec<u8>,
@@ -116,7 +129,7 @@ pub struct ProcessRunOutput {
 ///
 /// Overflow and deadline expiry are reported as data so the caller can fail
 /// typed instead of parsing truncated output.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Default, Eq, PartialEq)]
 pub struct ProcessSplitOutput {
     /// Captured stdout bytes up to the requested limit.
     pub stdout: Vec<u8>,
@@ -133,7 +146,7 @@ pub struct ProcessSplitOutput {
 }
 
 /// Bounded transient PTY Connect result.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessConnectOutput {
     /// PTY bytes received during the bounded connection.
     pub bytes: Vec<u8>,
@@ -144,7 +157,7 @@ pub struct ProcessConnectOutput {
 }
 
 /// One durable provider-log read.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessFileChunk {
     /// Exact bytes from the requested absolute offset.
     pub bytes: Vec<u8>,
@@ -182,6 +195,8 @@ pub struct ProcessRegularFileRequest {
     pub max_bytes: usize,
     /// Maximum provider-side helper duration, capped at 300 seconds.
     pub timeout: Duration,
+    /// Optional absolute bound that includes helper termination.
+    pub completion_deadline: Option<Instant>,
 }
 
 /// Swappable envd process transport used by the E2B adapter.

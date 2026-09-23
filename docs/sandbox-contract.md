@@ -17,12 +17,30 @@ Managed inventory returns it when recognized and uses `None` for older
 resources that lack the metadata; adapters must not guess. Operations that are
 not valid for a class fail with a typed error before dispatch.
 
+`SandboxLifetime` gives both service and backend create requests one of two
+policies. `IdleAutoPause` is the default and preserves the existing resumable
+interactive lifecycle. `OneShot { max_lifetime }` never pauses, is not
+resumable, and remains running until the consumer destroys it or the provider
+timeout destroys it. A one-shot duration must be a whole number of seconds in
+`1..=3600`, bounded by `SANDBOX_ONE_SHOT_MAX_LIFETIME`; create and recovery must
+reject zero, fractional-second, or larger values before provider access.
+Consumers should explicitly destroy completed one-shot work instead of waiting
+for the timeout.
+
+Adapters preserve the lifetime kind and, for one-shot sandboxes, its maximum
+duration in provider metadata used for recovery. Managed inventory returns
+`Some(lifetime)` only when that metadata is complete and valid. Missing,
+unknown, or malformed lifetime metadata remains `None`, never an inferred
+default. Reacquiring access to a running one-shot sandbox must use a
+non-mutating read path. Resume, connect, pause, or any other access operation
+must not move its destruction deadline beyond the original `max_lifetime`.
+
 ## Backend Requirements
 
 Every `SandboxBackend` implementation must support:
 
 - create, recover, inspect, resume, pause, and destroy;
-- managed-sandbox listing with optional consumer correlation IDs;
+- managed-sandbox listing with optional consumer, lifetime, and correlation IDs;
 - snapshot inventory, creation, ambiguous-delivery recovery, inspection, and
   deletion;
 - bounded regular-file reads and replacement writes below a trusted root;
@@ -36,12 +54,59 @@ Every `SandboxBackend` implementation must support:
   recovery, and explicit source cleanup; and
 - idempotent screen-stack ensure plus exact validated viewport resize.
 
+## Network Policies
+
+`SandboxNetworkPolicy::Open` adds no per-session restriction. It never weakens
+the deployment-owned private-network or profile deny rules applied by an
+adapter. `SandboxNetworkPolicy::Allowlist` denies ordinary outbound traffic by
+default and permits only its typed `EgressDestination` values.
+
+An allowlist accepts no more than 64 caller-supplied entries. Exact IP values
+use `IpAddr`; CIDRs carry an address and a family-appropriate prefix and are
+canonicalized to their network address. IPv4-mapped IPv6 addresses and CIDRs
+contained by the mapped prefix canonicalize to IPv4 before policy identity and
+overlap checks. Domain values are lowercase ASCII DNS names no longer than 253
+bytes. Each label is `1..=63` bytes, begins and ends with an ASCII letter or
+digit, and otherwise contains only letters, digits, or hyphens. A domain may
+have one leading `*.` label, which matches subdomains at any depth but not the
+apex. Bare wildcards, embedded wildcards, canonical or legacy URL-style IP
+literals represented as domains, schemes, ports, paths, leading or trailing
+dots, and empty labels are invalid. Construction sorts and
+deduplicates canonical entries, but the original list must meet the 64-entry
+bound before deduplication. Adapters revalidate values from every construction
+or deserialization path before provider dispatch.
+
+Domain matching covers HTTP on port 80 through the `Host` header and TLS on
+port 443 through SNI. It does not cover QUIC/HTTP3 or arbitrary ports; those
+flows are controlled only by allowed IP and CIDR values. A provider whose
+allow rules outrank deny rules must reject any allowed IP or CIDR overlapping a
+private or deployment deny range before mutation. Cross-family checks treat
+IPv4 as its mapped IPv6 range so broader IPv6 CIDRs cannot bypass an IPv4 deny.
+An implicitly allowed DNS resolver must pass the same check.
+
+Destination kinds describe the provider-neutral policy vocabulary, not a
+promise that every adapter can enforce every kind. If a provider cannot apply
+the complete policy without weakening private or deployment deny rules, its
+adapter must return `UnsupportedNetworkPolicy` before any provider request.
+The adapter must not silently omit the unsupported destination or partially
+apply the policy.
+
+Create recovery receives the exact original policy. A backend must correlate
+the policy applied by create, revalidate the recovery value, and return
+`SandboxNetworkPolicyMismatch` when the correlated sandbox used a different
+policy. It must not silently adopt that sandbox or dispatch a replacement.
+
 Creation and snapshot methods separate an initial mutation from recovery. The
 trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
 same request; an empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.
+Sandbox creation must dispatch its one provider mutation directly after local
+validation. It must not put a fallible inventory read before that dispatch,
+because the caller cannot safely replay a create after invocation starts.
+Ambiguous delivery may perform recover-only inventory reads but must never send
+a second provider create.
 Snapshot inventory requires a nonempty source provider reference and nonempty
 correlation value before an authenticated provider request is built. Snapshot
 creation requires the same nonempty values before its mutation is sent.
@@ -134,68 +199,56 @@ sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
 remains delivery-ambiguous, while an invalid inventory row is provider
 unavailability. Snapshot inspection must reject a returned provider ID that
 differs from the requested ID.
-
-`SandboxBackend::stream_process` and the matching trusted-service method return
-a boxed stream after request validation and sandbox access succeed, or a single
-`DeadlineExpired` outcome if connection uses the entire budget. The service
-request identifies an owned sandbox; the backend request carries its provider
-reference. Both also carry only direct argv, separate stdout and stderr limits,
-an absolute deadline, and an idle timeout. Once a provider start is decoded,
-events are ordered as `Started { pid }`, zero or more `Stdout(bytes)` and
-`Stderr(bytes)` values, `Exited { exit_code, exited }`, and one final `Outcome`;
-a transport or timer failure before start may emit only the outcome. The
-`exited` field is true only for a normal process exit, so signal termination
-cannot be mistaken for a successful zero exit code.
-`Exited` is not terminal: `Completed` is valid only after the provider's success
-trailer is decoded and transport EOF follows. It confirms provider stream
-completion; consumers must inspect both `exit_code` and `exited` to determine
-whether the command succeeded.
-Missing or failed trailers, invalid ordering, malformed frames, and provider
-transport errors end with `TransportFailure`. Once `Exited` has been decoded,
-expiry of either timer before both the success trailer and transport EOF is
-also a `TransportFailure`, including expiry while delivery of `Exited` is blocked.
-`StdoutOverflow` and `StderrOverflow` are distinct, and only the bounded prefix
-may be emitted before either. Before process end, an absolute deadline produces
-`DeadlineExpired`; an idle timer produces `IdleTimeout` and resets only when
-stdout or stderr data arrives, not for start, keep-alive, process-end, or
-transport frames. For a coalesced HTTP fragment, all output uses the fragment's
-receipt time, not the later time when queue capacity allows its delivery. Every
-stream consumed to its end contains exactly one `Outcome` as its last item.
-The absolute budget begins before backend sandbox
-connection; setup consumes that same budget and cannot extend the process run.
-The idle timer begins before opening the process transport.
-
-If streaming ends before a process end is observed, the backend makes a bounded
-best-effort kill after it has learned the PID. This includes overflow, idle or
-absolute timeout, transport failure, and a consumer dropping the returned
-stream. For an owned stream, the backend sends its terminal outcome and closes
-the producer side before awaiting cleanup, so bounded-queue backpressure cannot
-delay that cleanup. An overflowing frame's final bounded output prefix is stored
-with the terminal outcome instead of waiting for data-queue capacity. The
-returned stream drains already queued data first, then yields that optional
-prefix, the independently stored outcome, and EOF. A slow consumer can delay its
-own observation but cannot extend process execution or cleanup. A consumer drop
-cannot receive an outcome because it no longer owns the stream, but it still
-triggers provider cleanup.
-Port zero, empty required
-text, oversized values, unknown
-profiles, and unsupported network policies fail before provider dispatch. A
-direct, streaming, or stateless process command cannot be empty, and its
-command and arguments total at most 128 KiB. Each direct or streaming stdout
-and stderr limit, and each combined stateless output limit, is at most 64 MiB.
-Collected direct execution, stateless read-only execution, and existing process
-transport helpers retain their 300-second ceiling. Only incremental
-`stream_process` accepts an absolute deadline up to 3,600 seconds; its required
-idle timeout must be nonzero and no greater than that deadline. A terminal
-output long poll is at most 30 seconds. A terminal create or recovery request
-cannot set its provider transcript limit above the shared 256 MiB regular-file
-ceiling. A backend accepting a streaming deadline must arrange for the provider
-resource to remain available through that deadline before starting the command.
-These bounds must be checked before acquiring provider sandbox access, and
-absolute deadlines must use checked arithmetic so no caller duration can panic.
-In particular, an
+Port zero, empty required text, oversized values, unknown profiles, invalid or
+unsupported network policies, and allowlist conflicts with deployment denies
+fail before provider dispatch. A
+direct, streaming, or stateless process command cannot be empty, and its command and
+arguments total at most 128 KiB. Each direct stream or combined stateless
+output limit is at most 64 MiB. Collected direct, stateless read-only, and
+non-streaming process-transport durations are at most 300 seconds. Streaming
+execution instead accepts up to 3,600 seconds and requires a nonzero idle
+timeout no greater than the deadline. A terminal output long poll
+is at most 30 seconds. A terminal create or recovery request cannot set its
+provider transcript limit above the shared 256 MiB regular-file ceiling.
+Resumable sandboxes must stay available through accepted streaming deadlines;
+one-shot sandboxes retain their original destruction deadline. These
+bounds must be checked before acquiring provider sandbox access, and absolute
+deadlines must use checked arithmetic so no caller duration can panic. In
+particular, an
 oversized replacement write must fail before connecting to or resuming its
 sandbox.
+
+`SandboxBackend::stream_process` and the matching trusted-service method return
+a boxed stream after validation and sandbox access succeed, or a single
+`DeadlineExpired` outcome if connection consumes the budget. The service
+request identifies an owned sandbox; the backend uses its provider reference.
+They carry argv, separate output limits, an absolute deadline, and an idle
+timeout. Events are ordered as `Started { pid }`, zero or more `Stdout(bytes)`
+or `Stderr(bytes)`, `Exited { exit_code, exited }`, then exactly one final
+`Outcome` followed by EOF. Before start, failure may emit only an outcome.
+Signal termination reports `exited: false`; `Completed` requires a provider
+success trailer and HTTP EOF, not a successful command exit. Missing or failed
+trailers, invalid ordering, malformed frames, bytes after the trailer, or timer
+expiry after `Exited` produces `TransportFailure`. Stdout and stderr overflow
+are distinct and emit only the bounded prefix.
+The absolute budget begins before sandbox connection. The idle timer starts
+before the process transport opens and resets only on fresh stdout or stderr
+arrivals, never start, keep-alive, exit, or delayed consumer delivery. Coalesced
+HTTP fragments use their receipt time. Bounded staging reports
+`ConsumerBackpressure` when full, so slow consumers cannot postpone timeout or
+cleanup. Overflow, backpressure, timeout, transport failure, or consumer drop
+triggers best-effort kill when an unfinished process has a known PID. Queued
+data and any separately retained final overflow prefix precede the terminal
+outcome; cleanup does not wait for consumer capacity.
+Trusted direct-process callers may select an optional working directory and
+environment map. A working directory must be absolute, at most 4,096 UTF-8
+bytes, and contain no NUL or control character. Environment names must match
+`[A-Za-z_][A-Za-z0-9_]*`; values may contain arbitrary UTF-8 except NUL. A map
+contains at most 256 entries and at most 64 KiB across the UTF-8 bytes of every
+name and value. `PATH`, `HOME`, every `LD_*` name, and every `DYLD_*` name are
+template-owned and cannot be overridden. The same interface-owned validation
+must run before provider access. Stateless read-only execution retains its
+required explicit working directory and does not accept an environment map.
 Helper processes may report success only after a normal exit; an exit-code
 field accompanying signal termination is not a successful completion.
 Trusted interpreter helpers must ignore caller-controlled module search paths,
@@ -245,14 +298,46 @@ starts before that shell, so login-profile output and exits remain captured
 without allowing the shell to replace, truncate, or forge the stored
 transcript.
 
-Sandbox create and connect access is valid only when the provider returns both
-a nonblank process credential and a nonblank private-traffic credential. An
-accepted create with unusable credentials remains delivery-ambiguous; connect
-returns retryable provider unavailability. Read-only access is valid only when
-the provider returns a nonblank call-local process credential for an
-already-running sandbox whose automatic resume is disabled. A missing or blank
-credential is retryable provider unavailability and must not be sent to the
-provider's process endpoint.
+Before the interactive shell can run or exit, the provider must durably record
+the terminal's provider identity, consumer terminal ID, create-operation ID,
+and atomic process selector in the same trusted storage class as the
+transcript. Create and recovery must securely initialize that storage before
+attempting an identity read. The final record name must remain absent while
+its private inode is written and synced, then be published atomically without
+replacing another record and followed by a directory sync. Recovery validates
+that versioned record against the original request. If the process has already
+disappeared, recovery and inspection return the recorded provider reference and
+`Exited`; they never allocate a
+replacement. Unknown record versions, malformed records, identity conflicts,
+and duplicate selectors fail closed. A live legacy terminal without a record
+remains discoverable by its exact selector, but an exited legacy terminal has
+no recoverable provider identity. Input rejects an exited terminal. Explicit
+close stays idempotent and retains its identity record so final transcript
+bytes remain readable; restored-sandbox cleanup removes all retained terminal
+identity state.
+Inspection and output reads must share the same record-aware identity
+resolution. They validate any present record even while its exact process is
+live, and use selector-only compatibility only when no record exists. If an
+unrelated process reuses an exited terminal's numeric PID, the trusted record
+proves the original terminal is `Exited` and its retained transcript remains
+readable. A conflicting process using the expected terminal tag still fails
+closed. Only a typed missing-file result may enable the legacy fallback;
+provider-level terminal absence and every other read error must propagate.
+During bounded output polling, the identity helper receives an absolute
+completion deadline earlier than the outer deadline. The provider transport
+derives its execution cutoff by reserving the full termination window, and the
+remaining gap lets the completed helper result return to the caller.
+
+Sandbox create access is valid only when the provider returns both a nonblank
+process credential and a nonblank private-traffic credential. An accepted
+create with unusable credentials remains delivery-ambiguous. Ordinary connect
+requires the same credentials and maps missing values to retryable provider
+unavailability. Read-only access is valid when the provider returns a nonblank
+call-local process credential for an already-running sandbox whose automatic
+resume is disabled. This read path may omit a private-traffic credential; an
+operation that requires that credential must fail instead of mutating a
+one-shot sandbox's timeout. A missing or blank process credential is retryable
+provider unavailability and must not be sent to the provider process endpoint.
 
 Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
 must not exceed 8,294,400 pixels. Resize success requires an exact
@@ -261,27 +346,44 @@ normal helper exit. An adapter that cannot confirm resize process termination
 returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
 fence and arrange cleanup.
 
-Provider diagnostics returned through handled errors must not contain secret
-values or opaque backend handles. Image-command failures must redact every
-provider identifier and credential known to the adapter before applying the
-final output bound. If streaming capture already omitted earlier bytes, a
-leading fragment that can be the suffix of a known sensitive value must also
-be redacted. Unknown profile errors do not echo an untrusted profile name.
+[Process diagnostics](process-diagnostics.md) define the boundary between
+sensitive process data and automatic diagnostics. Process and terminal `Debug`,
+tracing, and handled image errors expose selected metadata only. They omit
+caller-controlled command text, paths, environment entries, input, and output
+contents instead of matching known secrets. Image failures retain exit and
+capture facts without output snippets; nested provider references hide their
+contents in `Debug`. Environment validation reports typed reasons without
+echoing a name or value. Unknown profile errors do not echo an untrusted name.
+Raw stdout/stderr, PTY output, and saved terminal transcripts remain unmasked
+within their existing bounds. Their explicit data access and transcript
+serialization must preserve content, even when it contains a secret.
 
 ## Conformance
 
 The public `sandbox_interface::conformance::exercise_backend` harness checks
-shared lifecycle, recovery, collected and streaming process execution, ingress,
-image, and terminal guarantees. Both process probes use `/bin/sh` plus
-self-contained scripts that emit exact stdout and stderr bytes; conforming
-images therefore need a standard shell but no harness-only executable. The
-streaming probe also requires a nonzero start PID, output before exit, exit
-before the completed outcome, and no event after that outcome.
-It retains the exact request for every sandbox and snapshot create before
-dispatch. After every create result, including synchronous success, it proves
-the correlated provider identity through recover-only polling; it never
-redispatches creation. A pending recovery waits one second before the next
-poll, with no more than 60 waits.
+shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
+It includes `exercise_one_shot_lifetime`, which creates, recovers, explicitly
+destroys, and idempotently cleans up a bounded one-shot sandbox.
+The process probe runs one `/bin/sh` command with `/workspace` as its working
+directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
+environment bytes on stdout plus an independent deterministic token on stderr,
+so conforming images need a standard shell but no harness-only executable.
+The streaming probe uses a separate self-contained `/bin/sh` script and
+checks a nonzero PID, output before exit, a completed outcome after exit,
+and no event after the outcome.
+
+The separate `exercise_network_allowlist` capability probe applies only to
+adapters that support domain destinations. It creates a sandbox that permits
+only `example.com`, uses `/bin/sh -c` and `curl` to require an application
+response from that host, and requires a fetch from a different host to exit
+unsuccessfully. Both curl commands put `--disable` first so user or system
+startup configuration cannot redirect a request or fabricate a policy result.
+The probe also proves that recovery rejects a different policy.
+The main harness retains the exact request for every sandbox and snapshot
+create before dispatch. After every create result, including synchronous
+success, it proves the correlated provider identity through recover-only
+polling; it never redispatches creation. A pending recovery waits one second
+before the next poll, with no more than 60 waits.
 
 Each returned terminal, snapshot, or sandbox is recorded before later work can
 fail. Final cleanup attempts every tracked resource in dependency order and

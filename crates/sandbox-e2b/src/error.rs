@@ -12,8 +12,8 @@ pub enum Error {
     /// The provider rejected authentication or authorization.
     #[error("[sandbox_e2b/error] provider authentication failed")]
     Unauthorized,
-    /// The provider rejected a typed request.
-    #[error("[sandbox_e2b/error] provider rejected the request")]
+    /// An E2B request is invalid or was rejected by the provider.
+    #[error("[sandbox_e2b/error] E2B request is invalid or was rejected")]
     InvalidRequest,
     /// The provider is temporarily unavailable or rate limited.
     #[error("[sandbox_e2b/error] provider is temporarily unavailable")]

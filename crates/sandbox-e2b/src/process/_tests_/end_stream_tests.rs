@@ -36,6 +36,8 @@ async fn split_collector_rejects_an_error_end_stream_envelope() {
             SplitProcessCommand {
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
+                cwd: None,
+                envs: Default::default(),
                 stdout_limit: 1024,
                 stderr_limit: 1024,
                 deadline: Duration::from_secs(1),
@@ -201,6 +203,8 @@ fn split_command() -> SplitProcessCommand {
     SplitProcessCommand {
         command: "/bin/true".to_owned(),
         args: Vec::new(),
+        cwd: None,
+        envs: Default::default(),
         stdout_limit: 1024,
         stderr_limit: 1024,
         deadline: Duration::from_secs(1),

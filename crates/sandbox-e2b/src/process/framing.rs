@@ -111,7 +111,7 @@ pub(super) enum ProcessDataChannel {
     Stderr,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub(super) enum ProcessEvent {
     Start(u32),
     Data {

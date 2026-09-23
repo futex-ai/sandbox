@@ -1,31 +1,70 @@
 //! Reusable backend conformance harness for provider implementations.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
-use futures_util::StreamExt;
 use uuid::Uuid;
 
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInputRequest,
     BackendInspectSnapshotRequest, BackendOutputRequest, BackendPortIngressRequest,
-    BackendReadFileRequest, BackendRunProcessRequest, BackendStreamProcessRequest,
-    BackendTerminalCreateRequest, BackendWriteFileRequest, Error, OperationId, ProcessStreamEvent,
-    ProcessStreamOutcome, ProviderRef, ResourceOwner, Result, SandboxBackend, SandboxConsumer,
-    SandboxId, SandboxNetworkPolicy, SnapshotId, TerminalId,
+    BackendReadFileRequest, BackendRunProcessRequest, BackendTerminalCreateRequest,
+    BackendWriteFileRequest, Error, OperationId, ResourceOwner, Result, SandboxBackend,
+    SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy, SnapshotId, TerminalId,
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
-const PROCESS_SCRIPT: &str = "printf '%s' 'argv-direct'; printf '%s' 'separate-stderr' >&2";
-const STREAM_PROCESS_SCRIPT: &str = "printf '%s' 'stream-stdout'; printf '%s' 'stream-stderr' >&2";
+const PROCESS_CWD: &str = "/workspace";
+const PROCESS_ENV_VALUE: &str = "environment-map";
+const PROCESS_SCRIPT: &str = "pwd; printf %s \"$SANDBOX_PROBE\"; printf %s 'separate-stderr' >&2";
+const PROCESS_STDERR: &[u8] = b"separate-stderr";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
-/// The target image must provide `/bin/sh`; the process probe supplies its own
-/// script and requires exact stdout and stderr bytes.
+/// The target image must provide `/bin/sh`; the split-output probe supplies its
+/// own shell script.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    exercise_one_shot_lifetime(backend, profile).await?;
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
     let outcome = exercise_backend_with_resources(backend, &mut resources, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
+/// Proves that one domain allowlist permits its exact HTTPS destination and
+/// prevents an application response from a different HTTPS destination.
+///
+/// The target image must provide `/bin/sh` and `curl`. The helper tracks and
+/// destroys its sandbox even when either fetch probe fails. Both curl commands
+/// disable startup configuration before processing any other option.
+pub async fn exercise_network_allowlist(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let outcome =
+        crate::conformance_network::exercise(backend, &mut resources, owner, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
+/// Proves that a backend can create, recover, and explicitly destroy a bounded
+/// one-shot sandbox without relying on idle pause or resume behavior.
+pub async fn exercise_one_shot_lifetime(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let request = sandbox_request(
+        owner,
+        profile,
+        None,
+        SandboxLifetime::OneShot {
+            max_lifetime: Duration::from_secs(60),
+        },
+    );
+    let outcome = match resources.create_sandbox(request).await {
+        Ok(sandbox) => backend.destroy_sandbox(sandbox.provider_ref).await,
+        Err(error) => Err(error),
+    };
     let cleanup = resources.cleanup().await;
     finish(outcome, cleanup)
 }
@@ -41,7 +80,12 @@ async fn exercise_backend_with_resources(
     let workspace_id = Uuid::now_v7();
     let owner = ResourceOwner::agent(workspace_id, Uuid::now_v7());
     let source = resources
-        .create_sandbox(sandbox_request(owner, profile, None))
+        .create_sandbox(sandbox_request(
+            owner,
+            profile,
+            None,
+            SandboxLifetime::IdleAutoPause,
+        ))
         .await?;
     backend.inspect_sandbox(source.provider_ref.clone()).await?;
     let paused = backend.pause_sandbox(source.provider_ref.clone()).await?;
@@ -104,13 +148,15 @@ async fn exercise_backend_with_resources(
             sandbox_provider_ref: source.provider_ref.clone(),
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), PROCESS_SCRIPT.to_owned()],
+            cwd: Some(PROCESS_CWD.to_owned()),
+            envs: BTreeMap::from([("SANDBOX_PROBE".to_owned(), PROCESS_ENV_VALUE.to_owned())]),
             stdout_limit: 4096,
             stderr_limit: 1024,
             deadline: Duration::from_secs(60),
         })
         .await?;
-    if process.stdout != b"argv-direct"
-        || process.stderr != b"separate-stderr"
+    if process.stdout != b"/workspace\nenvironment-map"
+        || process.stderr != PROCESS_STDERR
         || process.exit_code != Some(0)
         || !process.exited
         || process.stdout_overflowed
@@ -120,13 +166,14 @@ async fn exercise_backend_with_resources(
             "backend process run changed bounded split output",
         ));
     }
-    exercise_process_stream(backend, source.provider_ref.clone()).await?;
+    crate::conformance_process_stream::exercise(backend, source.provider_ref.clone()).await?;
 
     let first = resources
         .create_sandbox(sandbox_request(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -137,6 +184,7 @@ async fn exercise_backend_with_resources(
             owner,
             profile,
             Some(snapshot.provider_ref.clone()),
+            SandboxLifetime::IdleAutoPause,
         ))
         .await?;
     backend
@@ -191,74 +239,18 @@ async fn exercise_backend_with_resources(
     crate::conformance_image::exercise(backend, profile, workspace_id).await
 }
 
-async fn exercise_process_stream(
-    backend: &dyn SandboxBackend,
-    sandbox_provider_ref: ProviderRef,
-) -> Result<()> {
-    let mut stream = backend
-        .stream_process(BackendStreamProcessRequest {
-            sandbox_provider_ref,
-            command: "/bin/sh".to_owned(),
-            args: vec!["-c".to_owned(), STREAM_PROCESS_SCRIPT.to_owned()],
-            stdout_limit: 4096,
-            stderr_limit: 1024,
-            deadline: Duration::from_secs(60),
-            idle_timeout: Duration::from_secs(10),
-        })
-        .await?;
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let mut started = false;
-    let mut exited = false;
-    let mut completed = false;
-    while let Some(event) = stream.next().await {
-        if completed {
-            return Err(Error::internal_message(
-                "backend process stream emitted an event after its outcome",
-            ));
-        }
-        match event {
-            ProcessStreamEvent::Started { pid } if !started && pid != 0 => started = true,
-            ProcessStreamEvent::Stdout(bytes) if started && !exited => {
-                stdout.extend_from_slice(&bytes);
-            }
-            ProcessStreamEvent::Stderr(bytes) if started && !exited => {
-                stderr.extend_from_slice(&bytes);
-            }
-            ProcessStreamEvent::Exited {
-                exit_code,
-                exited: true,
-            } if started && !exited && exit_code == 0 => {
-                exited = true;
-            }
-            ProcessStreamEvent::Outcome(ProcessStreamOutcome::Completed) if exited => {
-                completed = true;
-            }
-            _ => {
-                return Err(Error::internal_message(
-                    "backend process stream changed event ordering or outcome",
-                ));
-            }
-        }
-    }
-    if !completed || stdout != b"stream-stdout" || stderr != b"stream-stderr" {
-        return Err(Error::internal_message(
-            "backend process stream changed split output",
-        ));
-    }
-    Ok(())
-}
-
 fn sandbox_request(
     owner: ResourceOwner,
     profile: &str,
     snapshot_provider_ref: Option<crate::ProviderRef>,
+    lifetime: SandboxLifetime,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
         consumer: SandboxConsumer::Runtime,
+        lifetime,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

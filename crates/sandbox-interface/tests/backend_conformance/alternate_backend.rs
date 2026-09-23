@@ -14,8 +14,9 @@ use sandbox_interface::{
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
     BackendStreamProcessRequest, BackendTerminal, BackendTerminalCreateRequest,
     BackendTerminalOutput, BackendWriteFileRequest, OperationId, PortIngress, ProcessEventStream,
-    ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend, SandboxProcessOutput, SandboxState,
-    ScreenStackCapabilities, ScreenStackOutcome, ScreenViewportSize, SnapshotState, TerminalState,
+    Error, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend, SandboxNetworkPolicy,
+    SandboxProcessOutput, SandboxState, ScreenStackCapabilities, ScreenStackOutcome,
+    ScreenViewportSize, SnapshotState, TerminalState,
 };
 
 use super::{
@@ -27,7 +28,7 @@ use super::{
 pub(super) struct AlternateBackend {
     next_sandbox: AtomicU64,
     next_snapshot: AtomicU64,
-    sandboxes: Mutex<HashMap<OperationId, ProviderRef>>,
+    sandboxes: Mutex<HashMap<OperationId, (ProviderRef, SandboxNetworkPolicy)>>,
     snapshots: Mutex<Vec<ProviderRef>>,
     files: Mutex<HashMap<String, Vec<u8>>>,
     pub(super) faults: AlternateBackendFaults,
@@ -50,14 +51,17 @@ impl SandboxBackend for AlternateBackend {
     }
 
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox> {
+        let network = request.network.validated()?;
+        request.lifetime.validate()?;
+        self.faults.record_sandbox_lifetime(request.lifetime);
         let index = self.next_sandbox.fetch_add(1, Ordering::Relaxed);
         let provider_ref = ProviderRef::new(format!("alternate-sandbox-{index}"));
         self.sandboxes
             .lock()
             .expect("sandbox lock")
-            .insert(request.operation_id, provider_ref.clone());
+            .insert(request.operation_id, (provider_ref.clone(), network));
         if self.faults.record_sandbox_create(&provider_ref) {
-            return Err(sandbox_interface::Error::BackendUnavailable {
+            return Err(Error::BackendUnavailable {
                 backend_id: "alternate".to_owned(),
             });
         }
@@ -71,19 +75,22 @@ impl SandboxBackend for AlternateBackend {
         &self,
         request: BackendCreateSandboxRequest,
     ) -> Result<Option<BackendSandbox>> {
+        let network = request.network.validated()?;
+        request.lifetime.validate()?;
         if self.faults.miss_recovery() {
             return Ok(None);
         }
-        Ok(self
-            .sandboxes
-            .lock()
-            .expect("sandbox lock")
-            .get(&request.operation_id)
-            .cloned()
-            .map(|provider_ref| BackendSandbox {
-                provider_ref,
-                state: SandboxState::Ready,
-            }))
+        let sandboxes = self.sandboxes.lock().expect("sandbox lock");
+        let Some((provider_ref, created_network)) = sandboxes.get(&request.operation_id) else {
+            return Ok(None);
+        };
+        if created_network != &network {
+            return Err(Error::SandboxNetworkPolicyMismatch);
+        }
+        Ok(Some(BackendSandbox {
+            provider_ref: provider_ref.clone(),
+            state: SandboxState::Ready,
+        }))
     }
 
     async fn inspect_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox> {
@@ -193,7 +200,7 @@ impl SandboxBackend for AlternateBackend {
 
     async fn delete_snapshot(&self, provider_ref: ProviderRef) -> Result<()> {
         if self.faults.record_snapshot_delete(&provider_ref) {
-            return Err(sandbox_interface::Error::BackendUnavailable {
+            return Err(Error::BackendUnavailable {
                 backend_id: "alternate".to_owned(),
             });
         }
@@ -290,7 +297,7 @@ impl SandboxBackend for AlternateBackend {
         terminal_provider_ref: ProviderRef,
     ) -> Result<()> {
         if self.faults.record_terminal_close(&terminal_provider_ref) {
-            return Err(sandbox_interface::Error::BackendUnavailable {
+            return Err(Error::BackendUnavailable {
                 backend_id: "alternate".to_owned(),
             });
         }

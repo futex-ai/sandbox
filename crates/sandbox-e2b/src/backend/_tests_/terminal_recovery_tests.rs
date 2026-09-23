@@ -1,13 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendTerminalCreateRequest, Error, OperationId, ProviderRef, SandboxBackend, TerminalId,
+    BackendTerminalCreateRequest, Error, OperationId, ProviderRef, ResourceKind, SandboxBackend,
+    TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
     ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile, E2bRuntimeConventions,
-    ProcessInfo, ProcessSelector, ProcessTransportMock,
+    ProcessInfo, ProcessRunOutput, ProcessSelector, ProcessTransportMock,
 };
 
 use super::configured::E2bSandboxBackend;
@@ -23,17 +24,23 @@ async fn terminal_recovery_finds_the_tagged_process_without_restarting_it() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
-    let processes = Unimock::new(
+    let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(vec![ProcessInfo {
                 pid: 42,
                 tag: Some(tag),
             }])),
-    );
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
+    ));
     let config = config().with_runtime_conventions(
         E2bRuntimeConventions::new("tenant", "tenant-terminal-", "/opt/tenant/screen-helper")
             .unwrap(),
@@ -73,14 +80,20 @@ async fn terminal_recovery_does_not_allocate_when_the_tag_is_absent() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
-    let processes = Unimock::new(
+    let processes = Unimock::new((
+        successful_directory_creation(),
         ProcessTransportMock::list
             .next_call(matching!(_))
             .returns(Ok(Vec::new())),
-    );
+        ProcessTransportMock::read_regular_file
+            .next_call(matching!(_, _))
+            .returns(Err(Error::NotFound {
+                resource: ResourceKind::File,
+            })),
+    ));
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(processes));
 
@@ -109,7 +122,7 @@ async fn restored_cleanup_unmounts_and_removes_drive_credentials() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let expected_tag = terminal_tag.clone();
@@ -175,7 +188,7 @@ async fn restored_cleanup_rejects_non_normal_helper_termination() {
                 sandbox_id: "sandbox".to_owned(),
                 domain: "e2b.app".to_owned(),
                 envd_access_token: "call-local-token".to_owned(),
-                traffic_access_token: "traffic-token".to_owned(),
+                traffic_access_token: Some("traffic-token".to_owned()),
             })),
     );
     let processes = Unimock::new((
@@ -200,6 +213,17 @@ async fn restored_cleanup_rejects_non_normal_helper_termination() {
         .expect_err("signalled cleanup must fail closed");
 
     assert!(matches!(error, Error::Internal(_)));
+}
+
+fn successful_directory_creation() -> impl unimock::Clause {
+    ProcessTransportMock::run
+        .next_call(matching!(_, _))
+        .returns(Ok(ProcessRunOutput {
+            bytes: Vec::new(),
+            exit_code: Some(0),
+            exited: true,
+            output_truncated: false,
+        }))
 }
 
 fn config() -> E2bAdapterConfig {

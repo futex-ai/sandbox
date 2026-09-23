@@ -7,7 +7,8 @@ use std::{
 };
 
 use sandbox_interface::{
-    BackendOutputRequest, Error, ProviderRef, SandboxBackend, TerminalId, TerminalState,
+    BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxBackend, TerminalId,
+    TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
 
@@ -19,8 +20,9 @@ use crate::{
 use super::{configured::E2bSandboxBackend, terminal_identity::TerminalIdentity};
 
 #[tokio::test]
-async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
+async fn terminal_reads_bound_identity_and_log_helpers_within_the_outer_deadline() {
     let terminal_id = TerminalId::new();
+    let started = tokio::time::Instant::now();
     let observed = Arc::new(Mutex::new(Vec::new()));
     let control = Unimock::new(
         E2bControlApiMock::connect_sandbox
@@ -36,10 +38,16 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
             .answers_arc({
                 let observed = observed.clone();
                 Arc::new(move |_, _, request: ProcessRegularFileRequest| {
-                    observed
-                        .lock()
-                        .expect("deadline observations")
-                        .push(request.timeout);
+                    observed.lock().expect("deadline observations").push((
+                        request.path.clone(),
+                        request.timeout,
+                        request.completion_deadline,
+                    ));
+                    if request.path.ends_with(".identity.json") {
+                        return Err(Error::NotFound {
+                            resource: ResourceKind::File,
+                        });
+                    }
                     Ok(ProcessFileChunk {
                         bytes: b"output".to_vec(),
                         total_size: 6,
@@ -59,15 +67,25 @@ async fn terminal_reads_pass_zero_and_max_wait_bounded_helper_deadlines() {
     }
 
     let observed = observed.lock().expect("deadline observations");
-    assert_eq!(observed.len(), 2);
-    for (timeout, wait) in observed
-        .iter()
-        .copied()
-        .zip([Duration::ZERO, Duration::from_secs(30)])
-    {
-        assert!(timeout > wait + Duration::from_secs(4));
-        assert!(timeout <= wait + Duration::from_secs(5));
-    }
+    assert_eq!(observed.len(), 4);
+    assert!(observed[0].0.ends_with(".identity.json"));
+    assert_eq!(observed[0].1, Duration::from_secs(10));
+    let zero_wait_deadline = observed[0].2.expect("zero-wait identity deadline");
+    assert!(zero_wait_deadline > started + Duration::from_secs(4));
+    assert!(zero_wait_deadline <= started + Duration::from_secs(5));
+    assert!(observed[1].0.ends_with(".log"));
+    assert!(observed[1].1 > Duration::from_secs(4));
+    assert!(observed[1].1 <= Duration::from_secs(5));
+    assert!(observed[1].2.is_none());
+    assert!(observed[2].0.ends_with(".identity.json"));
+    assert_eq!(observed[2].1, Duration::from_secs(10));
+    let max_wait_deadline = observed[2].2.expect("max-wait identity deadline");
+    assert!(max_wait_deadline > started + Duration::from_secs(34));
+    assert!(max_wait_deadline <= started + Duration::from_secs(35));
+    assert!(observed[3].0.ends_with(".log"));
+    assert!(observed[3].1 > Duration::from_secs(34));
+    assert!(observed[3].1 <= Duration::from_secs(35));
+    assert!(observed[3].2.is_none());
 }
 
 #[tokio::test]
@@ -117,7 +135,7 @@ fn access() -> ControlSandboxAccess {
         sandbox_id: "sandbox".to_owned(),
         domain: "e2b.app".to_owned(),
         envd_access_token: "call-local-token".to_owned(),
-        traffic_access_token: "traffic-token".to_owned(),
+        traffic_access_token: Some("traffic-token".to_owned()),
     }
 }
 

@@ -24,7 +24,8 @@ use crate::{
 
 use super::{
     files, image_realization, mapping, port_ingress, process_run, process_stream, read_only_exec,
-    sandboxes, screen_resize, screen_stack, snapshots, terminal_output, terminals,
+    sandboxes, screen_resize, screen_stack, snapshots, terminal_operations, terminal_output,
+    terminals,
 };
 
 /// E2B implementation of the consumer's mandatory sandbox backend contract.
@@ -43,7 +44,12 @@ impl E2bSandboxBackend {
                 config.api_key().to_owned(),
                 config.sandbox_domain().to_owned(),
                 config.idle_timeout_seconds(),
-            ),
+            )
+            .map(|control| {
+                control.with_lifetime_metadata_key(
+                    config.runtime_conventions().metadata_key("lifetime"),
+                )
+            }),
             config.backend_id(),
             None,
         )?;
@@ -171,7 +177,7 @@ impl SandboxBackend for E2bSandboxBackend {
     }
 
     async fn clean_restored_terminals(&self, sandbox_provider_ref: ProviderRef) -> Result<()> {
-        terminals::clean_restored(self, sandbox_provider_ref).await
+        terminal_operations::clean_restored(self, sandbox_provider_ref).await
     }
 
     async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
@@ -227,7 +233,7 @@ impl SandboxBackend for E2bSandboxBackend {
     }
 
     async fn write_terminal(&self, request: BackendInputRequest) -> Result<()> {
-        terminals::write(self, request).await
+        terminal_operations::write(self, request).await
     }
 
     async fn close_terminal(
@@ -235,6 +241,6 @@ impl SandboxBackend for E2bSandboxBackend {
         sandbox_provider_ref: ProviderRef,
         terminal_provider_ref: ProviderRef,
     ) -> Result<()> {
-        terminals::close(self, sandbox_provider_ref, terminal_provider_ref).await
+        terminal_operations::close(self, sandbox_provider_ref, terminal_provider_ref).await
     }
 }

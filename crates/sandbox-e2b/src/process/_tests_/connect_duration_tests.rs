@@ -28,6 +28,7 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
                 cwd: None,
+                envs: Default::default(),
                 output_capture: ProcessOutputCapture::HardLimit { max_bytes: 0 },
                 timeout: Duration::MAX,
                 read_only: false,
@@ -41,6 +42,8 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
             SplitProcessCommand {
                 command: "/bin/true".to_owned(),
                 args: Vec::new(),
+                cwd: None,
+                envs: Default::default(),
                 stdout_limit: 0,
                 stderr_limit: 0,
                 deadline: Duration::MAX,
@@ -57,6 +60,7 @@ async fn process_transport_rejects_excessive_durations_without_panicking() {
                 offset: 0,
                 max_bytes: 32,
                 timeout: Duration::MAX,
+                completion_deadline: None,
             },
         )
         .await

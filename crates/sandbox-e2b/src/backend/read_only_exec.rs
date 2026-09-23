@@ -22,6 +22,7 @@ pub(super) async fn execute(
                 command: request.executable,
                 args: request.args,
                 cwd: Some(request.cwd),
+                envs: Default::default(),
                 output_capture: ProcessOutputCapture::HardLimit {
                     max_bytes: request.output_limit,
                 },

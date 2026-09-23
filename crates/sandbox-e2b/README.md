@@ -13,6 +13,8 @@ using the provider-neutral interface.
   inside the adapter boundary.
 - Reconcile ambiguous creation and snapshot delivery without allocating
   duplicate resources.
+- Encode deny-by-default IP/CIDR allowlists and reject unsafe destination kinds
+  without weakening deployment deny ranges.
 - Enforce bounded IO, exact provider identity checks, and private port ingress.
 - Keep all credentialed provider tests feature-gated and ignored by default.
 
@@ -28,7 +30,11 @@ profiles, template IDs, and denied IP/CIDR destinations, then keeps those
 values externally immutable. The public concrete control-client constructor
 independently requires an HTTPS root origin, a nonempty canonical API key, a
 valid sandbox routing domain, and a nonzero idle timeout before it creates a
-credentialed transport. Its neutral runtime conventions use the `sandbox`
+credentialed transport. Its public create request carries typed allow
+destinations, and the concrete client independently canonicalizes IP/CIDR
+rules, rejects domains, enforces the 64-entry bound, checks every private and
+deployment deny overlap, and rejects an allowlist paired with ordinary internet
+access before transport. Its neutral runtime conventions use the `sandbox`
 metadata prefix, `sandbox-terminal-` process-tag prefix,
 `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
 The default workload account is the non-root `user`; deployments can select a
@@ -39,16 +45,47 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
-Creates use exact metadata, including the typed sandbox consumer class, to
-recover ambiguous delivery. A sandbox ID must be a lowercase DNS-label
-fragment that fits every envd hostname. An accepted create with an unusable ID
-remains delivery-ambiguous; managed inventory rejects the same ID as provider
-unavailability, maps recognized consumer metadata, and leaves that metadata
-absent for older resources. Create and recover validate the same profile and
-network-policy rules before any control request. Snapshot creation and
-recovery require a nonempty source sandbox and correlation name before an
-authenticated request. Bounded, cursor-safe snapshot inventory rejects an
-empty or dot-segment identity as provider unavailability; an accepted snapshot
+An Open sandbox keeps the profile's existing public-egress setting and omits
+`allowOut`. An allowlisted sandbox always disables ordinary internet access
+and sends canonical IP/CIDR destinations through E2B's `network.allowOut`,
+while the same built-in private and profile deny ranges remain in `denyOut`.
+Because E2B gives allow rules precedence, overlapping allowed IP/CIDR ranges
+are rejected before control dispatch, including overlap through IPv4-mapped
+IPv6 forms. Representable mapped values canonicalize to IPv4.
+
+E2B domain rules trust the sandbox-controlled HTTP `Host` header or TLS SNI,
+and E2B allow rules outrank IP denies. The adapter therefore rejects the
+complete policy with `UnsupportedNetworkPolicy` whenever it contains a domain,
+before any E2B request. A direct request through the public concrete control
+client repeats the safety checks and returns `E2bAdapterError::InvalidRequest`
+before transport. Use an IP/CIDR rule, another adapter that jointly verifies
+hostnames and destination IPs, or a trusted enforcing proxy. Allowlist policy
+identity is hashed into provider metadata so recovery returns a typed mismatch
+instead of adopting a sandbox created with different egress access. Open bodies
+remain unchanged.
+
+Sandbox creates dispatch directly after local validation, without a provider
+inventory preflight, and carry exact metadata including the typed consumer and
+lifetime. Ambiguous delivery uses only metadata-filtered recovery reads and
+never sends a second create. Allowlist policy identity is verified separately
+on the returned row. Idle-auto-pause creation preserves the existing
+resumable request body. A one-shot create disables pause and resume and uses
+its validated 1-to-3600-second maximum as E2B's destruction timeout. Create and
+recovery reject invalid lifetimes before provider access. A sandbox ID must be
+a lowercase DNS-label fragment that fits every envd hostname. An accepted
+create with an unusable ID remains delivery-ambiguous; managed inventory
+rejects the same ID as provider unavailability, maps recognized consumer and
+lifetime metadata, and leaves missing or malformed values absent for older
+resources. Before connect or
+pause, the concrete client reads that metadata. Running one-shot envd access
+uses the non-mutating detail response; paused one-shot sandboxes are not resumed
+and their original timeout is never extended. Because detail does not return a
+private-traffic token, one-shot port ingress fails safely. Create and recover
+validate the same profile and network-policy rules before any control request.
+Snapshot creation and recovery require a nonempty source sandbox and
+correlation name before an authenticated request. Bounded, cursor-safe snapshot
+inventory rejects an empty or dot-segment identity as provider unavailability;
+an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
 inspection also rejects a response whose ID differs from the requested ID.
 Snapshot capture keeps its source paused while recovery finds no new snapshot
@@ -58,8 +95,25 @@ Terminal identities combine an E2B PID with the consumer terminal ID; start
 and inventory responses reject PID zero before exposing a process. Reads
 verify both identity values,
 while input and close operations use envd's atomic tag selector so PID reuse
-cannot retarget them. File reads use one descriptor-relative, non-following
-helper; writes stage their payload, bind it to the caller-computed SHA-256
+cannot retarget them. Before the login shell can run, the trusted supervisor
+initializes its private storage, fsyncs a root-owned `0600` versioned identity
+record containing the PID, terminal ID, operation ID, and exact tag under a
+temporary name, then atomically publishes the final name without replacement.
+Recovery and inspection use it to return the same provider reference as
+`Exited` after an immediate shell exit. Live terminals without a record remain
+compatible; exited legacy terminals and unknown record versions fail closed.
+Inspection and output validate every present record, including for a live
+terminal, before using selector-only fallback for a record-free legacy
+terminal. This record-aware resolution means unrelated PID reuse cannot hide
+an exited terminal's retained transcript while same-tag conflicts fail closed.
+Only typed file absence enables legacy fallback; provider terminal absence
+propagates. Output reads carry an earlier absolute completion deadline into the
+identity helper; the process transport derives its execution cutoff by
+reserving the full termination window and return time. Input rejects exited
+terminals. Explicit close retains the record so final output remains readable,
+and restored cleanup removes all terminal identity state. File
+reads use one descriptor-relative, non-following helper; writes stage their
+payload, bind it to the caller-computed SHA-256
 digest, perform one
 descriptor-relative atomic replacement below the trusted root, and use an
 atomic digest-bearing commit-or-revoke marker to reconcile an uncertain writer
@@ -120,26 +174,36 @@ while cleanup starts without waiting for consumer capacity.
 Direct process, streaming, and stateless read-only requests are
 validated before the adapter acquires sandbox access: commands must be
 non-empty, combined argv is capped at 128 KiB, and each direct stream or
-combined stateless output cap is at most 64 MiB. Existing process, read-only,
-and regular-file durations
-retain their 300-second ceiling. Only incremental streams accept up to 3,600
-seconds, with a nonzero idle timeout no greater than the deadline. Their envd
-HTTP request timeout is the remaining budget plus a 10-second transport
-allowance. The control connection uses the greater of the configured sandbox timeout and the
-deadline rounded up to whole seconds, so an accepted stream does not outlive its
-sandbox. The absolute budget starts before control connection, and the process
-transport retains that origin in `StreamProcessCommand::requested_at`. Setup
-consumes the same budget; expiry during connection returns `DeadlineExpired`
-without starting a process. The idle timer starts before envd connection.
-Existing connection paths retain their configured sandbox timeout, and
-existing HTTP paths retain the fixed 310-second client timeout. Terminal output
-waits cannot exceed 30 seconds. Every bound is checked before provider access,
-and absolute Tokio deadlines use checked arithmetic. Failed
-image-command diagnostics redact the call-local
-opaque sandbox ID and envd access token before returning bounded output,
-including a sensitive suffix split by the streaming tail boundary. Malformed
-process data with zero or multiple output channels is rejected instead of
+combined stateless output cap is at most 64 MiB. Caller-controlled process,
+read-only execution, and regular-file durations cannot exceed 300 seconds.
+Terminal output waits cannot exceed 30 seconds. Every bound is checked before
+provider access, and absolute Tokio deadlines use checked arithmetic. Failed
+image-command diagnostics contain only exit and capture metadata. Captured
+text never enters the handled error, so credentials and provider identities
+need no output matching or normalization. Malformed process data with zero or multiple output channels is rejected instead of
 silently losing bytes.
+Incremental streams instead accept up to 3,600 seconds and require a nonzero
+idle timeout no greater than the deadline. Their envd HTTP timeout is the
+remaining budget plus a 10-second transport allowance; the absolute budget
+starts before control connection, and the idle timer starts before envd access.
+For resumable sandboxes the connection timeout is at least the stream deadline;
+one-shot sandboxes retain their original lifetime. Expiry during connection
+returns `DeadlineExpired` without starting a process.
+Direct process starts also forward an optional validated absolute working
+directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
+NUL or control characters. Environment names follow
+`[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and requests allow at most 256
+entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
+`DYLD_*` are rejected as template-owned. Execution-request and captured-output `Debug` contain
+only selected metadata, with no command text, paths, environment names or
+values, or captured contents. Validation errors never echo a rejected name or
+value. Process and terminal bytes remain unmasked in returned results and
+saved transcripts; only their automatic diagnostic representations omit
+content. Tracing uses static events and selected metadata. Read-only execution
+keeps its existing explicit cwd and passes no environment entries; PTY startup keeps its
+fixed locale and terminal map.
+The shared conformance probe verifies the selected cwd and environment on
+stdout while independently asserting a deterministic stderr token.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Process, read-only, and private-port hosts use the adapter's validated
@@ -152,11 +216,11 @@ unavailability; failed mutating delivery remains ambiguous. A successful safe
 response with malformed JSON is also retryable provider unavailability. A
 terminal-input response must decode E2B's exact empty JSON acknowledgment;
 unknown fields or malformed output after that accepted mutation keep the
-delivery outcome ambiguous. Sandbox create and connect responses must contain
-nonblank envd and private-traffic tokens. Missing or blank credentials keep an
-accepted create delivery-ambiguous and make connect retryable. A read-only
-access lookup treats a missing or blank envd token as retryable provider
-unavailability and does not attempt an unauthenticated envd request.
+delivery outcome ambiguous. Sandbox create and ordinary connect responses must
+contain nonblank envd and private-traffic tokens. Missing or blank credentials
+keep an accepted create delivery-ambiguous and make ordinary connect retryable.
+One-shot read access requires only the nonblank envd token returned by sandbox
+detail and never attempts an unauthenticated envd request.
 
 Image construction is split across the interface's durable phases. E2B
 preparation accepts an already persisted source and never creates, snapshots,
@@ -238,6 +302,10 @@ Live tests are opt-in, ignored, and billable:
 E2B_API_KEY=... cargo test -p sandbox-e2b \
   --features live-e2b --test live_e2b -- --ignored
 
+E2B_API_KEY=... cargo test -p sandbox-e2b \
+  --features live-e2b --test live_e2b \
+  live_e2b_one_shot_create_and_destroy -- --ignored
+
 E2B_API_KEY=... E2B_SCREEN_TEMPLATE_ID=... \
   cargo test -p sandbox-e2b --features live-e2b --test live_e2b \
   live_e2b_private_screen_bridges -- --ignored
@@ -259,14 +327,19 @@ deletable snapshot handle.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
 - `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
+- `src/backend/terminal_record.rs` — strict durable terminal identity records.
 - `src/control/` — E2B control API boundary.
+- `src/network.rs` — allowlist translation, deny overlap, and recovery identity.
+- `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
 - `src/process/` — envd Connect framing and operations.
 - `src/process/stream_run.rs` — incremental events, timers, and cleanup.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
+- `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.
 
 ### Related Docs
 
 - [Sandbox contract](../../docs/sandbox-contract.md)
 - [E2B adapter guarantees](../../docs/e2b-adapter.md)
+- [Process data and diagnostics](../../docs/process-diagnostics.md)
 - [E2B snapshot documentation](https://e2b.dev/docs/sandbox/snapshots)

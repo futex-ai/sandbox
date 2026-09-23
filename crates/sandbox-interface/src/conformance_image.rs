@@ -146,6 +146,7 @@ fn source_request(
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(workspace_id),
         consumer: SandboxConsumer::Runtime,
+        lifetime: crate::SandboxLifetime::IdleAutoPause,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

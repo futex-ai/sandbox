@@ -18,6 +18,7 @@ fn command_for_paths(paths: impl IntoIterator<Item = String>) -> ProcessCommand 
         command: trusted_python::EXECUTABLE.to_owned(),
         args: trusted_python::command_args(CLEANER, paths),
         cwd: None,
+        envs: Default::default(),
         output_capture: ProcessOutputCapture::HardLimit { max_bytes: 4096 },
         timeout: Duration::from_secs(300),
         read_only: false,

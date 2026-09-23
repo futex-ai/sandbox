@@ -118,6 +118,36 @@ async fn helper_deadline_after_start_kills_the_observed_process() {
 }
 
 #[tokio::test]
+async fn absolute_helper_deadline_accounts_for_request_setup_before_cleanup() {
+    let started = event_frame(r#"{"event":{"start":{"pid":43}}}"#);
+    let mock = Unimock::new((
+        stream_call
+            .next_call(matching!(_, "Start", _))
+            .answers_arc(Arc::new(move |_, _, _, _| {
+                let first = futures_util::stream::iter([Ok(Bytes::from(started.clone()))]);
+                Ok(Box::pin(first.chain(futures_util::stream::pending())))
+            })),
+        unary_call
+            .next_call(matching!(_, "SendSignal", _, false))
+            .returns(Ok(Vec::new())),
+    ));
+    let completion_deadline = tokio::time::Instant::now() + Duration::from_millis(3_050);
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let error = transport(mock)
+        .run_helper_before(
+            connection(),
+            command(ProcessOutputCapture::HardLimit { max_bytes: 5 }),
+            completion_deadline,
+        )
+        .await
+        .expect_err("an unfinished helper must be killed by its absolute deadline");
+
+    assert!(matches!(error, DomainError::BackendUnavailable { .. }));
+    assert!(tokio::time::Instant::now() < completion_deadline);
+}
+
+#[tokio::test]
 async fn helper_rejects_a_non_normal_end_even_when_its_default_code_is_zero() {
     let events = vec![
         event_frame(r#"{"event":{"end":{"exitCode":0,"exited":false}}}"#),
@@ -158,6 +188,7 @@ fn command(output_capture: ProcessOutputCapture) -> ProcessCommand {
         command: "/bin/false".to_owned(),
         args: Vec::new(),
         cwd: None,
+        envs: Default::default(),
         output_capture,
         timeout: Duration::from_secs(10),
         read_only: false,
