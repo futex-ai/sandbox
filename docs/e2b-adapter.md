@@ -24,7 +24,11 @@ conventions only with an already validated value.
 `ReqwestE2bControlApi::new` applies the same safety checks at its public
 boundary: it rejects a non-HTTPS or non-root API origin, an empty or padded API
 key, an invalid sandbox routing domain, and a zero idle timeout before building
-the authenticated transport.
+the authenticated transport. Its public create request accepts typed allow
+destinations. The concrete client independently canonicalizes IP/CIDR allow and
+deny rules, enforces the 64-entry pre-deduplication bound, rejects domains and
+deny overlaps, and rejects an allowlist paired with ordinary internet access
+before sending an authenticated request.
 
 `E2bRuntimeConventions` controls the metadata prefix, terminal process-tag
 prefix, absolute screen-helper path, exact helper and agent process names
@@ -34,6 +38,45 @@ their current values so recovery and snapshot cleanup find the right resources
 and commands use the account present in their templates. Root, unsafe account
 names, unsafe prefixes or paths, shell characters, whitespace, and process
 names longer than Linux's 15-byte task-name limit are rejected.
+
+## Network Policies
+
+The adapter preserves the existing `Open` request exactly: the profile's
+`allow_public_egress` value becomes `allow_internet_access`, `allowOut` is
+omitted, and `denyOut` remains the sorted, deduplicated merge of built-in
+private ranges and profile `denied_destinations`.
+
+For `Allowlist`, `allow_internet_access` is always `false`, the same merged
+`denyOut` is retained, and canonical IP and CIDR values are sent in
+`network.allowOut`. E2B lets explicit allow rules take precedence over deny
+rules. The adapter therefore rejects an allowed IP or CIDR that overlaps any
+built-in private or profile deny range instead of letting provider precedence
+weaken deployment policy. Representable IPv4-mapped IPv6 values canonicalize
+to IPv4, and broader IPv6 ranges are compared against mapped IPv4 denies.
+
+The E2B adapter rejects every otherwise valid allowlist containing a `Domain`
+destination with `UnsupportedNetworkPolicy` before any control request. E2B
+matches domains from the sandbox-controlled HTTP `Host` header or TLS SNI,
+while allow rules outrank denied IP ranges. A sandbox could therefore connect
+to a denied address while presenting an allowed hostname. Rejecting the whole
+policy prevents domain rules from bypassing the adapter's private and
+deployment deny guarantees. Callers that require named destinations must use
+an adapter that can jointly verify the hostname and destination IP, or route
+through a trusted enforcing proxy represented by an allowed IP/CIDR. A caller
+using the public concrete control client directly receives
+`E2bAdapterError::InvalidRequest` for the same unsafe values before transport.
+See E2B's current
+[internet-access documentation](https://docs.e2b.dev/network/internet-access)
+for the underlying provider semantics.
+
+Allowlist creates add a versioned hash of the canonical policy to provider
+metadata. Recovery queries by the unchanged stable operation identity, then
+compares that hash before adopting the sandbox. A missing or different hash
+returns `SandboxNetworkPolicyMismatch`. Open creates add no policy metadata,
+which preserves their prior request body and lets existing Open resources
+recover unchanged. Create and recovery both rerun shape, bound,
+supported-destination, canonical, and deny-overlap validation before any
+provider call.
 
 ## Sandbox Lifetimes
 
@@ -47,8 +90,8 @@ payload:
   whole-second maximum as `timeout`.
 
 The one-shot maximum is 3600 seconds, inclusive. Create and recover apply the
-same validation before listing or mutating provider resources. Exact recovery
-metadata includes `lifetime`; one-shot metadata also includes
+same validation before provider access. Exact recovery metadata includes
+`lifetime`; one-shot metadata also includes
 `one_shot_max_lifetime_seconds`, under the configured metadata prefix. Managed
 inventory returns a lifetime only when those values form a complete valid
 policy. Older, missing, unknown, or malformed metadata stays unknown.
@@ -103,9 +146,10 @@ Sandbox creation sends its single provider mutation directly after request
 validation; it does not perform a fallible inventory preflight. The mutation
 carries exact configured metadata, including the stable runtime-or-browser
 consumer and lifetime values. Ambiguous delivery performs inventory-only
-recovery and never dispatches another create. Managed inventory returns
-recognized consumer and lifetime values, rejects an unusable sandbox identity,
-and leaves missing or malformed metadata absent. Snapshot recovery
+recovery and never dispatches another create. Allowlist policy identity is
+compared on the returned row, not included in the inventory filter. Managed
+inventory returns recognized consumer and lifetime values, rejects an unusable
+sandbox identity, and leaves missing or malformed metadata absent. Snapshot recovery
 walks bounded cursor pagination and adopts exactly one new correlated snapshot.
 The source stays paused when recovery sees no new snapshot or more than one
 candidate; only a synchronous completed create or exactly one recovered
@@ -142,8 +186,9 @@ sandbox. The adapter drains the existing 4 KiB capture window without copying
 its contents into errors or serialized failure metadata. It does not scan,
 normalize, or mask captured text. See [process diagnostics](process-diagnostics.md).
 Creation and recovery share validation. An invalid one-shot lifetime,
-unconfigured logical profile, or unsupported network policy returns a handled
-provider-neutral error before any provider request.
+unconfigured logical profile, invalid or unsupported network policy, or
+deployment-deny conflict returns a handled provider-neutral error before any
+provider request. Recovery rejects a mismatched network policy.
 
 ## Files, Processes, Terminals, And Screens
 
@@ -353,3 +398,6 @@ provider snapshot handle was obtained. A separate ignored probe creates,
 recovers, and destroys one one-shot sandbox. Live
 ingress probes use the same no-redirect rule as production credentialed
 clients, so a redirect cannot forward a private-traffic token to another host.
+Default and all-feature test runs never read credentials or contact E2B unless
+ignored tests are explicitly selected. There is no live E2B domain-allowlist
+probe because the adapter rejects domain destinations before provider access.

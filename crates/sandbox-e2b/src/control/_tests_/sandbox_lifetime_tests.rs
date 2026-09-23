@@ -25,6 +25,7 @@ async fn idle_auto_pause_create_preserves_the_existing_exact_lifecycle_body() {
             metadata: BTreeMap::from([("sandbox_agent_id".to_owned(), "agent".to_owned())]),
             allow_public_egress: false,
             denied_destinations: vec!["203.0.113.0/24".to_owned()],
+            allowed_destinations: None,
             idle_timeout_seconds: 600,
             lifetime: SandboxLifetime::IdleAutoPause,
         })
@@ -77,6 +78,7 @@ async fn one_shot_create_disables_pause_and_uses_its_maximum_lifetime() {
             metadata: BTreeMap::new(),
             allow_public_egress: false,
             denied_destinations: Vec::new(),
+            allowed_destinations: None,
             idle_timeout_seconds: 600,
             lifetime: SandboxLifetime::OneShot {
                 max_lifetime: Duration::from_secs(90),

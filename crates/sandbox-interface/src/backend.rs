@@ -162,6 +162,10 @@ pub trait SandboxBackend: Send + Sync {
     /// instead of this method until the outcome is reconciled.
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox>;
     /// Reconciles a correlated sandbox create without dispatching a new create.
+    ///
+    /// Recovery revalidates the request's network policy and returns
+    /// [`crate::Error::SandboxNetworkPolicyMismatch`] rather than adopting a
+    /// correlated sandbox created under a different policy.
     async fn recover_sandbox_create(
         &self,
         request: BackendCreateSandboxRequest,

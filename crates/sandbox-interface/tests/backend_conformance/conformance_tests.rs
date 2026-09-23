@@ -1,6 +1,8 @@
 //! Shared backend conformance-harness coverage.
 
-use sandbox_interface::conformance::{exercise_backend, exercise_one_shot_lifetime};
+use sandbox_interface::conformance::{
+    exercise_backend, exercise_network_allowlist, exercise_one_shot_lifetime,
+};
 
 use super::alternate_backend::AlternateBackend;
 
@@ -9,6 +11,13 @@ async fn asynchronous_alternate_backend_satisfies_the_shared_conformance_harness
     exercise_backend(&AlternateBackend::default(), "alternate")
         .await
         .expect("alternate backend should conform");
+}
+
+#[tokio::test]
+async fn alternate_backend_satisfies_the_domain_allowlist_probe() {
+    exercise_network_allowlist(&AlternateBackend::default(), "alternate")
+        .await
+        .expect("alternate backend should support domain allowlists");
 }
 
 #[tokio::test]

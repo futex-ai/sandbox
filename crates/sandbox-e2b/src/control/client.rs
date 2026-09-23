@@ -2,7 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    network,
+};
 
 use super::{
     E2bControlApi,
@@ -19,20 +22,9 @@ use super::{
     },
 };
 
-const PRIVATE_NETWORK_DENIES: &[&str] = &[
-    "10.0.0.0/8",
-    "100.64.0.0/10",
-    "127.0.0.0/8",
-    "169.254.0.0/16",
-    "172.16.0.0/12",
-    "192.168.0.0/16",
-    "224.0.0.0/4",
-    "::1/128",
-    "fc00::/7",
-    "fe80::/10",
-];
-
 /// Reqwest-backed E2B control API implementation.
+///
+/// Sandbox creates revalidate typed network input before transport.
 pub struct ReqwestE2bControlApi {
     pub(super) transport: std::sync::Arc<dyn E2bHttpTransport>,
     pub(super) sandbox_domain: String,
@@ -47,6 +39,11 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess> {
+        let network = network::validate_control_create(
+            request.allow_public_egress,
+            request.allowed_destinations,
+            request.denied_destinations,
+        )?;
         let one_shot_timeout = match request.lifetime.one_shot_timeout_seconds() {
             Ok(timeout) => timeout,
             Err(_) => return Err(Error::InvalidRequest),
@@ -55,13 +52,6 @@ impl E2bControlApi for ReqwestE2bControlApi {
             Some(timeout) => (false, false, timeout),
             None => (true, true, request.idle_timeout_seconds),
         };
-        let mut denies = PRIVATE_NETWORK_DENIES
-            .iter()
-            .map(|value| (*value).to_owned())
-            .collect::<Vec<_>>();
-        denies.extend(request.denied_destinations);
-        denies.sort();
-        denies.dedup();
         let body = encode(&CreateSandboxBody {
             template_id: request.template_id,
             metadata: request.metadata,
@@ -69,7 +59,8 @@ impl E2bControlApi for ReqwestE2bControlApi {
             allow_internet_access: request.allow_public_egress,
             network: NetworkBody {
                 allow_public_traffic: false,
-                deny_out: denies,
+                deny_out: network.deny_out,
+                allow_out: network.allow_out,
             },
             auto_pause,
             auto_pause_memory,
@@ -247,6 +238,10 @@ fn is_one_shot(response: &super::types::SandboxDetailBody, lifetime_metadata_key
 #[cfg(test)]
 #[path = "_tests_/control_client_tests.rs"]
 mod control_client_tests;
+
+#[cfg(test)]
+#[path = "_tests_/control_create_body_tests.rs"]
+mod control_create_body_tests;
 
 #[cfg(test)]
 #[path = "_tests_/control_pagination_tests.rs"]

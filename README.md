@@ -20,11 +20,16 @@ Consumers should depend on `sandbox-interface`. Only the process that selects
 and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
 credentials, payloads, access tokens, and errors out of higher-level services.
 Sandbox create requests carry their runtime-or-browser consumer class and typed
-lifetime through provider metadata. Interactive sandboxes keep idle auto-pause
-by default; bounded one-shot sandboxes remain running until explicit destroy or
-their maximum 3600-second provider timeout and are never resumed. Managed
-inventory returns recognized metadata and leaves missing or malformed values
-unknown.
+lifetime through provider metadata. Interactive sandboxes keep idle auto-pause;
+bounded one-shot sandboxes remain running until explicit destroy or their
+maximum 3600-second provider timeout and are never resumed. Managed inventory
+returns recognized metadata and leaves missing or malformed values unknown.
+Creates can also select a typed deny-by-default egress allowlist of canonical
+IP, CIDR, and DNS destinations. E2B supports the IP and CIDR forms, rejects DNS
+policies before provider access, preserves private and deployment deny ranges,
+and refuses to recover a sandbox created with a different policy. Its public
+control client independently revalidates typed allow destinations before
+transport.
 Image consumers also own the durable phase transitions: source creation,
 one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently

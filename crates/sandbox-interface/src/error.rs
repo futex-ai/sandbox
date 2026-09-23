@@ -1,50 +1,14 @@
 //! Shared handled error contract.
 
 use internal_error::InternalError;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{
     ActionId, ImageCommandFailure, ProcessRunContextError, RetainedSandboxRef, SandboxConsumer,
     SandboxNetworkPolicy, SandboxState, SnapshotState, TerminalActionState, TerminalId,
     TerminalState,
+    error_kinds::{QuotaKind, ResourceKind},
 };
-
-/// Runtime resource category used in handled errors.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResourceKind {
-    /// Sandbox resource.
-    Sandbox,
-    /// Snapshot resource.
-    Snapshot,
-    /// Terminal resource.
-    Terminal,
-    /// Terminal action resource.
-    Action,
-    /// Regular file resource.
-    File,
-}
-
-/// Code-owned quota category.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum QuotaKind {
-    /// Active sandboxes owned by one agent.
-    AgentSandboxes,
-    /// Active agent-owned sandboxes in one workspace.
-    WorkspaceSandboxes,
-    /// Retained snapshots owned by one agent.
-    AgentSnapshots,
-    /// Retained agent-owned snapshots in one workspace.
-    WorkspaceSnapshots,
-    /// Concurrent agent-owned snapshot operations in one workspace.
-    WorkspaceSnapshotOperations,
-    /// Active terminals in one sandbox.
-    SandboxTerminals,
-    /// Active browser-consumer sandboxes in one workspace.
-    WorkspaceBrowserSandboxes,
-}
 
 /// Errors returned by sandbox backends and lifecycle services.
 #[derive(Debug, Error, internal_error::ErrorContract)]
@@ -110,12 +74,21 @@ pub enum Error {
     /// A concurrent transcript reader advanced the durable provider cursor.
     #[error("[sandbox_interface/error] terminal transcript cursor changed concurrently")]
     TranscriptCursorConflict,
-    /// The requested per-session network policy is not supported.
+    /// The requested network policy or one of its destination kinds is not supported.
     #[error("[sandbox_interface/error] network policy {policy:?} is not supported")]
     UnsupportedNetworkPolicy {
         /// Rejected typed per-session network policy.
         policy: SandboxNetworkPolicy,
     },
+    /// One allowlist destination has an invalid IP, CIDR, or DNS shape.
+    #[error("[sandbox_interface/error] egress destination is invalid")]
+    InvalidEgressDestination,
+    /// An allowlist entry overlaps a deployment-owned deny range.
+    #[error("[sandbox_interface/error] egress destination conflicts with deployment policy")]
+    EgressDestinationDenied,
+    /// Recovery found a sandbox created with a different network policy.
+    #[error("[sandbox_interface/error] recovered sandbox network policy does not match")]
+    SandboxNetworkPolicyMismatch,
     /// The operation requires the runtime consumer class.
     #[error(
         "[sandbox_interface/error] {resource:?} operations require a runtime-consumer sandbox, not {consumer:?}"

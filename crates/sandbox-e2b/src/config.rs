@@ -1,11 +1,12 @@
 //! Validated adapter configuration and deployment-owned profiles.
 
-use std::{collections::HashMap, fmt, net::IpAddr};
+use std::{collections::HashMap, fmt};
 
 use sandbox_interface::{SANDBOX_PROFILE_MAX_ITEMS, valid_sandbox_profile_name};
 use url::Url;
 
 use crate::error::{Error, Result};
+use crate::network::canonical_ip_destination;
 use crate::runtime_conventions::E2bRuntimeConventions;
 
 const DEFAULT_SANDBOX_DOMAIN: &str = "e2b.app";
@@ -195,40 +196,13 @@ fn normalize_profiles(
     for profile in profiles.values_mut() {
         let mut destinations = Vec::with_capacity(profile.denied_destinations.len());
         for destination in &profile.denied_destinations {
-            destinations.push(canonical_deny_destination(destination)?);
+            destinations.push(canonical_ip_destination(destination)?);
         }
         destinations.sort();
         destinations.dedup();
         profile.denied_destinations = destinations;
     }
     Some(profiles)
-}
-
-fn canonical_deny_destination(destination: &str) -> Option<String> {
-    let destination = destination.trim();
-    let (address, prefix) = match destination.split_once('/') {
-        Some((address, prefix)) => (address, Some(prefix)),
-        None => (destination, None),
-    };
-    let address = match address.parse::<IpAddr>() {
-        Ok(address) => address,
-        Err(_) => return None,
-    };
-    let Some(prefix) = prefix else {
-        return Some(address.to_string());
-    };
-    let prefix = match prefix.parse::<u8>() {
-        Ok(prefix) => prefix,
-        Err(_) => return None,
-    };
-    let valid = match address {
-        IpAddr::V4(_) => prefix <= 32,
-        IpAddr::V6(_) => prefix <= 128,
-    };
-    if !valid {
-        return None;
-    }
-    Some(format!("{address}/{prefix}"))
 }
 
 #[cfg(test)]

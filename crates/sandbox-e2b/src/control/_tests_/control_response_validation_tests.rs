@@ -119,6 +119,7 @@ fn create_request() -> ControlCreateSandbox {
         metadata: SandboxMetadata::new(),
         allow_public_egress: false,
         denied_destinations: Vec::new(),
+        allowed_destinations: None,
         idle_timeout_seconds: 600,
         lifetime: SandboxLifetime::IdleAutoPause,
     }

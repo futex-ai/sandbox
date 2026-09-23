@@ -13,6 +13,8 @@ using the provider-neutral interface.
   inside the adapter boundary.
 - Reconcile ambiguous creation and snapshot delivery without allocating
   duplicate resources.
+- Encode deny-by-default IP/CIDR allowlists and reject unsafe destination kinds
+  without weakening deployment deny ranges.
 - Enforce bounded IO, exact provider identity checks, and private port ingress.
 - Keep all credentialed provider tests feature-gated and ignored by default.
 
@@ -28,7 +30,11 @@ profiles, template IDs, and denied IP/CIDR destinations, then keeps those
 values externally immutable. The public concrete control-client constructor
 independently requires an HTTPS root origin, a nonempty canonical API key, a
 valid sandbox routing domain, and a nonzero idle timeout before it creates a
-credentialed transport. Its neutral runtime conventions use the `sandbox`
+credentialed transport. Its public create request carries typed allow
+destinations, and the concrete client independently canonicalizes IP/CIDR
+rules, rejects domains, enforces the 64-entry bound, checks every private and
+deployment deny overlap, and rejects an allowlist paired with ordinary internet
+access before transport. Its neutral runtime conventions use the `sandbox`
 metadata prefix, `sandbox-terminal-` process-tag prefix,
 `/usr/local/bin/sandbox-screen` helper, and neutral image-cleanup process names.
 The default workload account is the non-root `user`; deployments can select a
@@ -39,18 +45,38 @@ Deployments that must adopt existing resources can supply an
 `E2bRuntimeConventions` value; prefixes, the absolute helper path, and exact
 cleanup process names are validated before use.
 
+An Open sandbox keeps the profile's existing public-egress setting and omits
+`allowOut`. An allowlisted sandbox always disables ordinary internet access
+and sends canonical IP/CIDR destinations through E2B's `network.allowOut`,
+while the same built-in private and profile deny ranges remain in `denyOut`.
+Because E2B gives allow rules precedence, overlapping allowed IP/CIDR ranges
+are rejected before control dispatch, including overlap through IPv4-mapped
+IPv6 forms. Representable mapped values canonicalize to IPv4.
+
+E2B domain rules trust the sandbox-controlled HTTP `Host` header or TLS SNI,
+and E2B allow rules outrank IP denies. The adapter therefore rejects the
+complete policy with `UnsupportedNetworkPolicy` whenever it contains a domain,
+before any E2B request. A direct request through the public concrete control
+client repeats the safety checks and returns `E2bAdapterError::InvalidRequest`
+before transport. Use an IP/CIDR rule, another adapter that jointly verifies
+hostnames and destination IPs, or a trusted enforcing proxy. Allowlist policy
+identity is hashed into provider metadata so recovery returns a typed mismatch
+instead of adopting a sandbox created with different egress access. Open bodies
+remain unchanged.
+
 Sandbox creates dispatch directly after local validation, without a provider
 inventory preflight, and carry exact metadata including the typed consumer and
 lifetime. Ambiguous delivery uses only metadata-filtered recovery reads and
-never sends a second create. Idle-auto-pause creation preserves the existing
+never sends a second create. Allowlist policy identity is verified separately
+on the returned row. Idle-auto-pause creation preserves the existing
 resumable request body. A one-shot create disables pause and resume and uses
 its validated 1-to-3600-second maximum as E2B's destruction timeout. Create and
 recovery reject invalid lifetimes before provider access. A sandbox ID must be
 a lowercase DNS-label fragment that fits every envd hostname. An accepted
 create with an unusable ID remains delivery-ambiguous; managed inventory
 rejects the same ID as provider unavailability, maps recognized consumer and
-lifetime metadata, and leaves
-missing or malformed values absent for older resources. Before connect or
+lifetime metadata, and leaves missing or malformed values absent for older
+resources. Before connect or
 pause, the concrete client reads that metadata. Running one-shot envd access
 uses the non-mutating detail response; paused one-shot sandboxes are not resumed
 and their original timeout is never extended. Because detail does not return a
@@ -58,8 +84,8 @@ private-traffic token, one-shot port ingress fails safely. Create and recover
 validate the same profile and network-policy rules before any control request.
 Snapshot creation and recovery require a nonempty source sandbox and
 correlation name before an authenticated request. Bounded, cursor-safe snapshot
-inventory rejects an
-empty or dot-segment identity as provider unavailability; an accepted snapshot
+inventory rejects an empty or dot-segment identity as provider unavailability;
+an accepted snapshot
 create with such an unusable identity remains delivery-ambiguous. Snapshot
 inspection also rejects a response whose ID differs from the requested ID.
 Snapshot capture keeps its source paused while recovery finds no new snapshot
@@ -281,6 +307,7 @@ deletable snapshot handle.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
 - `src/backend/terminal_record.rs` — strict durable terminal identity records.
 - `src/control/` — E2B control API boundary.
+- `src/network.rs` — allowlist translation, deny overlap, and recovery identity.
 - `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
 - `src/process/` — envd Connect framing and operations.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.

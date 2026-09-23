@@ -30,12 +30,24 @@ mod backend_tests;
 mod sandbox_create_tests;
 
 #[cfg(test)]
+#[path = "_tests_/sandbox_network_policy_tests.rs"]
+mod sandbox_network_policy_tests;
+
+#[cfg(test)]
+#[path = "_tests_/sandbox_network_address_tests.rs"]
+mod sandbox_network_address_tests;
+
+#[cfg(test)]
 #[path = "_tests_/sandbox_lifetime_access_tests.rs"]
 mod sandbox_lifetime_access_tests;
 
 #[cfg(test)]
 #[path = "_tests_/backend_conformance/mod.rs"]
 mod backend_conformance_tests;
+
+#[cfg(test)]
+#[path = "_tests_/backend_conformance_process.rs"]
+mod backend_conformance_process;
 
 #[cfg(test)]
 #[path = "_tests_/port_ingress_tests.rs"]

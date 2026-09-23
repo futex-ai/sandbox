@@ -20,13 +20,29 @@ const PROCESS_STDERR: &[u8] = b"separate-stderr";
 
 /// Exercises the mandatory lifecycle shared by every sandbox backend.
 ///
-/// The target image must provide `/bin/sh`; the process probe supplies its own
-/// script and requires exact stdout and stderr bytes.
+/// The target image must provide `/bin/sh`; the split-output probe supplies its
+/// own shell script.
 pub async fn exercise_backend(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
     exercise_one_shot_lifetime(backend, profile).await?;
     let sleeper = TokioRecoverySleeper;
     let mut resources = ConformanceResources::new(backend, &sleeper);
     let outcome = exercise_backend_with_resources(backend, &mut resources, profile).await;
+    let cleanup = resources.cleanup().await;
+    finish(outcome, cleanup)
+}
+
+/// Proves that one domain allowlist permits its exact HTTPS destination and
+/// prevents an application response from a different HTTPS destination.
+///
+/// The target image must provide `/bin/sh` and `curl`. The helper tracks and
+/// destroys its sandbox even when either fetch probe fails. Both curl commands
+/// disable startup configuration before processing any other option.
+pub async fn exercise_network_allowlist(backend: &dyn SandboxBackend, profile: &str) -> Result<()> {
+    let sleeper = TokioRecoverySleeper;
+    let mut resources = ConformanceResources::new(backend, &sleeper);
+    let owner = ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7());
+    let outcome =
+        crate::conformance_network::exercise(backend, &mut resources, owner, profile).await;
     let cleanup = resources.cleanup().await;
     finish(outcome, cleanup)
 }

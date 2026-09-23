@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, fmt};
 
-use sandbox_interface::SandboxLifetime;
+use sandbox_interface::{EgressDestination, SandboxLifetime};
 use serde::{Deserialize, Serialize};
 
 /// Opaque, non-secret consumer metadata attached to E2B sandboxes.
@@ -19,6 +19,11 @@ pub struct ControlCreateSandbox {
     pub allow_public_egress: bool,
     /// Additional deployment-owned denied destinations.
     pub denied_destinations: Vec<String>,
+    /// Typed per-session allow destinations, absent for open policy.
+    ///
+    /// The concrete client revalidates and canonicalizes these values before
+    /// transport.
+    pub allowed_destinations: Option<Vec<EgressDestination>>,
     /// Auto-pause timeout in seconds.
     pub idle_timeout_seconds: u32,
     /// Provider-neutral lifecycle policy for this sandbox.
@@ -122,6 +127,8 @@ pub(super) struct CreateSandboxBody {
 pub(super) struct NetworkBody {
     pub(super) allow_public_traffic: bool,
     pub(super) deny_out: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) allow_out: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]

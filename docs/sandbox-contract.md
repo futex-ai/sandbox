@@ -53,6 +53,48 @@ Every `SandboxBackend` implementation must support:
   recovery, and explicit source cleanup; and
 - idempotent screen-stack ensure plus exact validated viewport resize.
 
+## Network Policies
+
+`SandboxNetworkPolicy::Open` adds no per-session restriction. It never weakens
+the deployment-owned private-network or profile deny rules applied by an
+adapter. `SandboxNetworkPolicy::Allowlist` denies ordinary outbound traffic by
+default and permits only its typed `EgressDestination` values.
+
+An allowlist accepts no more than 64 caller-supplied entries. Exact IP values
+use `IpAddr`; CIDRs carry an address and a family-appropriate prefix and are
+canonicalized to their network address. IPv4-mapped IPv6 addresses and CIDRs
+contained by the mapped prefix canonicalize to IPv4 before policy identity and
+overlap checks. Domain values are lowercase ASCII DNS names no longer than 253
+bytes. Each label is `1..=63` bytes, begins and ends with an ASCII letter or
+digit, and otherwise contains only letters, digits, or hyphens. A domain may
+have one leading `*.` label, which matches subdomains at any depth but not the
+apex. Bare wildcards, embedded wildcards, canonical or legacy URL-style IP
+literals represented as domains, schemes, ports, paths, leading or trailing
+dots, and empty labels are invalid. Construction sorts and
+deduplicates canonical entries, but the original list must meet the 64-entry
+bound before deduplication. Adapters revalidate values from every construction
+or deserialization path before provider dispatch.
+
+Domain matching covers HTTP on port 80 through the `Host` header and TLS on
+port 443 through SNI. It does not cover QUIC/HTTP3 or arbitrary ports; those
+flows are controlled only by allowed IP and CIDR values. A provider whose
+allow rules outrank deny rules must reject any allowed IP or CIDR overlapping a
+private or deployment deny range before mutation. Cross-family checks treat
+IPv4 as its mapped IPv6 range so broader IPv6 CIDRs cannot bypass an IPv4 deny.
+An implicitly allowed DNS resolver must pass the same check.
+
+Destination kinds describe the provider-neutral policy vocabulary, not a
+promise that every adapter can enforce every kind. If a provider cannot apply
+the complete policy without weakening private or deployment deny rules, its
+adapter must return `UnsupportedNetworkPolicy` before any provider request.
+The adapter must not silently omit the unsupported destination or partially
+apply the policy.
+
+Create recovery receives the exact original policy. A backend must correlate
+the policy applied by create, revalidate the recovery value, and return
+`SandboxNetworkPolicyMismatch` when the correlated sandbox used a different
+policy. It must not silently adopt that sandbox or dispatch a replacement.
+
 Creation and snapshot methods separate an initial mutation from recovery. The
 trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
@@ -154,9 +196,9 @@ sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
 remains delivery-ambiguous, while an invalid inventory row is provider
 unavailability. Snapshot inspection must reject a returned provider ID that
 differs from the requested ID.
-Port zero, empty required
-text, oversized values, unknown
-profiles, and unsupported network policies fail before provider dispatch. A
+Port zero, empty required text, oversized values, unknown profiles, invalid or
+unsupported network policies, and allowlist conflicts with deployment denies
+fail before provider dispatch. A
 direct or stateless process command cannot be empty, and its command and
 arguments total at most 128 KiB. Each direct stream or combined stateless
 output limit is at most 64 MiB. Every direct, stateless read-only, or
@@ -296,11 +338,19 @@ The process probe runs one `/bin/sh` command with `/workspace` as its working
 directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
 environment bytes on stdout plus an independent deterministic token on stderr,
 so conforming images need a standard shell but no harness-only executable.
-It retains the exact request for every sandbox and snapshot create before
-dispatch. After every create result, including synchronous success, it proves
-the correlated provider identity through recover-only polling; it never
-redispatches creation. A pending recovery waits one second before the next
-poll, with no more than 60 waits.
+
+The separate `exercise_network_allowlist` capability probe applies only to
+adapters that support domain destinations. It creates a sandbox that permits
+only `example.com`, uses `/bin/sh -c` and `curl` to require an application
+response from that host, and requires a fetch from a different host to exit
+unsuccessfully. Both curl commands put `--disable` first so user or system
+startup configuration cannot redirect a request or fabricate a policy result.
+The probe also proves that recovery rejects a different policy.
+The main harness retains the exact request for every sandbox and snapshot
+create before dispatch. After every create result, including synchronous
+success, it proves the correlated provider identity through recover-only
+polling; it never redispatches creation. A pending recovery waits one second
+before the next poll, with no more than 60 waits.
 
 Each returned terminal, snapshot, or sandbox is recorded before later work can
 fail. Final cleanup attempts every tracked resource in dependency order and

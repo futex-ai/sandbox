@@ -12,6 +12,7 @@ instead of depending on one another.
   registries, and read-only access.
 - Define bounded data types for file transfer, process output, terminal logs,
   image preparation, ingress credentials, and screen viewport sizes.
+- Define validated per-session Open and deny-by-default egress policies.
 - Provide mocks and a public conformance harness that every backend can run.
 - Preserve provider-neutral lifecycle, reconciliation, and recovery semantics.
 
@@ -30,6 +31,18 @@ Backend sandbox creation also carries the typed `SandboxConsumer` class.
 Managed inventory returns `Some(class)` when provider metadata contains a
 recognized value and `None` for older or malformed metadata instead of
 guessing a class.
+`SandboxNetworkPolicy::allowlist` accepts at most 64 typed IP, CIDR, or
+lowercase DNS destinations, canonicalizes CIDRs, and sorts and deduplicates the
+result. IPv4-mapped IPv6 values canonicalize to IPv4 when representable, and
+URL-style legacy IP literals cannot masquerade as domains. Domains may use one
+leading `*.` label, which matches subdomains at any depth but not the apex, and
+are limited to HTTP/80 and TLS/443 hostname matching; other traffic requires an
+IP or CIDR rule. A provider-neutral destination kind does not imply that every
+adapter can enforce it safely. An adapter rejects the complete policy with
+`UnsupportedNetworkPolicy` before provider mutation when the provider cannot
+preserve deployment deny rules for one of its destinations. Raw or deserialized
+values are revalidated by adapters. Recovery must reject a policy that differs
+from the one used to create the correlated sandbox.
 After local validation, sandbox creation dispatches its one provider mutation
 without a fallible inventory preflight. Once that call starts, only recovery
 reads may follow; ambiguous delivery never permits a second create.
@@ -74,12 +87,17 @@ success. After a process end is observed, an adapter must also validate the
 provider stream's final status instead of accepting an absent or unsuccessful
 completion marker.
 
-The public `conformance` module exercises creation, recovery, image
-preparation, split-stream execution, private ingress, and terminal identity.
-It also creates, recovers, and explicitly destroys a bounded one-shot sandbox.
-Its process probe invokes `/bin/sh` with a self-contained `pwd` and environment
-script, a selected working directory, one environment entry, and an independent
-stderr token, so a normal backend image needs no test-only executable.
+The public `conformance` module's `exercise_backend` helper exercises creation,
+recovery, image preparation, split-stream execution, private ingress, and
+terminal identity. It also creates, recovers, and explicitly destroys a bounded
+one-shot sandbox. Its process probe invokes `/bin/sh` with a self-contained
+`pwd` and environment script, a selected working directory, one environment
+entry, and an independent stderr token, so a normal backend image needs no
+test-only executable.
+The separate `exercise_network_allowlist` capability probe is for adapters
+that support domain destinations. It requires `/bin/sh` and `curl`, disables
+curl startup configuration before any other option, allows one exact domain,
+and verifies that another domain cannot return an application response.
 Every sandbox create and both snapshot probes retain the exact request and use
 bounded recover-only polling, including after an immediate create result.
 Recovery waits one second after each pending result, for at most 60 waits, so
@@ -89,8 +107,9 @@ attempts every tracked terminal, snapshot, and sandbox even when an earlier
 cleanup action fails, while preserving the original operation error when one
 already exists.
 Retained-source diagnostics are optional, but are checked against the known
-source when present. Adapters should run the harness alongside
-provider-specific transport and failure tests.
+source when present. Every adapter should run the main harness alongside
+provider-specific transport and failure tests; domain-capable adapters should
+also run the network capability probe.
 
 Trusted image safety phases must run without user-controlled login startup
 files. Durable terminal capture must likewise be installed before the one
@@ -142,12 +161,19 @@ or inventory responses whose operating-system PID is zero.
 ## Quick Start
 
 ```rust
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
-use sandbox_interface::{SandboxId, SandboxLifetime, ScreenViewportSize};
+use sandbox_interface::{
+    EgressDestination, SandboxId, SandboxLifetime, SandboxNetworkPolicy, ScreenViewportSize,
+};
 
 let sandbox_id = SandboxId::new();
 let viewport = ScreenViewportSize::new(1280, 720)?;
+let network = SandboxNetworkPolicy::allowlist(vec![
+    EgressDestination::domain("api.example.com")?,
+    EgressDestination::Ip(IpAddr::V4(Ipv4Addr::new(192, 0, 2, 10))),
+])?;
 let lifetime = SandboxLifetime::OneShot {
     max_lifetime: Duration::from_secs(900),
 };
@@ -155,6 +181,7 @@ lifetime.validate()?;
 
 assert!(!sandbox_id.to_string().is_empty());
 assert_eq!(viewport.width(), 1280);
+assert!(matches!(network, SandboxNetworkPolicy::Allowlist { .. }));
 # Ok::<(), sandbox_interface::Error>(())
 ```
 
@@ -176,6 +203,7 @@ cargo clippy -p sandbox-interface --all-targets --all-features -- -D warnings
 - `src/backend_files.rs` and `src/process_run.rs` — bounded file/process data.
 - `src/read_only.rs` — narrow non-mutating capability.
 - `src/screen_stack.rs` — screen capabilities and validated viewport values.
+- `src/network.rs` — typed, bounded outbound network policies.
 - `src/conformance.rs` — reusable backend conformance harness.
 - `src/conformance_image.rs` — durable image phase conformance flow.
 
