@@ -314,9 +314,9 @@ process idle deadline.
       lint, and `cargo xtask check`; audit documentation and tracked files.
 - [x] Commit the fix locally with a Conventional Commit; do not push or run
       `cargo xtask review` until the maintainer completes independent review.
-- [ ] After independent review, push and run `cargo xtask review` against
+- [x] After independent review, push and run `cargo xtask review` against
       `origin/main`; report findings without automatically fixing them.
-- [ ] Complete the milestone and update the plan index after the review cycle.
+- [x] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
 
@@ -437,3 +437,12 @@ the reviewed implementation until the maintainer chooses the follow-up.
    overflow; an end after a failed frame cannot suppress cleanup. New tests
    also cover pending-open release at the shorter of the three-second drop
    grace and the absolute deadline.
+
+### Final Review Outcome
+
+The batch-observation fix was committed in `e844f9d`, independently reviewed,
+and pushed. `cargo xtask check` passed with 408 tests passing and four opt-in
+live tests ignored. Reverting only the reader change fails the two new
+coalesced-end regressions, and the pending-open tests fail when either grace
+bound is removed. The post-push `cargo xtask review` against `origin/main`
+reported no findings, which completes Milestone 7 and this plan.
