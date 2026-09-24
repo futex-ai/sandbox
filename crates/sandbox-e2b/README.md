@@ -157,6 +157,9 @@ past the absolute deadline), even after ordinary idle expiry, to learn the
 PID. Without one it releases the stream without killing; a decoded end
 prevents the kill. HTTP bodies, process output, and terminal output are bounded
 while streaming.
+Before staging or yielding, the reader records the first PID and any subsequent
+process end from each decoded batch. Frames after a failed frame are ignored,
+so a trailing end cannot suppress cleanup.
 Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors

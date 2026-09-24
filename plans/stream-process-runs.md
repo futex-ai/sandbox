@@ -306,8 +306,16 @@ process idle deadline.
 - [x] Commit the fixes locally with all new files tracked.
 - [x] After independent commit review, push and run `cargo xtask review` against
       `origin/main`; report findings without automatically fixing them.
-- [ ] Decide how to address the post-fix review finding below, then add a
+- [x] Decide how to address the post-fix review finding below, then add a
       regression and resolve the chosen follow-up.
+- [x] Add coalesced-end, failure-prefix, overflow, and pending-open grace
+      regressions; record each decoded batch before staging or yielding.
+- [x] Run formatting, Clippy, full workspace tests with `umask 022`, file-length
+      lint, and `cargo xtask check`; audit documentation and tracked files.
+- [x] Commit the fix locally with a Conventional Commit; do not push or run
+      `cargo xtask review` until the maintainer completes independent review.
+- [ ] After independent review, push and run `cargo xtask review` against
+      `origin/main`; report findings without automatically fixing them.
 - [ ] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
@@ -421,3 +429,11 @@ the reviewed implementation until the maintainer chooses the follow-up.
    finishes its current batch before deciding whether to kill.
    **Recommendation: A**, a small reader-local change that keeps one ordering
    rule without new coordination between tasks.
+
+   **Resolution:** Option A converts each decoded batch to a staged-event
+   prefix ending at the first failure, then publishes its first start PID and
+   any subsequent process end in one observation before staging or yielding. A coalesced
+   process end now prevents an unnecessary kill on consumer drop or output
+   overflow; an end after a failed frame cannot suppress cleanup. New tests
+   also cover pending-open release at the shorter of the three-second drop
+   grace and the absolute deadline.

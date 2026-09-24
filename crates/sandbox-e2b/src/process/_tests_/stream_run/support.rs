@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Duration};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use bytes::Bytes;
 use futures_util::{StreamExt, stream};
+use tokio::sync::Notify;
 
 use crate::{ConnectProcessTransport, ProcessConnection, StreamProcessCommand};
 
@@ -12,6 +13,14 @@ use crate::process::{
     framing::encode_frame,
     http::{ByteStream, ConnectHttpTransport},
 };
+
+pub(super) struct NotifyOnDrop(pub(super) Arc<Notify>);
+
+impl Drop for NotifyOnDrop {
+    fn drop(&mut self) {
+        self.0.notify_one();
+    }
+}
 
 pub(super) fn transport(mock: unimock::Unimock) -> ConnectProcessTransport {
     let http: Arc<dyn ConnectHttpTransport> = Arc::new(mock);

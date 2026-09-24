@@ -29,8 +29,8 @@ pub(super) enum StagedEvent {
     Failure,
 }
 
-/// First decoded process identity and whether its end was decoded, even when
-/// the delivery worker has not received the corresponding staged events.
+/// First decoded process identity and whether its end was decoded, published
+/// for the entire decoded batch before any events are staged or delivered.
 #[derive(Clone, Copy, Default)]
 pub(super) struct ReaderObservation {
     pub(super) pid: Option<u32>,
@@ -147,6 +147,7 @@ impl BufferedReader {
             let arrived_at = Instant::now();
             for chunk in bytes.chunks(STAGED_FRAGMENT_BYTES) {
                 let decoded = decoder.push(chunk);
+                let mut events = Vec::with_capacity(decoded.frames.len());
                 for frame in decoded.frames {
                     let event = if frame.end_stream {
                         if decode_end_stream(&frame.payload).is_ok() {
@@ -160,23 +161,37 @@ impl BufferedReader {
                             Err(_) => StagedEvent::Failure,
                         }
                     };
-                    match &event {
-                        StagedEvent::Process(ProcessEvent::Start(pid)) => {
-                            observed.send_modify(|observation| {
-                                if observation.pid.is_none() {
+                    let failed = matches!(event, StagedEvent::Failure);
+                    events.push(event);
+                    if failed {
+                        break;
+                    }
+                }
+                if events.iter().any(|event| {
+                    matches!(
+                        event,
+                        StagedEvent::Process(ProcessEvent::Start(_) | ProcessEvent::End { .. })
+                    )
+                }) {
+                    observed.send_modify(|observation| {
+                        for event in &events {
+                            match event {
+                                StagedEvent::Process(ProcessEvent::Start(pid))
+                                    if observation.pid.is_none() =>
+                                {
                                     observation.pid = Some(*pid);
                                 }
-                            });
-                        }
-                        StagedEvent::Process(ProcessEvent::End { .. }) => {
-                            observed.send_modify(|observation| {
-                                if observation.pid.is_some() {
+                                StagedEvent::Process(ProcessEvent::End { .. })
+                                    if observation.pid.is_some() =>
+                                {
                                     observation.ended = true;
                                 }
-                            });
+                                _ => {}
+                            }
                         }
-                        _ => {}
-                    }
+                    });
+                }
+                for event in events {
                     if let StagedEvent::Process(ProcessEvent::Data { channel, ref bytes }) = event
                         && !bytes.is_empty()
                         && matches!(

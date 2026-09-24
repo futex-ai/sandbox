@@ -240,6 +240,10 @@ decoded events separately from the 16-event consumer queue; when staging is
 full it reports `ConsumerBackpressure`, so slow consumers cannot postpone timeout or
 cleanup. Overflow, backpressure, timeout, and transport failure trigger a
 bounded best-effort kill when a PID was decoded and no process end was decoded.
+Before staging or yielding, the reader records the first PID and any subsequent
+process end from each decoded batch. A failed frame ends that batch's processed
+prefix: the failure is staged, but later frames are ignored and cannot
+suppress cleanup.
 On consumer drop, a decoded but undelivered PID is still eligible for cleanup.
 If the start request may have been sent but no PID is known yet, the adapter
 keeps the pending open and reader alive for at most three seconds after the

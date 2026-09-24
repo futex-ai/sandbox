@@ -16,15 +16,9 @@ use unimock::{MockFn, Unimock, matching};
 use crate::ProcessTransport;
 use crate::process::http::{stream_with_timeout as stream_call, unary as unary_call};
 
-use super::support::{byte_stream, command, connection, data_frame, event_frame, transport};
-
-struct NotifyOnDrop(Arc<Notify>);
-
-impl Drop for NotifyOnDrop {
-    fn drop(&mut self) {
-        self.0.notify_one();
-    }
-}
+use super::support::{
+    NotifyOnDrop, byte_stream, command, connection, data_frame, event_frame, transport,
+};
 
 #[tokio::test(start_paused = true)]
 async fn missing_start_after_drop_releases_provider_within_grace() {

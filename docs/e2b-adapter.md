@@ -293,6 +293,10 @@ the drop, never past the absolute deadline or cut short by ordinary idle
 expiry. It kills if it learns a PID; otherwise it logs a debug event and
 releases the stream. A drop before the open is polled never contacts envd;
 a decoded process end prevents a kill, even if its event was still staged.
+Before staging or yielding, the reader records the first PID and any subsequent
+process end from each decoded batch, even when overflow or a drop interrupts
+delivery. It stages a failed frame but ignores subsequent frames in that batch,
+so an end after a failure does not prevent cleanup.
 Envd's HTTP client keeps its fixed 310-second timeout for existing paths. The
 new path alone applies a per-request timeout equal to the remaining absolute budget plus a
 10-second transport allowance, so the client cannot truncate a valid one-hour

@@ -12,16 +12,28 @@ use crate::process::{
     types::ProcessConnection,
 };
 
+use super::support::NotifyOnDrop;
+
 pub(super) fn transport(
     mock: unimock::Unimock,
     entered: Arc<Notify>,
     resume: Arc<Notify>,
+) -> ConnectProcessTransport {
+    transport_with_release(mock, entered, resume, None)
+}
+
+pub(super) fn transport_with_release(
+    mock: unimock::Unimock,
+    entered: Arc<Notify>,
+    resume: Arc<Notify>,
+    released: Option<Arc<Notify>>,
 ) -> ConnectProcessTransport {
     ConnectProcessTransport {
         http: Arc::new(GatedOpen {
             inner: Arc::new(mock),
             entered,
             resume,
+            released,
         }),
         backend_id: "configured-e2b".to_owned(),
     }
@@ -31,6 +43,7 @@ struct GatedOpen {
     inner: Arc<dyn ConnectHttpTransport>,
     entered: Arc<Notify>,
     resume: Arc<Notify>,
+    released: Option<Arc<Notify>>,
 }
 
 #[async_trait]
@@ -51,6 +64,10 @@ impl ConnectHttpTransport for GatedOpen {
         request_json: Vec<u8>,
         request_timeout: Duration,
     ) -> Result<ByteStream> {
+        let _release = self
+            .released
+            .as_ref()
+            .map(|notify| NotifyOnDrop(notify.clone()));
         self.entered.notify_one();
         self.resume.notified().await;
         self.inner
