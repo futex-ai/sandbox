@@ -106,6 +106,15 @@ entry, and an independent stderr token, so a normal backend image needs no
 test-only executable.
 The streaming probe uses a separate self-contained `/bin/sh` command and
 checks ordered split output and the final outcome.
+Streaming requests expose only argument counts, limits, and deadlines in
+`Debug`, while stream events show stdout and stderr byte counts rather than
+captured bytes. Silence before a process starts produces `IdleTimeout`; EOF
+without a success trailer remains `TransportFailure`. Adapters should retain
+a possible in-flight start briefly after consumer drop to learn the PID for
+bounded cleanup, without killing after a decoded process end.
+Before staging or yielding, the adapter records the first PID and any subsequent
+process end from each decoded batch. Events after a failed frame are ignored
+and cannot suppress cleanup.
 The separate `exercise_network_allowlist` capability probe is for adapters
 that support domain destinations. It requires `/bin/sh` and `curl`, disables
 curl startup configuration before any other option, allows one exact domain,

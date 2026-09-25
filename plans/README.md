@@ -6,11 +6,11 @@ milestones are finished.
 
 ## Active
 
-- [Stream process runs](stream-process-runs.md)
 - [Add one-shot sandbox lifetimes](one-shot-sandbox-lifetime.md)
 
 ## Completed
 
+- [Stream process runs](stream-process-runs.md)
 - [Add egress allowlist policy](egress-allowlist-policy.md)
 - [Add direct process working directory and environment](process-run-cwd-and-env.md)
 - [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)

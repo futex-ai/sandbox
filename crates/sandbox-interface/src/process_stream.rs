@@ -15,7 +15,7 @@ pub const PROCESS_STREAM_MAX_DEADLINE: Duration = Duration::from_secs(3600);
 /// stream. The idle timer begins before opening the process transport and
 /// bounds time without stdout or stderr data. It must be nonzero and no greater
 /// than the requested deadline.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct StreamProcessRequest {
     /// Caller resource owner.
     pub owner: ResourceOwner,
@@ -41,7 +41,7 @@ pub struct StreamProcessRequest {
 /// [`crate::BackendRunProcessRequest`]. They must also reject a deadline above
 /// [`PROCESS_STREAM_MAX_DEADLINE`], a zero idle timeout, or an idle timeout
 /// above the deadline before contacting their provider.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendStreamProcessRequest {
     /// Source provider sandbox reference.
     pub sandbox_provider_ref: ProviderRef,
@@ -86,7 +86,7 @@ pub enum ProcessStreamOutcome {
 /// `Outcome` is emitted exactly once and is always the final stream item.
 /// `Exited` is not terminal because provider completion still requires a
 /// decoded success trailer followed by transport EOF.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum ProcessStreamEvent {
     /// The provider started the process with a nonzero operating-system PID.
     Started {

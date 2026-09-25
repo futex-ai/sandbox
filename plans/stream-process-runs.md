@@ -297,9 +297,26 @@ process idle deadline.
 - [x] Run `git add -A`, commit with Conventional Commits, and push the branch.
 - [x] Run `cargo xtask review` after the push and report any findings without
       automatically fixing them.
-- [ ] Decide how to address the four post-merge review findings below, then
+- [x] Decide how to address the four post-merge review findings below, then
       add regressions and resolve the chosen follow-ups.
-- [ ] Complete the milestone and update the plan index after the review cycle.
+- [x] Preserve PID discovery during drop grace even when the ordinary idle
+      timer has expired; prove late starts are killed within the grace window.
+- [x] Run focused regressions, formatting, Clippy, the workspace tests,
+      file-length lint, and `cargo xtask check`; align the contract and READMEs.
+- [x] Commit the fixes locally with all new files tracked.
+- [x] After independent commit review, push and run `cargo xtask review` against
+      `origin/main`; report findings without automatically fixing them.
+- [x] Decide how to address the post-fix review finding below, then add a
+      regression and resolve the chosen follow-up.
+- [x] Add coalesced-end, failure-prefix, overflow, and pending-open grace
+      regressions; record each decoded batch before staging or yielding.
+- [x] Run formatting, Clippy, full workspace tests with `umask 022`, file-length
+      lint, and `cargo xtask check`; audit documentation and tracked files.
+- [x] Commit the fix locally with a Conventional Commit; do not push or run
+      `cargo xtask review` until the maintainer completes independent review.
+- [x] After independent review, push and run `cargo xtask review` against
+      `origin/main`; report findings without automatically fixing them.
+- [x] Complete the milestone and update the plan index after the review cycle.
 
 ### Milestone 7 Review Outcome
 
@@ -341,6 +358,12 @@ follow-up.
    metadata-only `Debug` for all three types. Option B: remove `Debug` entirely.
    **Recommendation: A**, matching the existing non-streaming process requests
    while preserving safe structural diagnostics.
+
+   **Resolution:** Option A replaces derived `Debug` with metadata-only
+   formatting on both streaming requests and the E2B command. Regression
+   tests verify command and argument secrets are absent in normal and pretty
+   formatting while limits, counts, and timeouts remain visible.
+
 2. **Severity: high — redact streamed output in event diagnostics.**
    `ProcessStreamEvent` in `crates/sandbox-interface/src/process_stream.rs`
    derives `Debug` for stdout and stderr byte vectors. Logging those events can
@@ -348,6 +371,11 @@ follow-up.
    ordinary diagnostics. Option A: implement `Debug` that displays the output
    channel and byte count only. Option B: remove `Debug`. **Recommendation: A**,
    so tests retain safe event visibility without printing output data.
+
+   **Resolution:** Option A formats stdout and stderr events with byte counts
+   only; start, exit, and outcome diagnostics retain their existing fields.
+   Regression tests verify secret-looking output bytes never appear.
+
 3. **Severity: high — preserve a staged process ID on consumer drop.**
    `crates/sandbox-e2b/src/process/stream_run.rs` checks for consumer closure
    before consuming staged events. If the reader already staged `Started` but
@@ -356,6 +384,15 @@ follow-up.
    expiry. Option A: publish the observed PID from the reader to shared cleanup
    state. Option B: drain ready start events before honoring closure.
    **Recommendation: A**, removing the scheduling race at its source.
+
+   **Resolution:** Option A publishes the first decoded PID and process end
+   independently of staged delivery. After a polled open, a dropped consumer
+   keeps the pending request and reader alive for at most three seconds or
+   until the absolute deadline to learn a PID, even when ordinary idle expiry
+   would have fired, then uses the existing bounded kill. It releases the
+   provider stream without killing if no PID arrives. Decoded process ends
+   prevent kills, even when undelivered.
+
 4. **Severity: medium — preserve idle timeout before a process starts.**
    `crates/sandbox-e2b/src/process/stream_run.rs` observes reader timeout
    outcomes only after processing `Started`. A provider stream with no start or
@@ -363,3 +400,49 @@ follow-up.
    nothing misreports an idle timeout to callers. Option A: observe the reader
    outcome before start as well. Option B: add a separate pre-start idle timer.
    **Recommendation: A**, retaining one arrival-based timeout source.
+
+   **Resolution:** Option A keeps staged start handling ahead of reader
+   outcomes and uses the reader's recorded outcome when staging closes without
+   a trailer. A silent pre-start stream now reports `IdleTimeout`; EOF without
+   a trailer and expiry after a decoded exit still report `TransportFailure`.
+
+### Post-Fix Review Outcome
+
+The four fixes were committed in `3853587`, independently reviewed, and
+pushed. `cargo xtask check` passed with 403 tests passing and four opt-in live
+tests ignored. The post-push review reported one new finding; do not change
+the reviewed implementation until the maintainer chooses the follow-up.
+
+1. **Severity: medium — record a coalesced process end before drop cleanup.**
+   The provider reader in `crates/sandbox-e2b/src/process/stream_reader.rs`
+   records start and end observations one frame at a time and yields after
+   staging each frame. When one HTTP chunk carries both the start frame and
+   the process-end frame after the consumer has dropped the stream, drop
+   cleanup in `crates/sandbox-e2b/src/process/stream_drop.rs` sees the PID
+   after the first frame, stops the reader before it records the end, and
+   sends a kill for a process that has already exited. A probe confirmed one
+   `SendSignal` in that case. Doing nothing sends kills that the contract says
+   a decoded process end prevents; the process has already exited, so this is
+   usually harmless, but a reused PID could be signalled. Option A: record
+   start and end observations for every frame in a decoded batch before
+   staging or yielding. Option B: make drop cleanup wait until the reader
+   finishes its current batch before deciding whether to kill.
+   **Recommendation: A**, a small reader-local change that keeps one ordering
+   rule without new coordination between tasks.
+
+   **Resolution:** Option A converts each decoded batch to a staged-event
+   prefix ending at the first failure, then publishes its first start PID and
+   any subsequent process end in one observation before staging or yielding. A coalesced
+   process end now prevents an unnecessary kill on consumer drop or output
+   overflow; an end after a failed frame cannot suppress cleanup. New tests
+   also cover pending-open release at the shorter of the three-second drop
+   grace and the absolute deadline.
+
+### Final Review Outcome
+
+The batch-observation fix was committed in `e844f9d`, independently reviewed,
+and pushed. `cargo xtask check` passed with 408 tests passing and four opt-in
+live tests ignored. Reverting only the reader change fails the two new
+coalesced-end regressions, and the pending-open tests fail when either grace
+bound is removed. The post-push `cargo xtask review` against `origin/main`
+reported no findings, which completes Milestone 7 and this plan.

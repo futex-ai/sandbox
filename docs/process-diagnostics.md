@@ -18,13 +18,17 @@ must not copy that content into ordinary application logs or error messages.
 
 ## Automatic Diagnostics
 
-Direct and stateless read-only process requests, image preparation requests,
-and captured-output `Debug` implementations emit only selected metadata:
+Direct, streaming, and stateless read-only process requests, image preparation
+requests, and captured-output `Debug` implementations emit only selected metadata:
 consumer-owned typed identifiers, counts, limits, whether a working directory
 was supplied, deadlines, exit status, and overflow or truncation flags. They
 omit command and argument text, paths, environment names and values, input,
 and captured output. This applies with and without an environment map, and to
 both ordinary and alternate pretty `Debug` formatting.
+Streaming command diagnostics show argument counts, output limits, and
+deadlines rather than command or argument contents. Stream-event diagnostics
+show stdout and stderr byte counts instead of bytes; start, exit, and outcome
+events keep their ordinary field diagnostics. Returned event bytes remain exact.
 
 Terminal input, output, and transcript `Debug` follow the same rule. Formatting
 a result changes neither its data fields nor its data serialization. Nested

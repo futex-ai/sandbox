@@ -3,8 +3,9 @@
 use std::fmt;
 
 use crate::{
-    BackendReadOnlyExecRequest, BackendRunProcessRequest, ReadOnlyExecOutput, ReadOnlyExecRequest,
-    RunProcessRequest, SandboxProcessOutput,
+    BackendReadOnlyExecRequest, BackendRunProcessRequest, BackendStreamProcessRequest,
+    ProcessStreamEvent, ReadOnlyExecOutput, ReadOnlyExecRequest, RunProcessRequest,
+    SandboxProcessOutput, StreamProcessRequest,
 };
 
 impl fmt::Debug for RunProcessRequest {
@@ -20,6 +21,56 @@ impl fmt::Debug for RunProcessRequest {
             .field("stderr_limit", &self.stderr_limit)
             .field("deadline", &self.deadline)
             .finish()
+    }
+}
+
+impl fmt::Debug for StreamProcessRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("StreamProcessRequest")
+            .field("owner", &self.owner)
+            .field("sandbox_id", &self.sandbox_id)
+            .field("arg_count", &self.args.len())
+            .field("stdout_limit", &self.stdout_limit)
+            .field("stderr_limit", &self.stderr_limit)
+            .field("deadline", &self.deadline)
+            .field("idle_timeout", &self.idle_timeout)
+            .finish()
+    }
+}
+
+impl fmt::Debug for BackendStreamProcessRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("BackendStreamProcessRequest")
+            .field("arg_count", &self.args.len())
+            .field("stdout_limit", &self.stdout_limit)
+            .field("stderr_limit", &self.stderr_limit)
+            .field("deadline", &self.deadline)
+            .field("idle_timeout", &self.idle_timeout)
+            .finish()
+    }
+}
+
+impl fmt::Debug for ProcessStreamEvent {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Started { pid } => formatter.debug_struct("Started").field("pid", pid).finish(),
+            Self::Stdout(bytes) => formatter
+                .debug_struct("Stdout")
+                .field("output_bytes", &bytes.len())
+                .finish(),
+            Self::Stderr(bytes) => formatter
+                .debug_struct("Stderr")
+                .field("output_bytes", &bytes.len())
+                .finish(),
+            Self::Exited { exit_code, exited } => formatter
+                .debug_struct("Exited")
+                .field("exit_code", exit_code)
+                .field("exited", exited)
+                .finish(),
+            Self::Outcome(outcome) => formatter.debug_tuple("Outcome").field(outcome).finish(),
+        }
     }
 }
 

@@ -149,8 +149,17 @@ supervisor clips recorder chunks to the remaining limit, keeps draining
 overflow so the interactive terminal stays usable, and waits for the recorder
 before exiting.
 One-shot processes are killed when collection or streaming terminates without
-an observed exit after learning their PID, including consumer drop. HTTP
-bodies, process output, and terminal output are bounded while streaming.
+a decoded process end after learning their PID, including consumer drop. A
+decoded but undelivered start remains eligible for a bounded kill; if the
+consumer drops after start may have been sent but before a PID is decoded,
+the worker retains the open and reader for at most three seconds (and never
+past the absolute deadline), even after ordinary idle expiry, to learn the
+PID. Without one it releases the stream without killing; a decoded end
+prevents the kill. HTTP bodies, process output, and terminal output are bounded
+while streaming.
+Before staging or yielding, the reader records the first PID and any subsequent
+process end from each decoded batch. Frames after a failed frame are ignored,
+so a trailing end cannot suppress cleanup.
 Connect frame headers are validated before the rest
 of an HTTP chunk is retained, so an oversized declared frame cannot force an
 unbounded intermediate buffer. Both combined and split-stream collectors
@@ -167,6 +176,8 @@ itself mean the command succeeded. Timer expiry after exit but before HTTP EOF
 is a transport failure, including while exit-event delivery is blocked. Only
 stdout or stderr bytes reset the idle timer, measured by the independent
 provider reader when the HTTP fragment arrives, even if event delivery stalls.
+Silence before the start event produces `IdleTimeout`, whereas EOF without a
+trailer produces `TransportFailure`.
 The reader bounds decoded-event staging to 32 slots and reports
 `ConsumerBackpressure` if staging fills; it stops the process without waiting
 for a slow consumer. The terminal outcome and any final bounded overflow
@@ -197,7 +208,8 @@ NUL or control characters. Environment names follow
 `[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and requests allow at most 256
 entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
 `DYLD_*` are rejected as template-owned. Execution-request and captured-output `Debug` contain
-only selected metadata, with no command text, paths, environment names or
+only selected metadata; streaming commands show argument counts, limits, and
+timeouts, while streamed output events show byte counts. They omit command text, paths, environment names or
 values, or captured contents. Validation errors never echo a rejected name or
 value. Process and terminal bytes remain unmasked in returned results and
 saved transcripts; only their automatic diagnostic representations omit

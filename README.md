@@ -81,11 +81,20 @@ Incremental process streams additionally accept a deadline up to one hour and
 a nonzero idle timeout no greater than the deadline. Their absolute budget
 starts before connection; only newly arrived stdout or stderr resets idle
 timing, independent of consumer speed. Completion requires the success trailer
-and HTTP EOF; later bytes and expiry after exit are transport failures.
+and HTTP EOF; later bytes and expiry after exit are transport failures. Silence
+before process start produces `IdleTimeout`, while EOF without a trailer
+produces `TransportFailure`.
 Bounded staging protects cleanup against slow consumers. Unfinished processes
 are killed best-effort after timeout, overflow, failure, backpressure, or
 consumer drop. Resumable sandboxes are connected for at least the stream
 deadline; one-shot sandboxes retain their original destruction deadline.
+On consumer drop, the adapter preserves a decoded PID even if its start event
+was not delivered, and retains a polled open or provider stream for at most
+three seconds (never past the absolute deadline) to learn a late PID before
+cleanup. A decoded process end prevents a kill.
+Before staging or yielding, the reader records the first PID and any subsequent
+process end from each decoded batch. Frames after a failed frame are ignored,
+so an invalid event cannot suppress cleanup.
 Terminal creation and recovery also reject transcript limits above the shared
 256 MiB readable-file ceiling before provider access. Stateless commands reject
 an empty executable, more than 128 KiB of argv, or more than 64 MiB of combined
@@ -93,9 +102,10 @@ output before credentials are acquired. Trusted direct process calls may select
 a validated absolute working directory and bounded environment map, while
 template-owned resolution variables remain protected. Process and terminal
 diagnostics expose selected metadata only; command text, environment entries,
-and output contents are omitted. Terminal output, saved transcripts, and
-returned stdout/stderr remain unmasked. Image failures report exit and capture
-facts without output snippets. Image preparation validates every input path
+and output contents are omitted. Streaming command diagnostics use argument
+counts and limits, and streamed output diagnostics use byte counts. Terminal
+output, saved transcripts, and returned stdout/stderr remain unmasked. Image
+failures report exit and capture facts without output snippets. Image preparation validates every input path
 and size before it connects, incomplete filesystem-size measurements fail closed, and cache
 cleanup cannot follow setup-created symlink parents. Trusted provider helpers
 keep uncertain-write fences and terminal logs in root-owned storage. A
