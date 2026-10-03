@@ -22,7 +22,7 @@ const WRITE_STATE_ROOT: &str = "/var/lib";
 const WRITE_STATE_DIRECTORY: &str = "sandbox-e2b/write-fences";
 
 /// One atomic replacement write below a trusted absolute root.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct ProcessRegularFileWriteRequest {
     /// Absolute directory that contains the destination.
     pub root: String,

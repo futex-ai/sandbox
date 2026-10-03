@@ -222,8 +222,13 @@ sandbox.
 a boxed stream after validation and sandbox access succeed, or a single
 `DeadlineExpired` outcome if connection consumes the budget. The service
 request identifies an owned sandbox; the backend uses its provider reference.
-They carry argv, separate output limits, an absolute deadline, and an idle
-timeout. Events are ordered as `Started { pid }`, zero or more `Stdout(bytes)`
+`StreamProcessRequest` and `BackendStreamProcessRequest` carry argv, optional
+`cwd: Option<String>`, `envs: BTreeMap<String, String>`, separate output limits,
+an absolute deadline, and an idle timeout. Their execution context uses the
+same validation as collected runs. Backends must call
+`validate_execution_context()` first, then validate argv, output limits,
+deadline, and idle timeout, all before provider access.
+Events are ordered as `Started { pid }`, zero or more `Stdout(bytes)`
 or `Stderr(bytes)`, `Exited { exit_code, exited }`, then exactly one final
 `Outcome` followed by EOF. Before start, failure may emit only an outcome.
 Signal termination reports `exited: false`; `Completed` requires a provider
@@ -254,9 +259,11 @@ the open was polled makes no provider call. A decoded process end prevents a
 kill even if its event was not delivered. Queued data and any separately
 retained final overflow prefix precede the terminal outcome; cleanup does
 not wait for consumer capacity.
-Trusted direct-process callers may select an optional working directory and
-environment map. A working directory must be absolute, at most 4,096 UTF-8
-bytes, and contain no NUL or control character. Environment names must match
+Trusted collected and streaming direct-process callers may select an optional
+working directory and environment map. Absent cwd and an empty map preserve
+the provider's existing default context. A working directory must be absolute,
+at most 4,096 UTF-8 bytes, and contain no NUL or control character. Environment
+names must match
 `[A-Za-z_][A-Za-z0-9_]*`; values may contain arbitrary UTF-8 except NUL. A map
 contains at most 256 entries and at most 64 KiB across the UTF-8 bytes of every
 name and value. `PATH`, `HOME`, every `LD_*` name, and every `DYLD_*` name are
@@ -361,9 +368,10 @@ returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
 fence and arrange cleanup.
 
 [Process diagnostics](process-diagnostics.md) define the boundary between
-sensitive process data and automatic diagnostics. Process and terminal `Debug`,
-tracing, and handled image errors expose selected metadata only. They omit
-caller-controlled command text, paths, environment entries, input, and output
+sensitive process data and automatic diagnostics. Process, terminal, and
+file-write request `Debug`, tracing, and handled image errors expose selected
+metadata only. They omit caller-controlled command text, paths, environment
+entries, input, and output
 contents instead of matching known secrets. Image failures retain exit and
 capture facts without output snippets; nested provider references hide their
 contents in `Debug`. Environment validation reports typed reasons without
@@ -371,6 +379,11 @@ echoing a name or value. Unknown profile errors do not echo an untrusted name.
 Raw stdout/stderr, PTY output, and saved terminal transcripts remain unmasked
 within their existing bounds. Their explicit data access and transcript
 serialization must preserve content, even when it contains a secret.
+`WriteFileRequest` formats only its lifecycle operation ID, owner, sandbox ID,
+and input byte count. `BackendWriteFileRequest` formats only the input byte
+count. Neither includes the root, path, contents, or provider reference;
+explicit request fields and written bytes remain exact. File-read results
+are outside this file-write diagnostic guarantee.
 
 ## Conformance
 
@@ -382,9 +395,13 @@ The process probe runs one `/bin/sh` command with `/workspace` as its working
 directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
 environment bytes on stdout plus an independent deterministic token on stderr,
 so conforming images need a standard shell but no harness-only executable.
-The streaming probe uses a separate self-contained `/bin/sh` script and
-checks a nonzero PID, output before exit, a completed outcome after exit,
-and no event after the outcome.
+The streaming probe selects cwd `/workspace` and
+`SANDBOX_PROBE=stream-environment-map`, then runs `/bin/sh -c` with
+`pwd; printf '%s' "$SANDBOX_PROBE"; printf '%s' 'stream-stderr' >&2`.
+It requires stdout `/workspace\nstream-environment-map` and stderr
+`stream-stderr`, a nonzero PID, output before exit, a completed outcome after
+exit, and no event after the outcome. Its environment value differs from the
+collected probe's `environment-map`, so reused collected context cannot pass.
 
 The separate `exercise_network_allowlist` capability probe applies only to
 adapters that support domain destinations. It creates a sandbox that permits

@@ -7,7 +7,7 @@ use std::{
     process::Command,
 };
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::{CleanupRequest, command};
 
@@ -15,8 +15,8 @@ const REPLACEMENT_DIGEST: &str = "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d
 
 #[test]
 fn exact_target_recovery_finishes_the_workload_handoff() {
-    let root = tempdir().expect("temporary write root");
-    let state_root = tempdir().expect("temporary state root");
+    let root = private_tempdir().expect("temporary write root");
+    let state_root = private_tempdir().expect("temporary state root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let target = root.path().join("src/lib.rs");
     fs::write(&target, b"replacement").expect("replacement target");
@@ -52,8 +52,8 @@ fn exact_target_recovery_finishes_the_workload_handoff() {
 
 #[test]
 fn exact_target_recovery_requires_a_non_root_workload_identity() {
-    let root = tempdir().expect("temporary write root");
-    let state_root = tempdir().expect("temporary state root");
+    let root = private_tempdir().expect("temporary write root");
+    let state_root = private_tempdir().expect("temporary state root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     fs::write(root.path().join("src/lib.rs"), b"replacement").expect("replacement target");
     let mut cleanup = cleanup_command(root.path(), state_root.path(), true);
@@ -71,8 +71,8 @@ fn exact_target_recovery_requires_a_non_root_workload_identity() {
 
 #[test]
 fn disposable_cleanup_removes_its_revocation_marker() {
-    let root = tempdir().expect("temporary write root");
-    let state_root = tempdir().expect("temporary state root");
+    let root = private_tempdir().expect("temporary write root");
+    let state_root = private_tempdir().expect("temporary state root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = state_root.path().join("state");
 
@@ -87,8 +87,8 @@ fn disposable_cleanup_removes_its_revocation_marker() {
 
 #[test]
 fn uncertain_cleanup_retains_its_revocation_marker() {
-    let root = tempdir().expect("temporary write root");
-    let state_root = tempdir().expect("temporary state root");
+    let root = private_tempdir().expect("temporary write root");
+    let state_root = private_tempdir().expect("temporary state root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = state_root.path().join("state");
 
@@ -105,9 +105,9 @@ fn uncertain_cleanup_retains_its_revocation_marker() {
 
 #[test]
 fn failed_disposable_cleanup_keeps_its_revocation_marker() {
-    let root = tempdir().expect("temporary write root");
-    let outside = tempdir().expect("outside directory");
-    let state_root = tempdir().expect("temporary state root");
+    let root = private_tempdir().expect("temporary write root");
+    let outside = private_tempdir().expect("outside directory");
+    let state_root = private_tempdir().expect("temporary state root");
     symlink(outside.path(), root.path().join("src")).expect("linked parent");
     let state = state_root.path().join("state");
 

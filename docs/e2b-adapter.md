@@ -302,23 +302,32 @@ new path alone applies a per-request timeout equal to the remaining absolute bud
 10-second transport allowance, so the client cannot truncate a valid one-hour
 stream.
 
-Direct-process requests pass their validated optional `cwd` and `envs` to
-envd's `Start` request. The working directory must be absolute, no longer than
+Collected and streaming direct-process requests pass their validated optional
+`cwd` and `envs` to envd's `Start` request. `StreamProcessCommand` carries both
+fields after `args`. Absent context omits `process.cwd` and sends
+`process.envs: {}`, preserving the existing Start body.
+The working directory must be absolute, no longer than
 4,096 UTF-8 bytes, and free of NUL and control characters. Environment names
 use `[A-Za-z_][A-Za-z0-9_]*`; values reject NUL. At most 256 entries and 64 KiB
 across every name and value are accepted. The adapter rejects `PATH`, `HOME`,
 all `LD_*`, and all `DYLD_*` names so the template remains responsible for
 executable and loader resolution. Validation happens before the control API is
-asked for sandbox access. Process and terminal `Debug` contain only selected
-metadata; streaming commands show argument counts, limits, and timeouts, while
-streamed stdout and stderr events show only their byte counts. Diagnostics omit
-command text, paths, environment entries, input, and captured output.
+asked for sandbox access. Streaming validates context first, then argv, output
+limits, deadline, and idle timeout. Direct `ConnectProcessTransport::stream_process` callers
+retain timer-only validation, matching collected transport behavior.
+Process and terminal `Debug` contain only selected metadata;
+`StreamProcessCommand` shows `arg_count`, `has_cwd`, `env_count`,
+`stdout_limit`, `stderr_limit`, `requested_at`, `deadline`, and `idle_timeout`,
+while streamed stdout and stderr events show only their byte counts.
+Diagnostics omit command text, paths, environment entries, input, and captured output.
 Validation errors report typed reasons without echoing names
 or values. Raw process results, PTY output, and saved transcripts remain
 unmasked, including credentials deliberately printed by a command. The
 stateless read-only path still supplies only its existing explicit `cwd` and an empty environment map. PTY startup remains
 separate and keeps its fixed `LANG`, `LC_ALL`, and `TERM` values plus its
 existing optional `cwd`.
+The private streaming settings contain the encoded Start body and must never
+implement `Debug`; tracing must never record that body or context contents.
 
 The adapter starts every trusted Python file and terminal helper with isolated
 module lookup and without Python site initialization. Sandbox files in the
@@ -397,7 +406,11 @@ Oversized replacement writes fail before acquiring mutating sandbox access.
 
 The public backend conformance process runs use `/bin/sh` with self-contained
 scripts: the collected run verifies `/workspace`, one environment entry, and
-an independent stderr token; the streaming run verifies ordered split output.
+an independent stderr token. The streaming run selects `/workspace` and
+`SANDBOX_PROBE=stream-environment-map`, requiring stdout
+`/workspace\nstream-environment-map`, stderr `stream-stderr`, and ordered events
+through the completed outcome. Its value differs from the collected probe's
+`environment-map` so context must be forwarded for each run.
 A normal E2B image needs no test-only executable. The lifetime probe creates
 and destroys a bounded one-shot sandbox without pausing or resuming it.
 

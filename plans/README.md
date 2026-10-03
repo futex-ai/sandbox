@@ -10,6 +10,7 @@ milestones are finished.
 
 ## Completed
 
+- [Stream process working directory, environment, and write redaction](stream-process-cwd-env-and-write-redaction.md)
 - [Stream process runs](stream-process-runs.md)
 - [Add egress allowlist policy](egress-allowlist-policy.md)
 - [Add direct process working directory and environment](process-run-cwd-and-env.md)

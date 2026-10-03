@@ -2,15 +2,14 @@
 
 use std::{fs, os::unix::fs::symlink, process::Command};
 
-use tempfile::tempdir;
+use crate::{ProcessCommand, test_directories::private_tempdir};
 
 use super::{cleanup_command, directory_command};
-use crate::ProcessCommand;
 
 #[test]
 fn directory_creation_rejects_an_intermediate_symlink() {
-    let root = tempdir().expect("temporary path root");
-    let outside = tempdir().expect("outside directory");
+    let root = private_tempdir().expect("temporary path root");
+    let outside = private_tempdir().expect("outside directory");
     symlink(outside.path(), root.path().join("sandbox")).expect("intermediate symlink");
     let relative = "sandbox/terminals";
 
@@ -22,7 +21,7 @@ fn directory_creation_rejects_an_intermediate_symlink() {
 
 #[test]
 fn directory_creation_builds_a_normal_nested_path() {
-    let root = tempdir().expect("temporary path root");
+    let root = private_tempdir().expect("temporary path root");
     let relative = "sandbox/terminals";
     let target = root.path().join(relative);
 
@@ -34,8 +33,8 @@ fn directory_creation_builds_a_normal_nested_path() {
 
 #[test]
 fn cleanup_rejects_an_intermediate_symlink_without_touching_its_target() {
-    let root = tempdir().expect("temporary path root");
-    let outside = tempdir().expect("outside directory");
+    let root = private_tempdir().expect("temporary path root");
+    let outside = private_tempdir().expect("outside directory");
     fs::create_dir(outside.path().join("terminals")).expect("outside terminals");
     let protected = outside.path().join("terminals/protected");
     fs::write(&protected, b"protected").expect("protected file");
@@ -50,8 +49,8 @@ fn cleanup_rejects_an_intermediate_symlink_without_touching_its_target() {
 
 #[test]
 fn cleanup_removes_child_symlinks_without_following_them() {
-    let root = tempdir().expect("temporary path root");
-    let outside = tempdir().expect("outside directory");
+    let root = private_tempdir().expect("temporary path root");
+    let outside = private_tempdir().expect("outside directory");
     let target = root.path().join("sandbox/terminals");
     fs::create_dir_all(&target).expect("terminal directory");
     let protected = outside.path().join("protected");

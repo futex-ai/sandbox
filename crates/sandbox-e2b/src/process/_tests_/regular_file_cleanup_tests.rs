@@ -7,7 +7,7 @@ use std::{
     process::Command,
 };
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::{CleanupRequest, command};
 
@@ -15,8 +15,8 @@ const REPLACEMENT_DIGEST: &str = "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d
 
 #[test]
 fn cleanup_revokes_the_writer_and_removes_temporary_files() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let staged = stage.path().join("upload");
     let state = stage.path().join("state");
@@ -50,9 +50,9 @@ fn cleanup_revokes_the_writer_and_removes_temporary_files() {
 
 #[test]
 fn cleanup_does_not_follow_a_replaced_parent_directory() {
-    let root = tempdir().expect("temporary write root");
-    let outside = tempdir().expect("outside directory");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let outside = private_tempdir().expect("outside directory");
+    let stage = private_tempdir().expect("temporary staging root");
     symlink(outside.path(), root.path().join("linked")).expect("linked parent");
     let staged = stage.path().join("upload");
     let state = stage.path().join("state");
@@ -79,8 +79,8 @@ fn cleanup_does_not_follow_a_replaced_parent_directory() {
 
 #[test]
 fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let staged = stage.path().join("missing-upload");
     let state = stage.path().join("state");
@@ -115,8 +115,8 @@ fn cleanup_finishes_a_writer_that_won_the_atomic_commit_claim() {
 
 #[test]
 fn cleanup_rejects_a_commit_claim_for_different_same_size_bytes() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = stage.path().join("state");
     let target = root.path().join("src/lib.rs");
@@ -141,8 +141,8 @@ fn cleanup_rejects_a_commit_claim_for_different_same_size_bytes() {
 
 #[test]
 fn cleanup_rejects_a_workload_accessible_temporary_directory() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = stage.path().join("state");
     let target = root.path().join("src/lib.rs");
@@ -172,8 +172,8 @@ fn cleanup_rejects_a_workload_accessible_temporary_directory() {
 
 #[test]
 fn cleanup_recovers_a_commit_after_the_writer_removed_its_state() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = stage.path().join("missing-state");
     let target = root.path().join("src/lib.rs");
@@ -194,8 +194,8 @@ fn cleanup_recovers_a_commit_after_the_writer_removed_its_state() {
 
 #[test]
 fn cleanup_syncs_the_directory_before_confirming_an_existing_target() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let state = stage.path().join("state");
     let marker = stage.path().join("fsync-observed");

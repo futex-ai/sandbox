@@ -1,8 +1,20 @@
-//! Process command diagnostics contain selected metadata only.
+//! Process command and file-write diagnostics contain selected metadata only.
 
 use std::fmt;
 
-use super::types::{ProcessCommand, ProcessPtyRequest, SplitProcessCommand, StreamProcessCommand};
+use super::{
+    regular_file_write::ProcessRegularFileWriteRequest,
+    types::{ProcessCommand, ProcessPtyRequest, SplitProcessCommand, StreamProcessCommand},
+};
+
+impl fmt::Debug for ProcessRegularFileWriteRequest {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProcessRegularFileWriteRequest")
+            .field("input_bytes", &self.bytes.len())
+            .finish()
+    }
+}
 
 impl fmt::Debug for ProcessCommand {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -37,6 +49,8 @@ impl fmt::Debug for StreamProcessCommand {
         formatter
             .debug_struct("StreamProcessCommand")
             .field("arg_count", &self.args.len())
+            .field("has_cwd", &self.cwd.is_some())
+            .field("env_count", &self.envs.len())
             .field("stdout_limit", &self.stdout_limit)
             .field("stderr_limit", &self.stderr_limit)
             .field("requested_at", &self.requested_at)

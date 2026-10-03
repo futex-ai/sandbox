@@ -1,10 +1,12 @@
 //! Bounded incremental non-interactive process execution values.
 
-use std::{pin::Pin, time::Duration};
+use std::{collections::BTreeMap, pin::Pin, time::Duration};
 
 use futures_core::Stream;
 
-use crate::{ProviderRef, ResourceOwner, SandboxId};
+use crate::{
+    ProviderRef, ResourceOwner, Result, SandboxId, process_run::validate_execution_context,
+};
 
 /// Maximum absolute deadline accepted for one streaming process run.
 pub const PROCESS_STREAM_MAX_DEADLINE: Duration = Duration::from_secs(3600);
@@ -15,6 +17,7 @@ pub const PROCESS_STREAM_MAX_DEADLINE: Duration = Duration::from_secs(3600);
 /// stream. The idle timer begins before opening the process transport and
 /// bounds time without stdout or stderr data. It must be nonzero and no greater
 /// than the requested deadline.
+/// Trusted services must call [`Self::validate_execution_context`] before provider access.
 #[derive(Clone, Eq, PartialEq)]
 pub struct StreamProcessRequest {
     /// Caller resource owner.
@@ -25,6 +28,10 @@ pub struct StreamProcessRequest {
     pub command: String,
     /// Exact argument vector.
     pub args: Vec<String>,
+    /// Optional absolute initial working directory.
+    pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Maximum emitted stdout bytes before overflow terminates the stream.
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before overflow terminates the stream.
@@ -37,8 +44,9 @@ pub struct StreamProcessRequest {
 
 /// Provider request to stream one bounded non-interactive process.
 ///
-/// Backends must validate argv and stream limits identically to
-/// [`crate::BackendRunProcessRequest`]. They must also reject a deadline above
+/// Backends must call [`Self::validate_execution_context`] first, then validate
+/// argv and stream limits identically to [`crate::BackendRunProcessRequest`].
+/// They must also reject a deadline above
 /// [`PROCESS_STREAM_MAX_DEADLINE`], a zero idle timeout, or an idle timeout
 /// above the deadline before contacting their provider.
 #[derive(Clone, Eq, PartialEq)]
@@ -49,6 +57,10 @@ pub struct BackendStreamProcessRequest {
     pub command: String,
     /// Exact argument vector.
     pub args: Vec<String>,
+    /// Optional absolute initial working directory.
+    pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Maximum emitted stdout bytes before overflow terminates the stream.
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before overflow terminates the stream.
@@ -57,6 +69,20 @@ pub struct BackendStreamProcessRequest {
     pub deadline: Duration,
     /// Maximum duration without stdout or stderr data.
     pub idle_timeout: Duration,
+}
+
+impl StreamProcessRequest {
+    /// Validates the caller-controlled working directory and environment map.
+    pub fn validate_execution_context(&self) -> Result<()> {
+        validate_execution_context(self.cwd.as_deref(), &self.envs)
+    }
+}
+
+impl BackendStreamProcessRequest {
+    /// Validates the caller-controlled working directory and environment map.
+    pub fn validate_execution_context(&self) -> Result<()> {
+        validate_execution_context(self.cwd.as_deref(), &self.envs)
+    }
 }
 
 /// Terminal result of a streaming process run.
@@ -110,3 +136,7 @@ pub enum ProcessStreamEvent {
 
 /// Boxed asynchronous event stream returned by process streaming methods.
 pub type ProcessEventStream = Pin<Box<dyn Stream<Item = ProcessStreamEvent> + Send + 'static>>;
+
+#[cfg(test)]
+#[path = "_tests_/process_stream_tests.rs"]
+mod process_stream_tests;

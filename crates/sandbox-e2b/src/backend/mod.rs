@@ -69,6 +69,10 @@ mod process_environment_redaction_tests;
 mod process_stream_tests;
 
 #[cfg(test)]
+#[path = "_tests_/process_stream_context_tests.rs"]
+mod process_stream_context_tests;
+
+#[cfg(test)]
 #[path = "_tests_/read_only_exec_tests.rs"]
 mod read_only_exec_tests;
 #[cfg(test)]

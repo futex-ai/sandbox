@@ -2,14 +2,14 @@
 
 use std::{fs, os::unix::fs::symlink, process::Command};
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::image_cache_cleanup::test_command;
 
 #[test]
 fn cache_cleanup_refuses_a_symlinked_parent_without_touching_its_target() {
-    let home = tempdir().expect("temporary home");
-    let outside = tempdir().expect("outside cache root");
+    let home = private_tempdir().expect("temporary home");
+    let outside = private_tempdir().expect("outside cache root");
     let protected = outside.path().join("_cacache/artifact");
     fs::create_dir(outside.path().join("_cacache")).expect("outside cache directory");
     fs::write(&protected, b"protected").expect("protected cache bytes");
@@ -33,8 +33,8 @@ fn cache_cleanup_refuses_a_symlinked_parent_without_touching_its_target() {
 
 #[test]
 fn cache_cleanup_unlinks_a_child_symlink_without_traversing_its_target() {
-    let home = tempdir().expect("temporary home");
-    let outside = tempdir().expect("outside cache root");
+    let home = private_tempdir().expect("temporary home");
+    let outside = private_tempdir().expect("outside cache root");
     let cache = home.path().join(".cache");
     let protected = outside.path().join("artifact");
     fs::create_dir(&cache).expect("cache directory");

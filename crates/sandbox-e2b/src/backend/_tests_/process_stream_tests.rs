@@ -185,6 +185,8 @@ fn valid_request() -> BackendStreamProcessRequest {
         sandbox_provider_ref: ProviderRef::new("provider"),
         command: "/bin/sh".to_owned(),
         args: vec!["-c".to_owned(), "printf streamed".to_owned()],
+        cwd: None,
+        envs: Default::default(),
         stdout_limit: 4096,
         stderr_limit: 1024,
         deadline: Duration::from_secs(900),

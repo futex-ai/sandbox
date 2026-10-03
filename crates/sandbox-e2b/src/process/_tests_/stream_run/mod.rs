@@ -5,6 +5,7 @@ mod backpressure_tests;
 mod behavior_tests;
 mod cleanup_tests;
 mod coalesced_end_tests;
+mod context_tests;
 mod delayed_control;
 mod drop_completion_tests;
 mod drop_idle_tests;

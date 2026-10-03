@@ -18,7 +18,7 @@ pub struct BackendReadFileRequest {
 }
 
 /// Provider request to replace one bounded regular file below one root.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct BackendWriteFileRequest {
     /// Source provider sandbox reference.
     pub sandbox_provider_ref: ProviderRef,

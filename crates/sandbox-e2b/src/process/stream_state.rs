@@ -10,6 +10,7 @@ use tokio::sync::{
 
 use super::framing::ProcessDataChannel;
 
+/// The encoded Start body contains environment values and must never implement Debug.
 pub(super) struct StreamSettings {
     pub(super) request: Vec<u8>,
     pub(super) stdout_limit: usize,

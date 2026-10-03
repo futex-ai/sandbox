@@ -19,16 +19,28 @@ must not copy that content into ordinary application logs or error messages.
 ## Automatic Diagnostics
 
 Direct, streaming, and stateless read-only process requests, image preparation
-requests, and captured-output `Debug` implementations emit only selected metadata:
-consumer-owned typed identifiers, counts, limits, whether a working directory
-was supplied, deadlines, exit status, and overflow or truncation flags. They
+requests, file-write requests, and captured-output `Debug` implementations emit
+only selected metadata: consumer-owned typed identifiers, counts, limits,
+whether a working directory was supplied, deadlines, exit status, and overflow or truncation flags. They
 omit command and argument text, paths, environment names and values, input,
 and captured output. This applies with and without an environment map, and to
 both ordinary and alternate pretty `Debug` formatting.
-Streaming command diagnostics show argument counts, output limits, and
-deadlines rather than command or argument contents. Stream-event diagnostics
-show stdout and stderr byte counts instead of bytes; start, exit, and outcome
+Streaming request and command diagnostics show `arg_count`, `has_cwd`,
+`env_count`, `stdout_limit`, `stderr_limit`, `deadline`, and `idle_timeout`.
+`StreamProcessRequest` also shows `owner` and `sandbox_id`, and
+`StreamProcessCommand` also shows `requested_at`; backend requests omit their
+provider reference. The encoded streaming `Start` body contains environment
+values, so private `StreamSettings` must never implement `Debug`.
+Stream-event diagnostics show stdout and stderr byte counts instead of bytes;
+start, exit, and outcome
 events keep their ordinary field diagnostics. Returned event bytes remain exact.
+
+`WriteFileRequest` shows only `lifecycle_operation_id`, `owner`, `sandbox_id`,
+and `input_bytes`. `BackendWriteFileRequest` and E2B's
+`ProcessRegularFileWriteRequest` show only `input_bytes`. Root, path, bytes,
+and provider references are omitted in ordinary and pretty `Debug`; explicit
+fields and the bytes written remain unchanged. File-read results are outside
+this write-request guarantee and must still be treated as sensitive data.
 
 Terminal input, output, and transcript `Debug` follow the same rule. Formatting
 a result changes neither its data fields nor its data serialization. Nested

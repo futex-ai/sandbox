@@ -10,7 +10,8 @@ use std::{
 };
 
 use sandbox_interface::{OperationId, TerminalId};
-use tempfile::tempdir;
+
+use crate::test_directories::private_tempdir;
 
 use super::{ListResponseWire, TERMINAL_WRAPPER, decode};
 
@@ -24,7 +25,7 @@ fn list_response_rejects_a_zero_pid() {
 #[test]
 fn terminal_wrapper_enforces_non_aligned_byte_limits_exactly() {
     for limit in [0, 64, 4097] {
-        let directory = tempdir().expect("temporary transcript directory");
+        let directory = private_tempdir().expect("temporary transcript directory");
         let transcript = directory.path().join("terminal.log");
         let mut child = start_wrapper(&transcript, limit);
         let mut input = child.stdin.take().expect("terminal wrapper stdin");
@@ -61,8 +62,8 @@ fn wait_for_transcript_size(path: &std::path::Path, expected: usize) -> u64 {
 
 #[test]
 fn terminal_wrapper_does_not_follow_an_existing_log_symlink() {
-    let directory = tempdir().expect("temporary transcript directory");
-    let outside = tempdir().expect("outside transcript directory");
+    let directory = private_tempdir().expect("temporary transcript directory");
+    let outside = private_tempdir().expect("outside transcript directory");
     let transcript = directory.path().join("terminal.log");
     let protected = outside.path().join("protected.log");
     fs::write(&protected, b"protected").expect("protected file");
@@ -87,8 +88,8 @@ fn terminal_wrapper_does_not_follow_an_existing_log_symlink() {
 
 #[test]
 fn terminal_wrapper_rejects_a_symlinked_parent_directory() {
-    let directory = tempdir().expect("temporary transcript directory");
-    let outside = tempdir().expect("outside transcript directory");
+    let directory = private_tempdir().expect("temporary transcript directory");
+    let outside = private_tempdir().expect("outside transcript directory");
     let linked_parent = directory.path().join("linked");
     symlink(outside.path(), &linked_parent).expect("parent symlink");
     let transcript = linked_parent.join("terminal.log");
@@ -102,7 +103,7 @@ fn terminal_wrapper_rejects_a_symlinked_parent_directory() {
 
 #[test]
 fn terminal_wrapper_exits_normally_below_the_limit() {
-    let directory = tempdir().expect("temporary transcript directory");
+    let directory = private_tempdir().expect("temporary transcript directory");
     let transcript = directory.path().join("terminal.log");
     let mut child = start_wrapper(&transcript, 1024 * 1024);
     let mut input = child.stdin.take().expect("terminal wrapper stdin");
@@ -125,7 +126,7 @@ fn terminal_wrapper_exits_normally_below_the_limit() {
 
 #[test]
 fn terminal_wrapper_persists_a_private_versioned_identity() {
-    let directory = tempdir().expect("temporary transcript directory");
+    let directory = private_tempdir().expect("temporary transcript directory");
     let transcript = directory.path().join("terminal.log");
     let identity = transcript.with_extension("identity.json");
     let mut child = start_wrapper(&transcript, 1024);
@@ -146,7 +147,7 @@ fn terminal_wrapper_persists_a_private_versioned_identity() {
 
 #[test]
 fn terminal_identity_is_hidden_until_its_contents_are_synced() {
-    let directory = tempdir().expect("temporary transcript directory");
+    let directory = private_tempdir().expect("temporary transcript directory");
     let transcript = directory.path().join("terminal.log");
     let identity = transcript.with_extension("identity.json");
     let marker = directory.path().join("identity-synced.marker");

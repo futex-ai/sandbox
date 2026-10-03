@@ -279,7 +279,7 @@ pub struct ReadFileRequest {
 }
 
 /// Request to replace a bounded regular file in an owned sandbox.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct WriteFileRequest {
     /// Existing lifecycle authority for trusted staging; otherwise claim an exclusive write lease.
     pub lifecycle_operation_id: Option<OperationId>,

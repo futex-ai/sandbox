@@ -56,6 +56,8 @@ fn stream_request_debug_omits_command_and_arguments() {
         sandbox_provider_ref: ProviderRef::new(secret),
         command: secret.to_owned(),
         args: vec![secret.to_owned()],
+        cwd: Some(format!("/{secret}")),
+        envs: BTreeMap::from([(secret.to_owned(), secret.to_owned())]),
         stdout_limit: 128,
         stderr_limit: 256,
         deadline: Duration::from_secs(5),
@@ -66,6 +68,8 @@ fn stream_request_debug_omits_command_and_arguments() {
         sandbox_id: SandboxId::new(),
         command: backend.command.clone(),
         args: backend.args.clone(),
+        cwd: backend.cwd.clone(),
+        envs: backend.envs.clone(),
         stdout_limit: backend.stdout_limit,
         stderr_limit: backend.stderr_limit,
         deadline: backend.deadline,
@@ -73,9 +77,11 @@ fn stream_request_debug_omits_command_and_arguments() {
     };
     assert_eq!(
         format!("{backend:?}"),
-        "BackendStreamProcessRequest { arg_count: 1, stdout_limit: 128, stderr_limit: 256, deadline: 5s, idle_timeout: 1s }"
+        "BackendStreamProcessRequest { arg_count: 1, has_cwd: true, env_count: 1, \
+         stdout_limit: 128, stderr_limit: 256, deadline: 5s, idle_timeout: 1s }"
     );
     for diagnostic in [
+        format!("{backend:?}"),
         format!("{backend:#?}"),
         format!("{service:?}"),
         format!("{service:#?}"),
@@ -83,12 +89,19 @@ fn stream_request_debug_omits_command_and_arguments() {
         assert!(!diagnostic.contains(secret), "{diagnostic}");
         assert!(!diagnostic.contains("command:"), "{diagnostic}");
         assert!(!diagnostic.contains("args:"), "{diagnostic}");
+        assert!(!diagnostic.contains(" cwd:"), "{diagnostic}");
+        assert!(!diagnostic.contains("envs:"), "{diagnostic}");
     }
     let diagnostic = format!("{service:?}");
     assert!(diagnostic.contains("owner:"), "{diagnostic}");
     assert!(diagnostic.contains("sandbox_id:"), "{diagnostic}");
     assert!(diagnostic.contains("idle_timeout: 1s"), "{diagnostic}");
     assert_eq!(service.args, [secret]);
+    assert_eq!(service.command, secret);
+    assert_eq!(service.cwd, backend.cwd);
+    assert_eq!(service.envs, backend.envs);
+    assert_eq!(backend.cwd.as_deref(), Some("/credential_alpha"));
+    assert_eq!(backend.envs.get(secret).map(String::as_str), Some(secret));
 }
 
 #[test]
@@ -143,18 +156,48 @@ fn validation_diagnostics_do_not_echo_environment_names() {
         request.cwd = None;
         request.envs = BTreeMap::from([
             ("TOKEN".to_owned(), name.to_owned()),
-            (name.to_owned(), "invalid\0value".to_owned()),
+            (name.to_owned(), "never-log-stream-value\0".to_owned()),
         ]);
-        let error = request
-            .validate_execution_context()
-            .expect_err("invalid context");
-
-        for diagnostic in [
-            error.to_string(),
-            format!("{error:?}"),
-            format!("{error:#?}"),
+        let backend_stream = BackendStreamProcessRequest {
+            sandbox_provider_ref: request.sandbox_provider_ref.clone(),
+            command: request.command.clone(),
+            args: request.args.clone(),
+            cwd: request.cwd.clone(),
+            envs: request.envs.clone(),
+            stdout_limit: request.stdout_limit,
+            stderr_limit: request.stderr_limit,
+            deadline: request.deadline,
+            idle_timeout: Duration::from_secs(1),
+        };
+        let service_stream = StreamProcessRequest {
+            owner: ResourceOwner::platform(Uuid::nil()),
+            sandbox_id: SandboxId::new(),
+            command: backend_stream.command.clone(),
+            args: backend_stream.args.clone(),
+            cwd: backend_stream.cwd.clone(),
+            envs: backend_stream.envs.clone(),
+            stdout_limit: backend_stream.stdout_limit,
+            stderr_limit: backend_stream.stderr_limit,
+            deadline: backend_stream.deadline,
+            idle_timeout: backend_stream.idle_timeout,
+        };
+        for result in [
+            request.validate_execution_context(),
+            backend_stream.validate_execution_context(),
+            service_stream.validate_execution_context(),
         ] {
-            assert!(!diagnostic.contains(name), "{diagnostic}");
+            let error = result.expect_err("invalid context");
+            for diagnostic in [
+                error.to_string(),
+                format!("{error:?}"),
+                format!("{error:#?}"),
+            ] {
+                assert!(!diagnostic.contains(name), "{diagnostic}");
+                assert!(
+                    !diagnostic.contains("never-log-stream-value"),
+                    "{diagnostic}"
+                );
+            }
         }
     }
 }
