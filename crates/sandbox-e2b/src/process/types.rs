@@ -90,6 +90,10 @@ pub struct StreamProcessCommand {
     pub command: String,
     /// Exact argument vector.
     pub args: Vec<String>,
+    /// Optional absolute initial working directory.
+    pub cwd: Option<String>,
+    /// Explicit environment additions; values are secret in diagnostics.
+    pub envs: BTreeMap<String, String>,
     /// Maximum emitted stdout bytes before the stream terminates.
     pub stdout_limit: usize,
     /// Maximum emitted stderr bytes before the stream terminates.

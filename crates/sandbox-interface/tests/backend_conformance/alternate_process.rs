@@ -54,12 +54,20 @@ pub(super) fn stream(request: BackendStreamProcessRequest) -> Result<ProcessEven
         request.args,
         [
             "-c",
-            "printf '%s' 'stream-stdout'; printf '%s' 'stream-stderr' >&2"
+            "pwd; printf '%s' \"$SANDBOX_PROBE\"; printf '%s' 'stream-stderr' >&2"
         ]
+    );
+    assert_eq!(request.cwd.as_deref(), Some("/workspace"));
+    assert_eq!(
+        request.envs,
+        BTreeMap::from([(
+            "SANDBOX_PROBE".to_owned(),
+            "stream-environment-map".to_owned()
+        )])
     );
     Ok(Box::pin(stream::iter([
         ProcessStreamEvent::Started { pid: 17 },
-        ProcessStreamEvent::Stdout(b"stream-stdout".to_vec()),
+        ProcessStreamEvent::Stdout(b"/workspace\nstream-environment-map".to_vec()),
         ProcessStreamEvent::Stderr(b"stream-stderr".to_vec()),
         ProcessStreamEvent::Exited {
             exit_code: 0,

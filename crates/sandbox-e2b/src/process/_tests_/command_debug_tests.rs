@@ -2,9 +2,44 @@
 
 use std::{collections::BTreeMap, time::Duration};
 
+use crate::process::regular_file_write::ProcessRegularFileWriteRequest;
 use crate::process::types::{
     ProcessCommand, ProcessOutputCapture, SplitProcessCommand, StreamProcessCommand,
 };
+
+#[test]
+fn file_write_command_debug_omits_paths_and_contents() {
+    let payload = "ghp_FAKE_TEST_TOKEN_never_log";
+    let request = ProcessRegularFileWriteRequest {
+        root: payload.to_owned(),
+        path: payload.to_owned(),
+        bytes: payload.as_bytes().to_vec(),
+    };
+
+    assert_eq!(
+        format!("{request:?}"),
+        format!(
+            "ProcessRegularFileWriteRequest {{ input_bytes: {} }}",
+            payload.len()
+        )
+    );
+    assert_eq!(
+        format!("{request:#?}"),
+        format!(
+            "ProcessRegularFileWriteRequest {{\n    input_bytes: {},\n}}",
+            payload.len()
+        )
+    );
+    for diagnostic in [format!("{request:?}"), format!("{request:#?}")] {
+        assert!(!diagnostic.contains(payload), "{diagnostic}");
+        for field in [" root:", " path:", " bytes:"] {
+            assert!(!diagnostic.contains(field), "{diagnostic}");
+        }
+    }
+    assert_eq!(request.root, payload);
+    assert_eq!(request.path, payload);
+    assert_eq!(request.bytes, payload.as_bytes());
+}
 
 #[test]
 fn command_debug_reports_only_approved_metadata() {
@@ -60,6 +95,8 @@ fn stream_command_debug_omits_argv_and_reports_limits() {
     let command = StreamProcessCommand {
         command: "credential_alpha".to_owned(),
         args: vec!["credential_alpha".to_owned()],
+        cwd: Some("/credential_alpha".to_owned()),
+        envs: BTreeMap::from([("credential_alpha".to_owned(), "credential_alpha".to_owned())]),
         stdout_limit: 128,
         stderr_limit: 256,
         requested_at: tokio::time::Instant::now(),
@@ -67,6 +104,14 @@ fn stream_command_debug_omits_argv_and_reports_limits() {
         idle_timeout: Duration::from_secs(1),
     };
     let diagnostic = format!("{command:?}");
+    assert_eq!(
+        diagnostic,
+        format!(
+            "StreamProcessCommand {{ arg_count: 1, has_cwd: true, env_count: 1, \
+         stdout_limit: 128, stderr_limit: 256, requested_at: {:?}, deadline: 5s, idle_timeout: 1s }}",
+            command.requested_at
+        )
+    );
     assert!(diagnostic.contains("arg_count: 1"), "{diagnostic}");
     assert!(diagnostic.contains("stdout_limit: 128"), "{diagnostic}");
     assert!(diagnostic.contains("stderr_limit: 256"), "{diagnostic}");
@@ -76,5 +121,12 @@ fn stream_command_debug_omits_argv_and_reports_limits() {
         assert!(!diagnostic.contains("credential_alpha"), "{diagnostic}");
         assert!(!diagnostic.contains("command:"), "{diagnostic}");
         assert!(!diagnostic.contains("args:"), "{diagnostic}");
+        assert!(!diagnostic.contains(" cwd:"), "{diagnostic}");
+        assert!(!diagnostic.contains("envs:"), "{diagnostic}");
     }
+    assert_eq!(command.cwd.as_deref(), Some("/credential_alpha"));
+    assert_eq!(
+        command.envs.get("credential_alpha").map(String::as_str),
+        Some("credential_alpha")
+    );
 }

@@ -43,6 +43,8 @@ pub(super) async fn stream(
             StreamProcessCommand {
                 command: request.command,
                 args: request.args,
+                cwd: request.cwd,
+                envs: request.envs,
                 stdout_limit: request.stdout_limit,
                 stderr_limit: request.stderr_limit,
                 requested_at,
@@ -60,6 +62,7 @@ fn expired() -> ProcessEventStream {
 }
 
 fn validate(request: &BackendStreamProcessRequest) -> Result<()> {
+    request.validate_execution_context()?;
     process_run::validate_argv("command", &request.command, &request.args)?;
     process_run::validate_stream_limit("stdout_limit", request.stdout_limit)?;
     process_run::validate_stream_limit("stderr_limit", request.stderr_limit)?;

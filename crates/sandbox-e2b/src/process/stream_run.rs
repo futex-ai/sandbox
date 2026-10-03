@@ -1,7 +1,6 @@
 //! Incremental split-stream process execution.
 
 use std::{
-    collections::BTreeMap,
     future::{Future, poll_fn},
     time::Duration,
 };
@@ -42,6 +41,8 @@ impl ConnectProcessTransport {
         let StreamProcessCommand {
             command,
             args,
+            cwd,
+            envs,
             stdout_limit,
             stderr_limit,
             requested_at,
@@ -49,7 +50,7 @@ impl ConnectProcessTransport {
             idle_timeout,
         } = command;
         let request = map_result(
-            encode(&argv_start(command, args, None, BTreeMap::new())),
+            encode(&argv_start(command, args, cwd, envs)),
             false,
             &self.backend_id,
         )?;

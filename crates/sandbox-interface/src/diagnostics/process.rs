@@ -31,6 +31,8 @@ impl fmt::Debug for StreamProcessRequest {
             .field("owner", &self.owner)
             .field("sandbox_id", &self.sandbox_id)
             .field("arg_count", &self.args.len())
+            .field("has_cwd", &self.cwd.is_some())
+            .field("env_count", &self.envs.len())
             .field("stdout_limit", &self.stdout_limit)
             .field("stderr_limit", &self.stderr_limit)
             .field("deadline", &self.deadline)
@@ -44,6 +46,8 @@ impl fmt::Debug for BackendStreamProcessRequest {
         formatter
             .debug_struct("BackendStreamProcessRequest")
             .field("arg_count", &self.args.len())
+            .field("has_cwd", &self.cwd.is_some())
+            .field("env_count", &self.envs.len())
             .field("stdout_limit", &self.stdout_limit)
             .field("stderr_limit", &self.stderr_limit)
             .field("deadline", &self.deadline)

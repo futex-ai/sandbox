@@ -61,8 +61,9 @@ seconds. Terminal create and recovery requests cap the durable transcript at
 the same 256 MiB ceiling as readable regular files. Backends reject every
 command, output, duration, and transcript bound before acquiring provider
 access.
-Trusted direct-process requests may also carry an optional absolute working
-directory and an ordered environment map. The working directory is capped at
+Trusted collected and streaming direct-process requests may also carry an
+optional absolute working directory and an ordered environment map. The
+working directory is capped at
 4,096 bytes and rejects NUL or control characters. Environment names use
 `[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and the map is capped at 256
 entries and 64 KiB across name and value bytes. `PATH`, `HOME`, `LD_*`, and
@@ -71,10 +72,15 @@ rejection reason without echoing an environment name or value. Process request
 `Debug` exposes only typed consumer identifiers, counts, flags, and limits;
 command text, paths, and environment contents are omitted even when no
 explicit environment entries are supplied.
+File-write request `Debug` also omits root, path, provider reference, and
+contents. Service requests retain lifecycle operation, owner, and sandbox IDs
+plus `input_bytes`; backend requests show only `input_bytes`. Explicit fields
+and written bytes stay exact; file-read results remain sensitive.
 Stateless read-only execution keeps its explicit working directory and exposes
 no environment map.
-Streaming process execution accepts the same non-empty argv and split 64 MiB
-limits, but its absolute deadline may be up to 3,600 seconds and it requires a
+Streaming process execution accepts the same validated optional cwd, ordered
+environment map, non-empty argv, and split 64 MiB limits, but its absolute
+deadline may be up to 3,600 seconds and it requires a
 nonzero idle timeout no greater than that deadline. Only new stdout or stderr
 output resets idle timing; buffered delivery to a slow consumer does not.
 Typed start, stdout, stderr, exit, and one final outcome preserve normal versus
@@ -104,9 +110,13 @@ one-shot sandbox. Its process probe invokes `/bin/sh` with a self-contained
 `pwd` and environment script, a selected working directory, one environment
 entry, and an independent stderr token, so a normal backend image needs no
 test-only executable.
-The streaming probe uses a separate self-contained `/bin/sh` command and
-checks ordered split output and the final outcome.
-Streaming requests expose only argument counts, limits, and deadlines in
+The streaming probe selects `/workspace` and
+`SANDBOX_PROBE=stream-environment-map`, requiring stdout
+`/workspace\nstream-environment-map`, stderr `stream-stderr`, ordered split
+output, and the final outcome. Its environment value differs from the
+collected probe's `environment-map`.
+Streaming requests expose only identifiers, argument counts, cwd presence,
+environment counts, limits, and deadlines in
 `Debug`, while stream events show stdout and stderr byte counts rather than
 captured bytes. Silence before a process starts produces `IdleTimeout`; EOF
 without a success trailer remains `TransportFailure`. Adapters should retain

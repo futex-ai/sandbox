@@ -67,6 +67,8 @@ fn request(deadline: Duration) -> BackendStreamProcessRequest {
         sandbox_provider_ref: ProviderRef::new("sandbox"),
         command: "/bin/sh".to_owned(),
         args: vec!["-c".to_owned(), "sleep 3600".to_owned()],
+        cwd: None,
+        envs: Default::default(),
         stdout_limit: 1024,
         stderr_limit: 1024,
         deadline,

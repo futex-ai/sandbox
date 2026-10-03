@@ -47,6 +47,8 @@ pub(super) fn command(
     StreamProcessCommand {
         command: "bowser".to_owned(),
         args: vec!["capture".to_owned()],
+        cwd: None,
+        envs: Default::default(),
         stdout_limit,
         stderr_limit,
         requested_at: tokio::time::Instant::now(),

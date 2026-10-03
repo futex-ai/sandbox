@@ -5,13 +5,64 @@ use std::{fmt::Debug, time::Duration};
 use sandbox_interface::{
     ActionId, BackendInputRequest, BackendOutputRequest, BackendPrepareImageRequest,
     BackendReadOnlyExecRequest, BackendTerminal, BackendTerminalCreateRequest,
-    CreateTerminalRequest, ExecuteTerminalRequest, ImageSource, OperationId, ProviderRef,
-    ReadOnlyExecOutput, ReadOnlyExecRequest, RealizeImageFileInput, RealizeImageRequest,
-    ResourceOwner, SandboxId, TerminalId, TerminalState, WriteTerminalRequest,
+    BackendWriteFileRequest, CreateTerminalRequest, ExecuteTerminalRequest, ImageSource,
+    OperationId, ProviderRef, ReadOnlyExecOutput, ReadOnlyExecRequest, RealizeImageFileInput,
+    RealizeImageRequest, ResourceOwner, SandboxId, TerminalId, TerminalState, WriteFileRequest,
+    WriteTerminalRequest,
 };
 use uuid::Uuid;
 
 const PAYLOAD: &str = "sensitive-caller-data";
+
+#[test]
+fn file_write_service_debug_omits_paths_and_contents() {
+    let request = WriteFileRequest {
+        lifecycle_operation_id: Some(OperationId::new()),
+        owner: owner(),
+        sandbox_id: SandboxId::new(),
+        root: PAYLOAD.to_owned(),
+        path: PAYLOAD.to_owned(),
+        bytes: PAYLOAD.as_bytes().to_vec(),
+    };
+
+    assert_metadata_only(&request);
+    assert_eq!(
+        format!("{request:?}"),
+        format!(
+            "WriteFileRequest {{ lifecycle_operation_id: {:?}, owner: {:?}, sandbox_id: {:?}, input_bytes: {} }}",
+            request.lifecycle_operation_id,
+            request.owner,
+            request.sandbox_id,
+            PAYLOAD.len()
+        )
+    );
+    assert_eq!(request.root, PAYLOAD);
+    assert_eq!(request.path, PAYLOAD);
+    assert_eq!(request.bytes, PAYLOAD.as_bytes());
+}
+
+#[test]
+fn file_write_backend_debug_omits_paths_and_contents() {
+    let request = BackendWriteFileRequest {
+        sandbox_provider_ref: provider(),
+        root: PAYLOAD.to_owned(),
+        path: PAYLOAD.to_owned(),
+        bytes: PAYLOAD.as_bytes().to_vec(),
+    };
+
+    assert_metadata_only(&request);
+    assert_eq!(
+        format!("{request:?}"),
+        format!(
+            "BackendWriteFileRequest {{ input_bytes: {} }}",
+            PAYLOAD.len()
+        )
+    );
+    assert_eq!(request.root, PAYLOAD);
+    assert_eq!(request.path, PAYLOAD);
+    assert_eq!(request.bytes, PAYLOAD.as_bytes());
+    assert_eq!(request.sandbox_provider_ref.as_str(), PAYLOAD);
+}
 
 #[test]
 fn read_only_execution_omits_text_and_keeps_output_exact() {
@@ -164,6 +215,8 @@ fn assert_metadata_only(value: &dyn Debug) {
             "input:",
             "bytes:",
             "setup_script:",
+            "root:",
+            "path:",
         ] {
             assert!(!debug.contains(&format!(" {field}")), "{debug}");
         }

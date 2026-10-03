@@ -19,7 +19,7 @@ pub const PROCESS_RUN_MAX_ENV_VARS: usize = 256;
 /// Maximum execution deadline accepted for one process run.
 pub const PROCESS_RUN_MAX_DEADLINE: Duration = Duration::from_secs(300);
 
-/// Typed reason that a direct-process execution context was rejected.
+/// Typed reason that a collected or streaming direct-process context was rejected.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum ProcessRunContextError {
     /// The working directory is not an absolute control-free path.
@@ -122,7 +122,11 @@ impl BackendRunProcessRequest {
     }
 }
 
-fn validate_execution_context(cwd: Option<&str>, envs: &BTreeMap<String, String>) -> Result<()> {
+/// Validates execution context shared by collected and streaming request layers.
+pub(crate) fn validate_execution_context(
+    cwd: Option<&str>,
+    envs: &BTreeMap<String, String>,
+) -> Result<()> {
     validate_working_directory(cwd)?;
     if envs.len() > PROCESS_RUN_MAX_ENV_VARS {
         return Err(invalid_context(

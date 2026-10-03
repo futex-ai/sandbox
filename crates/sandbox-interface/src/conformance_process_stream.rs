@@ -1,6 +1,6 @@
 //! Provider-neutral incremental process conformance probe.
 
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use futures_util::StreamExt;
 
@@ -9,7 +9,8 @@ use crate::{
     Result, SandboxBackend,
 };
 
-const STREAM_PROCESS_SCRIPT: &str = "printf '%s' 'stream-stdout'; printf '%s' 'stream-stderr' >&2";
+const STREAM_PROCESS_SCRIPT: &str =
+    "pwd; printf '%s' \"$SANDBOX_PROBE\"; printf '%s' 'stream-stderr' >&2";
 
 pub(crate) async fn exercise(
     backend: &dyn SandboxBackend,
@@ -20,6 +21,11 @@ pub(crate) async fn exercise(
             sandbox_provider_ref,
             command: "/bin/sh".to_owned(),
             args: vec!["-c".to_owned(), STREAM_PROCESS_SCRIPT.to_owned()],
+            cwd: Some("/workspace".to_owned()),
+            envs: BTreeMap::from([(
+                "SANDBOX_PROBE".to_owned(),
+                "stream-environment-map".to_owned(),
+            )]),
             stdout_limit: 4096,
             stderr_limit: 1024,
             deadline: Duration::from_secs(60),
@@ -61,10 +67,14 @@ pub(crate) async fn exercise(
             }
         }
     }
-    if !completed || stdout != b"stream-stdout" || stderr != b"stream-stderr" {
+    if !completed || stdout != b"/workspace\nstream-environment-map" || stderr != b"stream-stderr" {
         return Err(Error::internal_message(
             "backend process stream changed split output",
         ));
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "_tests_/conformance_process_stream_tests.rs"]
+mod conformance_process_stream_tests;

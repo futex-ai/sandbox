@@ -37,6 +37,13 @@ action rather than guess and duplicate work.
 `FileWriteUnconfirmed` requires the sandbox to stay fenced until it is
 reconciled or destroyed; do not immediately retry the write.
 
+For streaming process calls, Juno's trusted service must call
+`StreamProcessRequest::validate_execution_context()` before provider access
+and copy `cwd` and `envs` unchanged into `BackendStreamProcessRequest`.
+Use `None` and an empty map when no context is selected. The backend repeats
+the shared collected-run validation before acquiring provider access. This
+repository defines the service trait but contains no service implementation.
+
 Juno must construct `E2bRuntimeConventions` with the metadata prefix, terminal
 tag prefix, screen-helper path, and image helper and agent process names used
 by its existing resources. Set the process names through

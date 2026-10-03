@@ -202,22 +202,31 @@ starts before control connection, and the idle timer starts before envd access.
 For resumable sandboxes the connection timeout is at least the stream deadline;
 one-shot sandboxes retain their original lifetime. Expiry during connection
 returns `DeadlineExpired` without starting a process.
-Direct process starts also forward an optional validated absolute working
-directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
+Collected and streaming process starts also forward an optional validated
+absolute working directory and environment map. Cwd is capped at 4,096 UTF-8 bytes and rejects
 NUL or control characters. Environment names follow
 `[A-Za-z_][A-Za-z0-9_]*`, values reject NUL, and requests allow at most 256
 entries and 64 KiB across names and values. `PATH`, `HOME`, `LD_*`, and
 `DYLD_*` are rejected as template-owned. Execution-request and captured-output `Debug` contain
-only selected metadata; streaming commands show argument counts, limits, and
-timeouts, while streamed output events show byte counts. They omit command text, paths, environment names or
+only selected metadata; streaming commands show argument counts, cwd presence,
+environment counts, limits, the budget origin, and timeouts, while streamed
+output events show byte counts. They omit command text, paths, environment names or
 values, or captured contents. Validation errors never echo a rejected name or
 value. Process and terminal bytes remain unmasked in returned results and
 saved transcripts; only their automatic diagnostic representations omit
 content. Tracing uses static events and selected metadata. Read-only execution
 keeps its existing explicit cwd and passes no environment entries; PTY startup keeps its
 fixed locale and terminal map.
-The shared conformance probe verifies the selected cwd and environment on
-stdout while independently asserting a deterministic stderr token.
+File-write request diagnostics also omit roots, paths, provider references, and
+contents. `BackendWriteFileRequest` and `ProcessRegularFileWriteRequest` show
+only `input_bytes`; the service request also retains its lifecycle operation,
+owner, and sandbox IDs. Explicit fields and the written bytes stay exact.
+File-read results remain sensitive and are outside this write-request guarantee.
+Both shared conformance process probes verify the selected cwd and environment
+on stdout while independently asserting a deterministic stderr token. The
+streaming probe selects `/workspace` and `SANDBOX_PROBE=stream-environment-map`,
+requiring stdout `/workspace\nstream-environment-map` and stderr `stream-stderr`;
+its value differs from the collected probe's `environment-map`.
 Credentialed clients, including opt-in live ingress probes, do not follow
 redirects, and envd URLs are validated before call-local credentials are
 attached. Process, read-only, and private-port hosts use the adapter's validated
