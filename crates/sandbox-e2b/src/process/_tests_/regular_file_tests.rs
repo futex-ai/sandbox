@@ -2,9 +2,7 @@
 
 use std::{fs, process::Command, time::Duration};
 
-use tempfile::tempdir;
-
-use crate::process::ProcessRegularFileRequest;
+use crate::{process::ProcessRegularFileRequest, test_directories::private_tempdir};
 
 use super::{command, decode};
 
@@ -26,7 +24,7 @@ fn reader_uses_one_direct_descriptor_relative_operation() {
 
 #[test]
 fn reader_returns_bytes_from_the_opened_regular_file() {
-    let root = tempdir().expect("temporary read root");
+    let root = private_tempdir().expect("temporary read root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     fs::write(root.path().join("src/lib.rs"), b"abcdef").expect("regular file");
 
@@ -40,8 +38,8 @@ fn reader_returns_bytes_from_the_opened_regular_file() {
 
 #[test]
 fn reader_rejects_a_leaf_replaced_by_a_symlink_before_open() {
-    let root = tempdir().expect("temporary read root");
-    let adjacent = tempdir().expect("adjacent directory");
+    let root = private_tempdir().expect("temporary read root");
+    let adjacent = private_tempdir().expect("adjacent directory");
     let target = root.path().join("visible.txt");
     fs::write(&target, b"visible").expect("initial regular file");
     fs::write(adjacent.path().join("secret.txt"), b"secret").expect("adjacent secret");

@@ -319,6 +319,12 @@ cargo test -p sandbox-e2b --test screen_resize_deadline
 cargo clippy -p sandbox-e2b --all-targets --all-features -- -D warnings
 ```
 
+Unit tests that run the trusted Python helpers create their temporary roots
+through the test-only `private_tempdir` helper with explicit `0o700`
+permissions. The helpers reject group- or world-writable roots, and
+`tempfile::tempdir` derives its mode from the process umask, so plain
+temporary directories would fail under a common `0002` umask.
+
 Live tests are opt-in, ignored, and billable:
 
 ```bash

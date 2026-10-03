@@ -28,3 +28,7 @@ pub use self::process::{
     SplitProcessCommand, StreamProcessCommand,
 };
 pub use self::runtime_conventions::E2bRuntimeConventions;
+
+#[cfg(test)]
+#[path = "_tests_/test_directories.rs"]
+mod test_directories;

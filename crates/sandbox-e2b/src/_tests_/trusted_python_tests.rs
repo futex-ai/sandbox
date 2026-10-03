@@ -2,13 +2,13 @@
 
 use std::{fs, process::Command};
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::{EXECUTABLE, command_args};
 
 #[test]
 fn trusted_helper_ignores_working_directory_and_python_path_modules() {
-    let hostile = tempdir().expect("hostile Python module directory");
+    let hostile = private_tempdir().expect("hostile Python module directory");
     fs::write(hostile.path().join("hashlib.py"), "raise SystemExit(91)\n")
         .expect("hostile standard-library shadow");
     fs::write(

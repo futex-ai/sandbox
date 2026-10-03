@@ -250,3 +250,34 @@ pushed, and reviewed against `origin/main`.
       findings automatically.
 - [x] Mark every milestone complete and move this plan from Active to
       Completed in `plans/README.md`.
+
+## Milestone 4: Make Helper Tests Independent Of Umask (Completed)
+
+At the end of this milestone, `cargo xtask check` passes under both `0022`
+and `0002` umasks, so developers on systems that default to group-writable
+files can run the required checks.
+
+### Review Item
+
+1. **Severity: medium — helper tests depend on the developer's umask.**
+   Fifteen existing `sandbox-e2b` tests run the trusted Python file-write,
+   cleanup, and terminal-storage helpers against `tempfile::tempdir()` roots.
+   That function applies the process umask to mode `0o777`, so a `0002` umask
+   creates group-writable `0o775` directories, which the helpers correctly
+   reject. The failures also occur on `origin/main`. Option A: create test
+   roots with explicit `0o700` permissions. Option B: set `umask 022` inside
+   `cargo xtask check`. Option C: document the umask requirement.
+   **Recommendation: A**, because it fixes plain `cargo test` too and keeps
+   the helpers' safety checks unchanged; the user selected this option.
+
+- [x] Add a failing regression proving temporary test roots are `0o700`
+      under a `0002` umask (observed `0o775` before the fix).
+- [x] Add the test-only `private_tempdir` helper in
+      `crates/sandbox-e2b/src/_tests_/test_directories.rs` and use it for
+      every `sandbox-e2b` unit-test temporary directory.
+- [x] Document the helper in `crates/sandbox-e2b/README.md`.
+- [x] Run `cargo xtask check` under a `0002` umask; all 426 tests pass.
+- [x] Run `git add -A`, commit with a Conventional Commit, and push the
+      current branch.
+- [x] Run `cargo xtask review` after the push and report every finding without
+      automatically fixing it.

@@ -7,7 +7,7 @@ use std::{
     process::{Command, Output},
 };
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::{WriteAttempt, command};
 
@@ -15,8 +15,8 @@ const REPLACEMENT_DIGEST: &str = "95713e9cbdd1dfcb2d4080c2537f418d43ca0da25f0d7d
 
 #[test]
 fn writer_replaces_a_regular_file_through_directory_descriptors() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     fs::write(root.path().join("src/lib.rs"), b"old").expect("existing file");
     let staged = stage.path().join("upload");
@@ -40,8 +40,8 @@ fn writer_replaces_a_regular_file_through_directory_descriptors() {
 
 #[test]
 fn writer_keeps_verified_temporary_outside_the_workload_directory() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let target = root.path().join("src/lib.rs");
     let staged = stage.path().join("upload");
@@ -87,9 +87,9 @@ os.replace = raced_replace
 
 #[test]
 fn writer_rejects_a_leaf_symlink_without_changing_its_target() {
-    let root = tempdir().expect("temporary write root");
-    let outside = tempdir().expect("outside directory");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let outside = private_tempdir().expect("outside directory");
+    let stage = private_tempdir().expect("temporary staging root");
     let outside_file = outside.path().join("outside.txt");
     fs::write(&outside_file, b"protected").expect("outside file");
     symlink(&outside_file, root.path().join("target.txt")).expect("leaf symlink");
@@ -104,9 +104,9 @@ fn writer_rejects_a_leaf_symlink_without_changing_its_target() {
 
 #[test]
 fn writer_rejects_a_symlinked_parent_without_writing_outside_root() {
-    let root = tempdir().expect("temporary write root");
-    let outside = tempdir().expect("outside directory");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let outside = private_tempdir().expect("outside directory");
+    let stage = private_tempdir().expect("temporary staging root");
     symlink(outside.path(), root.path().join("linked")).expect("parent symlink");
     let staged = stage.path().join("upload");
     fs::write(&staged, b"replacement").expect("staged bytes");
@@ -124,8 +124,8 @@ fn writer_rejects_a_symlinked_parent_without_writing_outside_root() {
 
 #[test]
 fn writer_cannot_replace_after_cleanup_claims_revocation() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let target = root.path().join("src/lib.rs");
     let staged = stage.path().join("upload");

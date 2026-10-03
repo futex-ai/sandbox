@@ -2,14 +2,14 @@
 
 use std::{fs, process::Command};
 
-use tempfile::tempdir;
+use crate::test_directories::private_tempdir;
 
 use super::{WriteAttempt, command};
 
 #[test]
 fn writer_rejects_same_size_staging_tampering() {
-    let root = tempdir().expect("temporary write root");
-    let stage = tempdir().expect("temporary staging root");
+    let root = private_tempdir().expect("temporary write root");
+    let stage = private_tempdir().expect("temporary staging root");
     fs::create_dir(root.path().join("src")).expect("nested directory");
     let target = root.path().join("src/lib.rs");
     let staged = stage.path().join("upload");

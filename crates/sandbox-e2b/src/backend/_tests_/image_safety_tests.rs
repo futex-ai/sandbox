@@ -6,11 +6,10 @@ use sandbox_interface::{
     BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
     SandboxBackend, SandboxId,
 };
-use tempfile::tempdir;
 use unimock::Unimock;
 use uuid::Uuid;
 
-use crate::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
+use crate::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend, test_directories::private_tempdir};
 
 use super::SIZE_COMMAND;
 
@@ -50,7 +49,7 @@ async fn every_image_path_fails_before_provider_access() {
 
 #[test]
 fn size_command_rejects_partial_output_from_failed_du() {
-    let tools = tempdir().expect("temporary command directory");
+    let tools = private_tempdir().expect("temporary command directory");
     let du = tools.path().join("du");
     fs::write(&du, "#!/bin/sh\nprintf '4096\\t/\\n'\nexit 1\n").expect("fake du");
     let mut permissions = fs::metadata(&du).expect("fake du metadata").permissions();
