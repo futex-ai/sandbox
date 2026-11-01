@@ -58,4 +58,3 @@ manual developer action and is deliberately excluded from CI.
 
 - [Implementation review prompt](../docs/implementation-review-prompt.md)
 - [Workspace README](../README.md)
-- [Implementation plans](../plans/README.md)

@@ -211,4 +211,3 @@ copy application orchestration or provider template infrastructure.
   sensitive process data from metadata-only diagnostics.
 - [`docs/juno-adoption.md`](docs/juno-adoption.md) describes the separate
   consumer cutover.
-- [`plans/README.md`](plans/README.md) indexes implementation plans.
