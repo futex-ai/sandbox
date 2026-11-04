@@ -1,9 +1,9 @@
 # Sandbox Capabilities And Boat
 
-Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
+Status: Complete on this branch. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
 [PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
 This plan stays in the pull request at the owner's request.
-Fix round 2 applies the approved shared bootstrap lock. Checks pass. Post-push review remains.
+Fix round 2 is complete. The owner retains the merge of PR #11.
 
 ## Summary
 
@@ -319,12 +319,14 @@ deadline classification and cleanup ownership from findings 1 and 2.
 - [x] Run the concurrency regression twenty times and each new asynchronous test ten times.
 - [x] Inspect the delegated fix and preserve the deadline, cleanup, and safety regressions.
 - [x] Run `cargo xtask check`. Remove the resolved follow-up and record the outcome.
-- [ ] Commit with Conventional Commits, push, and run `cargo xtask review` after the push.
-- [ ] Check new findings. Fix each new High `fix now` finding in this round. Report the rest.
-- [ ] Watch CI, update PR #11, and report without merging.
+- [x] Commit with Conventional Commits, push, and run `cargo xtask review` after the push.
+- [x] Check new findings. Fix each new High `fix now` finding in this round. Report the rest.
+- [x] Watch CI, update PR #11, and report without merging.
 
 Evidence: `.context/sandbox-capabilities-and-boat/bootstrap-fix/`.
 Item 3, B: shared initialization now stays locked through workspace setup.
 A held attempt directory prevents recreation after queued cancellation.
 The private deadline classification and launch cleanup ownership remain unchanged.
 Root checked the implementation before closing the resolved follow-up record.
+Fix commit: `d695f51`. Its post-push review leaves no confirmed new finding.
+The independent check removed packaging candidate 4. The supported Git route works.

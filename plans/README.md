@@ -5,8 +5,8 @@ Other work uses the shared `plans` skill and its follow-up records.
 
 ## Active
 
-- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md) — bootstrap fix and checks complete; post-push review remains.
+None in this index.
 
 ## Completed
 
-None in this index.
+- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md) — implementation, approved fixes, checks, and review complete on the branch; PR #11 awaits owner merge.
