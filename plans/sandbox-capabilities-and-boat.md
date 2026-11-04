@@ -3,7 +3,7 @@
 Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
 [PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
 This plan stays in the pull request at the owner's request.
-The approved fixes are complete. A new High bootstrap finding needs a separate fix round.
+Fix round 2 applies the approved shared bootstrap lock. Checks pass. Post-push review remains.
 
 ## Summary
 
@@ -301,4 +301,30 @@ Evidence: `.context/sandbox-capabilities-and-boat/reports/review-fixes-c-d.md`.
 Root acceptance: `.context/sandbox-capabilities-and-boat/review-fixes/root-acceptance.md`.
 Fix commit: `ff633a6`. Both selected outcomes are applied and verified.
 The fix review confirmed High finding 3. It remains pending under the report-only instruction.
-Its [follow-up record](follow-ups/boat-concurrent-bootstrap-initialization.md) preserves option B for a separate pre-merge fix round.
+Its [follow-up record](https://github.com/futex-ai/sandbox/blob/2fd1962612d0864f027f123336eb921c63085368/plans/follow-ups/boat-concurrent-bootstrap-initialization.md) preserves option B for a separate pre-merge fix round.
+
+## Milestone 8: Serialize Shared Bootstrap Initialization
+
+Depends on: 7
+
+The owner approved `fix now, apply B` for finding 3 on 4 November 2026.
+Lock shared initialization inside the trusted helper through workspace setup.
+This also closes the staging-directory ownership window. Preserve the private
+deadline classification and cleanup ownership from findings 1 and 2.
+
+- [x] Add and observe the concurrent-first-use regression before the fix.
+- [x] Lock shared account and directory setup with the existing trusted file-lock pattern.
+- [x] Preserve abandonment when a bootstrap waits for the shared initialization lock.
+- [x] Verify one valid workload account and matching workspace ownership under concurrency.
+- [x] Run the concurrency regression twenty times and each new asynchronous test ten times.
+- [x] Inspect the delegated fix and preserve the deadline, cleanup, and safety regressions.
+- [x] Run `cargo xtask check`. Remove the resolved follow-up and record the outcome.
+- [ ] Commit with Conventional Commits, push, and run `cargo xtask review` after the push.
+- [ ] Check new findings. Fix each new High `fix now` finding in this round. Report the rest.
+- [ ] Watch CI, update PR #11, and report without merging.
+
+Evidence: `.context/sandbox-capabilities-and-boat/bootstrap-fix/`.
+Item 3, B: shared initialization now stays locked through workspace setup.
+A held attempt directory prevents recreation after queued cancellation.
+The private deadline classification and launch cleanup ownership remain unchanged.
+Root checked the implementation before closing the resolved follow-up record.
