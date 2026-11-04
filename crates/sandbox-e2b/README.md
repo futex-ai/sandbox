@@ -25,6 +25,10 @@ an HTTPS control client and envd process transport; `with_transports` accepts
 trait-backed test or alternate transports. Construction itself sends no E2B
 request.
 
+`E2bAdapterError::Internal` wraps the same `InternalError` type as the
+interface error. The `internal-error` revision rule of the
+[`sandbox-interface` README](../sandbox-interface/README.md) applies here too.
+
 `E2bAdapterConfig` validates the API origin, API key, idle timeout, logical
 profiles, template IDs, and denied IP/CIDR destinations, then keeps those
 values externally immutable. The public concrete control-client constructor
