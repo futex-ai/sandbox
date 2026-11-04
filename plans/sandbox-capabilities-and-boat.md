@@ -3,8 +3,7 @@
 Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
 [PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
 This plan stays in the pull request at the owner's request.
-Implementation and verification are complete. Two checked review findings
-await the owner. Their records stay under `plans/follow-ups/`.
+The approved review fixes are applied. Milestone 7 records their verification.
 
 ## Summary
 
@@ -65,13 +64,9 @@ claim that `/limits` returns resource amounts or prices. Document the source
 and date of the published catalogue. Preserve explicit failure for unknown
 sizes rather than invent resource or price values.
 
-Implementor call, 4 November 2026: choose Boat's documented exec API when it
-can preserve the process and file guarantees. SSH is the alternative if an
-API limitation prevents those guarantees. The caller must not need a local
-Boat CLI. Keep commands, files, credentials, and runner input out of diagnostics.
-Use typed transports, bounded responses, no credentialed redirects, safe
-provider route segments, and trusted file operations. Record the final
-transport choice and its reason here after checking the implementation.
+Boat uses the verified HTTPS exec and attach route recorded in Milestone 5.
+Keep inputs out of diagnostics. Preserve bounded transport, trusted file
+operations, safe routes, and the no-redirect credential policy.
 
 Implementor call, 4 November 2026: retain `snapshots: false` on every adapter
 create. Boat can restore these disposable sandboxes from saved snapshots.
@@ -81,12 +76,10 @@ The snapshot conformance probe accepts an explicit source. Its fake-server
 fixture must enforce this provider restriction instead of granting unsupported
 capture to disposable creates. This keeps both approved requirements intact.
 
-Implementor call, 4 November 2026: run the milestones in order in this shared
-workspace. They edit the same interface. The orchestrator writes the plan,
-delegates each milestone to the `non-ui implementor`, checks the result, and
-ticks its TODOs. The orchestrator owns the final gate, commits, push, review,
-and pull request. The explicit task overrides the shared skill defaults that
-delete a completed plan or automatically fix review findings.
+The orchestrator writes the plan, delegates related code together, and checks
+before ticking. It owns the gate, commits, push, and review. The plan stays
+in this pull request. Apply the approved fixes only. Report new review
+findings without fixing them in this round.
 
 ## Replaced Ways
 
@@ -279,11 +272,8 @@ for the owner's decision. Do not merge the pull request.
 - [x] Record the checked review findings and owner choices. Keep this plan active.
       Validate and push Markdown-only bookkeeping. Keep reviewed code unchanged.
 
-Review outcome: post-push review on `867637a` and two independent finding checks
-confirmed two Medium items. No fix is applied. The owner chooses the next work:
-
-- [Preparation expiry outcome](follow-ups/boat-preparation-expiry-outcome.md).
-- [Unopened stream cleanup](follow-ups/boat-unopened-stream-cleanup.md).
+The orchestrator directed `fix now, apply C` for review item 1 and
+`fix now, apply D` for item 2 on 4 November 2026. Milestone 7 records both outcomes.
 
 Evidence: `.context/sandbox-capabilities-and-boat/` holds prompts, reports,
 public documentation extracts, and verification logs. No provider key is needed.
@@ -291,3 +281,20 @@ public documentation extracts, and verification logs. No provider key is needed.
 Mainline integration: preserve the documentation and follow-up records from
 `2f35916`. Combine provider guidance in `README.md`. Keep only this requested
 plan in `plans/README.md`. No Rust, Python, or Cargo content changes in the merge.
+
+## Milestone 7: Apply The Reviewed Process Fixes
+
+Depends on: 6
+
+Item 1, C: Budget now classifies expiry and preserves phase-aware outcomes.
+Item 2, D: One lease owns cleanup until release. State remains after release.
+The fixes preserve requirements and public APIs.
+
+- [x] Classify expiry at the private budget owner and preserve phase-aware outcomes.
+- [x] Keep cleanup ownership through release. Retain state after launch release.
+- [x] Prove preparation expiry and both startup-cancellation regressions before fixes.
+- [x] Run new asynchronous tests ten times and targeted checks. Root runs the full gate.
+- [x] Inspect the fixes, close their follow-up records, and record both outcomes.
+- [ ] Commit, push, run `cargo xtask review`, and watch CI. Report new findings only.
+
+Evidence: `.context/sandbox-capabilities-and-boat/reports/review-fixes-c-d.md`.

@@ -1,11 +1,5 @@
 //! Independent bounded provider reader, arrival timing, and exact cleanup identity.
 
-use std::{
-    future::{Future, poll_fn},
-    pin::Pin,
-    time::Duration,
-};
-
 use futures_util::StreamExt;
 use sandbox_interface::{ProcessStreamEvent, ProcessStreamOutcome};
 use tokio::{
@@ -14,7 +8,6 @@ use tokio::{
 };
 
 use crate::{
-    error::Result,
     runtime::{
         api::{AttachRequest, DetachedProcess},
         configured::BoatTrustedRuntime,
@@ -24,8 +17,10 @@ use crate::{
 
 use super::{
     framing::Decoder,
+    launch::LaunchLease,
     lines::Lines,
     settings::{Counts, Observation, Settings},
+    wait::Boundary,
 };
 
 pub(super) struct Terminal {
@@ -35,6 +30,7 @@ pub(super) struct Terminal {
 
 pub(super) struct Reader {
     pub(super) attempt: Attempt,
+    pub(super) launch: LaunchLease,
     pub(super) settings: Settings,
     pub(super) staged: Sender<ProcessStreamEvent>,
     pub(super) consumer: Sender<ProcessStreamEvent>,
@@ -47,50 +43,7 @@ pub(super) struct Reader {
 }
 
 impl Reader {
-    pub(super) async fn run(mut self) -> Terminal {
-        let outcome = self.read().await;
-        let observation = *self.observed.borrow();
-        if self.consumer.is_closed() && observation.pid.is_none() {
-            return Terminal {
-                outcome,
-                prefix: self.prefix.take(),
-            };
-        }
-        let resolved;
-        if !observation.ended {
-            resolved = self
-                .attempt
-                .cleanup("terminate")
-                .await
-                .as_ref()
-                .is_ok_and(BoatTrustedRuntime::helper_succeeded);
-            if let Some(outer) = self.outer {
-                let api = self.attempt.api.clone();
-                let stop = api.stop(
-                    &self.attempt.sandbox,
-                    outer.process_id,
-                    Duration::from_secs(2),
-                );
-                let _ = tokio::time::timeout(Duration::from_secs(2), stop).await;
-            }
-        } else {
-            resolved = self
-                .attempt
-                .cleanup("ack")
-                .await
-                .as_ref()
-                .is_ok_and(BoatTrustedRuntime::helper_succeeded);
-        }
-        if outcome == ProcessStreamOutcome::Completed || resolved {
-            let _ = self.attempt.cleanup("clean").await;
-        }
-        Terminal {
-            outcome,
-            prefix: self.prefix.take(),
-        }
-    }
-
-    async fn read(&mut self) -> ProcessStreamOutcome {
+    pub(super) async fn read(&mut self) -> ProcessStreamOutcome {
         if self.consumer.is_closed() {
             return ProcessStreamOutcome::TransportFailure;
         }
@@ -100,9 +53,11 @@ impl Reader {
             Ok(value) => value,
             Err(_) => return self.expired(false),
         };
-        let opening = api.start(&sandbox, self.attempt.command("supervise"), timeout);
+        let budget = self.attempt.budget;
+        let command = self.attempt.command("supervise");
+        let opening = async { budget.classify(api.start(&sandbox, command, timeout).await) };
         tokio::pin!(opening);
-        let outer = match self.wait(opening.as_mut()).await {
+        let outer = match self.wait(opening.as_mut(), Boundary::Provider).await {
             Ok(value) => value,
             Err(outcome) => return outcome,
         };
@@ -122,23 +77,24 @@ impl Reader {
                 stderr: decoder.stderr,
                 timeout,
             };
-            let opening = api.attach(request);
+            let opening = async { budget.classify(api.attach(request).await) };
             tokio::pin!(opening);
-            let mut stream = match self.wait(opening.as_mut()).await {
+            let mut stream = match self.wait(opening.as_mut(), Boundary::Provider).await {
                 Ok(value) => value,
                 Err(outcome) => return outcome,
             };
             let mut lines = Lines::default();
             loop {
                 let next = async {
-                    match stream.next().await {
+                    let result = match stream.next().await {
                         Some(Ok(bytes)) => Ok(Some(bytes)),
                         Some(Err(error)) => Err(error),
                         None => Ok(None),
-                    }
+                    };
+                    budget.classify(result)
                 };
                 tokio::pin!(next);
-                let bytes = match self.wait(next.as_mut()).await {
+                let bytes = match self.wait(next.as_mut(), Boundary::Provider).await {
                     Ok(Some(bytes)) => bytes,
                     Ok(None) => break,
                     Err(outcome) => return outcome,
@@ -192,21 +148,26 @@ impl Reader {
                         if self.consumer.is_closed() {
                             return ProcessStreamOutcome::TransportFailure;
                         }
-                        let attempt = self.attempt.clone();
-                        let release = attempt.run("release");
-                        tokio::pin!(release);
-                        match self.wait(release.as_mut()).await {
+                        let mut launch = self.launch.take();
+                        let result = {
+                            let release = launch.release();
+                            tokio::pin!(release);
+                            self.wait(release.as_mut(), Boundary::Release).await
+                        };
+                        self.launch = launch;
+                        match result {
                             Ok(output) if BoatTrustedRuntime::helper_succeeded(&output) => {
                                 released = true
                             }
-                            _ => return ProcessStreamOutcome::TransportFailure,
+                            Ok(_) => return ProcessStreamOutcome::TransportFailure,
+                            Err(outcome) => return outcome,
                         }
                     }
                     if batch.success {
                         let attempt = self.attempt.clone();
                         let ack = attempt.run("ack");
                         tokio::pin!(ack);
-                        match self.wait(ack.as_mut()).await {
+                        match self.wait(ack.as_mut(), Boundary::Provider).await {
                             Ok(output) if BoatTrustedRuntime::helper_succeeded(&output) => {}
                             _ => return ProcessStreamOutcome::TransportFailure,
                         }
@@ -225,44 +186,6 @@ impl Reader {
                 }
                 _ => return ProcessStreamOutcome::TransportFailure,
             }
-        }
-    }
-
-    async fn wait<T>(
-        &mut self,
-        mut future: Pin<&mut (dyn Future<Output = Result<T>> + Send)>,
-    ) -> std::result::Result<T, ProcessStreamOutcome> {
-        loop {
-            if self.dropped.is_some() && self.observed.borrow().pid.is_some() {
-                return Err(ProcessStreamOutcome::TransportFailure);
-            }
-            let cutoff = self
-                .dropped
-                .unwrap_or(self.idle)
-                .min(self.settings.deadline);
-            tokio::select! {
-                biased;
-                _ = self.consumer.closed(), if self.dropped.is_none() => {
-                    if !self.polled { return Err(ProcessStreamOutcome::TransportFailure); }
-                    self.dropped = Some((Instant::now() + Duration::from_secs(3)).min(self.settings.deadline));
-                }
-                _ = tokio::time::sleep_until(cutoff) => {
-                    return Err(self.expired(cutoff != self.settings.deadline));
-                }
-                value = poll_fn(|cx| { self.polled = true; future.as_mut().poll(cx) }) => {
-                    return match value { Ok(value) => Ok(value), Err(_) => Err(ProcessStreamOutcome::TransportFailure) };
-                }
-            }
-        }
-    }
-
-    fn expired(&self, idle: bool) -> ProcessStreamOutcome {
-        if self.observed.borrow().ended || self.dropped.is_some() {
-            ProcessStreamOutcome::TransportFailure
-        } else if idle {
-            ProcessStreamOutcome::IdleTimeout
-        } else {
-            ProcessStreamOutcome::DeadlineExpired
         }
     }
 }

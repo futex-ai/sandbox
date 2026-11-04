@@ -10,6 +10,7 @@ use tokio::{
 use crate::trusted_runtime::attempt::Attempt;
 
 use super::{
+    launch::LaunchLease,
     reader::{Reader, Terminal},
     settings::{Observation, Settings},
 };
@@ -21,15 +22,13 @@ pub(super) fn events(attempt: Attempt, settings: Settings) -> ProcessEventStream
     let (staged, staging) = mpsc::channel(32);
     let (terminal_sender, terminal) = oneshot::channel();
     let (observed, _) = watch::channel(Observation::default());
-    let mut guard = LaunchGuard(Some(attempt));
+    let launch_lease = LaunchLease::new(attempt.clone());
     let launch = async move {
-        let Some(attempt) = guard.0.take() else {
-            return;
-        };
         let _worker = tokio::spawn(async move {
             let idle = Instant::now().checked_add(idle_timeout).unwrap_or(deadline);
             let reader = Reader {
                 attempt,
+                launch: launch_lease,
                 settings,
                 staged,
                 consumer: consumer.clone(),
@@ -109,20 +108,6 @@ impl Receiver {
         } else {
             self.done = true;
             Some(outcome)
-        }
-    }
-}
-
-struct LaunchGuard(Option<Attempt>);
-
-impl Drop for LaunchGuard {
-    fn drop(&mut self) {
-        if let Some(attempt) = self.0.take()
-            && let Ok(runtime) = tokio::runtime::Handle::try_current()
-        {
-            let _cleanup = runtime.spawn(async move {
-                let _ = attempt.cleanup("clean").await;
-            });
         }
     }
 }

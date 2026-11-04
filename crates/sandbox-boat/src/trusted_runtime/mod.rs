@@ -1,6 +1,7 @@
 //! Isolated trusted helpers and private per-operation staging.
 
 pub(crate) mod attempt;
+pub(crate) mod budget;
 pub(crate) mod manifest;
 
 #[cfg(test)]

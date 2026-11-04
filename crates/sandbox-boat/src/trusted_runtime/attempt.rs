@@ -14,7 +14,10 @@ use crate::{
     },
 };
 
-use super::manifest::{Bundle, Manifest, digest};
+use super::{
+    budget::{Budget, StepResult},
+    manifest::{Bundle, Manifest, digest},
+};
 
 const HOME: &str = "/home/user";
 const STATE: &str = "/var/lib/sandbox-boat";
@@ -28,7 +31,7 @@ pub(crate) struct Attempt {
     pub(crate) sandbox: String,
     pub(crate) id: String,
     pub(crate) digest: String,
-    pub(crate) deadline: Instant,
+    pub(crate) budget: Budget,
 }
 
 impl Attempt {
@@ -38,7 +41,25 @@ impl Attempt {
         workload: String,
         manifest: Manifest,
         deadline: Instant,
-    ) -> Result<Self> {
+    ) -> StepResult<Self> {
+        let budget = Budget::new(deadline);
+        let prepared = Self::initialize(api, sandbox, workload, manifest, budget).await;
+        match budget.classify(prepared) {
+            Ok((attempt, mut preparation)) => {
+                preparation.0 = None;
+                Ok(attempt)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    async fn initialize(
+        api: Arc<dyn BoatRuntimeApi>,
+        sandbox: String,
+        workload: String,
+        manifest: Manifest,
+        budget: Budget,
+    ) -> Result<(Self, PreparationGuard)> {
         let id = Uuid::new_v4().simple().to_string();
         let bundle = encode(&Bundle::new(id.clone(), workload.clone(), manifest))?;
         let attempt = Self {
@@ -46,7 +67,7 @@ impl Attempt {
             sandbox,
             id,
             digest: digest(&bundle),
-            deadline,
+            budget,
         };
         let command = python(
             BOOTSTRAP,
@@ -75,8 +96,7 @@ impl Attempt {
             preparation.0 = None;
             return Err(error);
         }
-        preparation.0 = None;
-        Ok(attempt)
+        Ok((attempt, preparation))
     }
 
     pub(crate) fn path(&self, name: &str) -> String {
@@ -84,12 +104,7 @@ impl Attempt {
     }
 
     pub(crate) fn remaining(&self) -> Result<Duration> {
-        let remaining = self.deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            Err(Error::Unavailable)
-        } else {
-            Ok(remaining)
-        }
+        self.budget.remaining()
     }
 
     pub(crate) fn command(&self, action: &str) -> String {
@@ -99,14 +114,18 @@ impl Attempt {
         )
     }
 
-    pub(crate) async fn run(&self, action: &str) -> Result<HelperOutput> {
-        self.api
-            .helper(
-                &self.sandbox,
-                self.command(action),
-                self.remaining()?.min(Duration::from_secs(300)),
-            )
-            .await
+    pub(crate) async fn run(&self, action: &str) -> StepResult<HelperOutput> {
+        let output = async {
+            self.api
+                .helper(
+                    &self.sandbox,
+                    self.command(action),
+                    self.remaining()?.min(Duration::from_secs(300)),
+                )
+                .await
+        }
+        .await;
+        self.budget.classify(output)
     }
 
     pub(crate) async fn cleanup(&self, action: &str) -> Result<HelperOutput> {

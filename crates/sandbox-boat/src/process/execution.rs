@@ -1,11 +1,14 @@
 //! Validate before access and prepare an immutable direct-argv attempt.
 
-use sandbox_interface::{BackendStreamProcessRequest, Error, ProcessEventStream, Result};
+use sandbox_interface::{
+    BackendStreamProcessRequest, Error, ProcessEventStream, ProcessStreamEvent,
+    ProcessStreamOutcome, Result,
+};
 use tokio::time::Instant;
 
 use crate::{
     runtime::configured::BoatTrustedRuntime,
-    trusted_runtime::{attempt::Attempt, manifest::Manifest},
+    trusted_runtime::{attempt::Attempt, budget::StepError, manifest::Manifest},
 };
 
 use super::{
@@ -46,12 +49,10 @@ pub(crate) async fn stream(
     );
     let attempt = match tokio::time::timeout_at(deadline, prepare).await {
         Ok(Ok(attempt)) => attempt,
-        Ok(Err(_)) => return Err(runtime.unavailable()),
-        Err(_) => {
+        Ok(Err(StepError::Failed(_))) => return Err(runtime.unavailable()),
+        Ok(Err(StepError::Expired)) | Err(_) => {
             return Ok(Box::pin(futures_util::stream::iter([
-                sandbox_interface::ProcessStreamEvent::Outcome(
-                    sandbox_interface::ProcessStreamOutcome::DeadlineExpired,
-                ),
+                ProcessStreamEvent::Outcome(ProcessStreamOutcome::DeadlineExpired),
             ])));
         }
     };
