@@ -1,7 +1,8 @@
 # Sandbox Capabilities And Boat
 
 Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
-No pull request exists yet. This plan stays in the pull request at the owner's request.
+[PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
+This plan stays in the pull request at the owner's request.
 
 ## Summary
 
@@ -265,10 +266,11 @@ for the owner's decision. Do not merge the pull request.
 - [x] Run relevant tests, formatting, Clippy, smoke coverage, and file-size checks.
 - [x] Run `cargo xtask check` and resolve all compile and check failures.
 - [x] Audit removals against `origin/main`, documentation drift, and the full diff.
-- [ ] Run `git add -A`, commit with Conventional Commits, and push this branch.
-- [ ] Run `cargo xtask review` after the push against the clean pushed branch.
+- [x] Merge mainline documentation updates and rerun the complete gate.
+- [x] Run `git add -A`, commit with Conventional Commits, and push this branch.
+- [x] Run `cargo xtask review` after the push against the clean pushed branch.
       Save and report every finding. Do not fix its findings automatically.
-- [ ] Open the pull request into `main` with this plan, decisions, and validation.
+- [x] Open the pull request into `main` with this plan, decisions, and validation.
 - [ ] Check the final commit's CI and report its exact results.
 - [ ] Update this plan's status and `plans/README.md` when all work is checked.
       Keep outstanding owner findings explicit. Commit and push bookkeeping.
@@ -276,3 +278,7 @@ for the owner's decision. Do not merge the pull request.
 
 Evidence: `.context/sandbox-capabilities-and-boat/` holds prompts, reports,
 public documentation extracts, and verification logs. No provider key is needed.
+
+Mainline integration: preserve the documentation and follow-up records from
+`2f35916`. Combine provider guidance in `README.md`. Keep only this requested
+plan in `plans/README.md`. No Rust, Python, or Cargo content changes in the merge.
