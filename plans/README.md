@@ -6,6 +6,7 @@ milestones are finished.
 
 ## Active
 
+- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md)
 - [Add one-shot sandbox lifetimes](one-shot-sandbox-lifetime.md)
 
 ## Completed
