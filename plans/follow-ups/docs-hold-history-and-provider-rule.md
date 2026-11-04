@@ -13,7 +13,7 @@
 
 - **Terms:**
   - **Protocol doc:** a doc that holds the requirements and the decisions in
-    force of one boundary. Here they are `docs/sandbox-contract.md`,
+    force of one boundary, here `docs/sandbox-contract.md`,
     `docs/e2b-adapter.md`, and `docs/process-diagnostics.md`.
 - **Background:**
   - The `documentation` skill from `futex-ai/skills` says that a protocol
@@ -48,10 +48,6 @@
     inventory "must also reject returned identities that their later
     provider routes cannot use". Commit `c007311` of 2026-09-22 added the E2B
     sentence.
-  - The `documentation` skill also says that a change moves code names and
-    mechanics out of each protocol doc that it touches. For example,
-    `docs/process-diagnostics.md:32-33` names the private type
-    `StreamSettings`.
   - `docs/sandbox-contract.md` has 428 lines. The same skill says: "When you
     touch a doc that passes the target, split it into linked pages in the
     same change." The target is about 250 lines.
@@ -68,10 +64,9 @@
   - **A.** Delete the three history passages, because the current rules
     already state their facts. Delete the E2B sentence at
     `docs/sandbox-contract.md:197-198`, and keep the general rule at lines
-    196-197. Move each code name out of each protocol doc that the change
-    touches. Do this in the branch of
+    196-197. Do this in the branch of
     `plans/follow-ups/docs-miss-decisions-in-force.md`, which splits the
-    contract. Alone, the split makes this change Medium. Effort: Small.
+    contract. Effort: Small.
 - **Left out:**
   - Only one approach is real, because the `documentation` skill names the
     home of history and of provider rules.
@@ -88,7 +83,9 @@
   passages. Commit `c007311` of 2026-09-22 added the E2B sentence to the
   contract.
 - **Related:** `plans/follow-ups/docs-miss-decisions-in-force.md`: both change
-  `docs/sandbox-contract.md`, and that item splits it. Do both in one branch.
+  `docs/sandbox-contract.md`. That item owns the split of the contract and
+  the move of code names out of each touched protocol doc. Do both in one
+  branch.
 - **Recommendation:** A, because the current rules already hold each fact,
   and the adapter doc already holds the E2B rule.
 - **Action:** fix after merge, apply A, because the fix touches

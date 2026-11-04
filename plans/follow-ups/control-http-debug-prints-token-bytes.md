@@ -12,8 +12,8 @@
 
 - **Terms:**
   - **Control transport:** the crate-private trait `E2bHttpTransport` at
-    `crates/sandbox-e2b/src/control/http.rs:38-42`. Its method `send` takes an
-    `HttpRequest` and returns an `HttpResponse`.
+    `crates/sandbox-e2b/src/control/http.rs:38-42`, whose method `send` takes
+    an `HttpRequest` and returns an `HttpResponse`.
   - **Access tokens:** the E2B credentials `envdAccessToken`, for process and
     file calls, and `trafficAccessToken`, for private-port traffic.
   - **Metadata-only `Debug`:** a hand-written `Debug` implementation that

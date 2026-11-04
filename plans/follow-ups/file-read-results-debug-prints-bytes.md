@@ -51,7 +51,7 @@
     results are outside this write-request guarantee and must still be
     treated as sensitive data." `docs/sandbox-contract.md:385-386`,
     `crates/sandbox-interface/README.md:84`, and
-    `crates/sandbox-e2b/README.md:228` say the same.
+    `crates/sandbox-e2b/README.md:224` say the same.
   - `docs/process-diagnostics.md:3-5` says that the library does not try to
     discover or replace secrets in process and terminal data.
   - The user decision. On 2026-10-03 the user approved the plan that gave
@@ -88,7 +88,7 @@
     - Update `docs/process-diagnostics.md:21-27` and `:42-43`,
       `docs/sandbox-contract.md:370-386`,
       `crates/sandbox-interface/README.md:81-84`,
-      `crates/sandbox-e2b/README.md:224-228`, and `README.md:106-108`.
+      `crates/sandbox-e2b/README.md:220-224`, and `README.md:106-108`.
     - `docs/sandbox-contract.md` has 428 lines. The `documentation` skill
       from `futex-ai/skills` says: "When you touch a doc that passes the
       target, split it into linked pages in the same change." The target is

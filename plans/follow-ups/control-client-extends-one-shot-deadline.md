@@ -19,18 +19,18 @@
 
 - **Terms:**
   - **One-shot sandbox:** a sandbox created with
-    `SandboxLifetime::OneShot { max_lifetime }`. E2B destroys it when that
+    `SandboxLifetime::OneShot { max_lifetime }`, which E2B destroys when that
     maximum lifetime ends.
-  - **Lifetime marker:** the metadata entry `<prefix>_lifetime=one_shot`. The
-    backend writes it at create, for example `sandbox_lifetime=one_shot` with
-    the default prefix.
+  - **Lifetime marker:** the metadata entry `<prefix>_lifetime=one_shot` that
+    the backend writes at create, such as `sandbox_lifetime=one_shot` with the
+    default prefix.
   - **Direct client:** `ReqwestE2bControlApi`, the public E2B control client
-    under `crates/sandbox-e2b/src/control/`. A caller can build it without
-    the backend.
-  - **Sandbox detail:** the response of E2B's `GET /sandboxes/{sandboxID}`.
-    The direct client reads it before each connect or pause.
-  - **`lifecycle.onTimeout`:** a field of sandbox detail. It says what E2B
-    does when the sandbox times out: `kill` or `pause`.
+    under `crates/sandbox-e2b/src/control/` that a caller can build without the
+    backend.
+  - **Sandbox detail:** the response of E2B's `GET /sandboxes/{sandboxID}`,
+    which the direct client reads before each connect or pause.
+  - **`lifecycle.onTimeout`:** the field of sandbox detail that says what E2B
+    does when the sandbox times out, `kill` or `pause`.
 - **Background:**
   - The contract. `docs/sandbox-contract.md:3-5` says that the doc covers the
     `sandbox-interface` boundary. Lines 22-24 say that a one-shot sandbox
@@ -41,7 +41,7 @@
   - The adapter promise. `docs/e2b-adapter.md:99-103` says that the concrete
     control client reads sandbox detail before connect or pause. For a
     running one-shot sandbox, "it never sends connect, resume, pause, or
-    timeout updates". `crates/sandbox-e2b/README.md:83-86` and the trait docs
+    timeout updates". `crates/sandbox-e2b/README.md:79-82` and the trait docs
     at `crates/sandbox-e2b/src/control/api.rs:28`, `:35`, and `:42` say the
     same. No doc tells a direct caller to add the marker.
   - Create. `create_sandbox` at `crates/sandbox-e2b/src/control/client.rs:67-112`
@@ -153,7 +153,7 @@
     - Add regressions from create to connect and from create to pause, for
       both public paths. Add `lifecycle` with `onTimeout` to the test details
       that rely on the marker.
-    - Update `docs/e2b-adapter.md:99-103`, `crates/sandbox-e2b/README.md:83-86`,
+    - Update `docs/e2b-adapter.md:99-103`, `crates/sandbox-e2b/README.md:79-82`,
       and the trait docs at `api.rs:28-43`. `docs/e2b-adapter.md` has 471
       lines. The `documentation` skill from `futex-ai/skills` says: "When you
       touch a doc that passes the target, split it into linked pages in the
