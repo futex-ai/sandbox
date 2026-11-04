@@ -19,6 +19,8 @@ application -> sandbox-interface <- sandbox-e2b
 Consumers should depend on `sandbox-interface`. Only the process that selects
 and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
 credentials, payloads, access tokens, and errors out of higher-level services.
+Each new provider implements the `sandbox-interface` contract in its own
+adapter crate beside `sandbox-e2b`.
 Sandbox create requests carry their runtime-or-browser consumer class and typed
 lifetime through provider metadata. Interactive sandboxes keep idle auto-pause;
 bounded one-shot sandboxes remain running until explicit destroy or their
@@ -170,20 +172,26 @@ later initialization can fail.
 
 ## Review Workflow
 
-Install and authenticate the Codex CLI locally before running the manual AI
-review. After all checks pass, commit every change and push the current branch,
-then run:
+Agents review a pushed branch with the `implementation-review` skill of
+[`futex-ai/skills`](https://github.com/futex-ai/skills). The skill says which
+findings the agent fixes and which findings wait for a maintainer.
 
-```bash
-cargo xtask review
-```
+`cargo xtask review` is an optional manual AI review with the Codex CLI. It
+needs a local Codex CLI that is installed and authenticated. To run it:
 
-The command fetches `origin/main`, requires a clean worktree and a pushed
-upstream commit, and delegates the complete branch diff to `codex exec review`.
-It never runs in CI and verifies that the reviewer did not alter the worktree.
-Review findings must be explained in simple language for a reader with no
-prior repository context; they are reported for a maintainer to decide on and
-are not changed automatically.
+1. Make sure that all checks pass.
+2. Commit every change.
+3. Push the current branch.
+4. Run the command:
+
+   ```bash
+   cargo xtask review
+   ```
+
+The command fetches `origin/main`. It requires a clean worktree and a pushed
+upstream commit. It runs `codex exec review` on the complete branch diff
+against `origin/main`. Then it verifies that the reviewer did not change the
+worktree. CI never runs the command.
 
 ## Provenance
 
