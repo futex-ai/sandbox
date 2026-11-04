@@ -5,7 +5,7 @@ Other work uses the shared `plans` skill and its follow-up records.
 
 ## Active
 
-- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md) — approved review fixes and checks complete; post-push review remains.
+- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md) — approved fixes and review complete; new High bootstrap finding remains for a separate fix round.
 
 ## Completed
 

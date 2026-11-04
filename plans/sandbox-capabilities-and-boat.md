@@ -3,7 +3,7 @@
 Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
 [PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
 This plan stays in the pull request at the owner's request.
-The approved review fixes are applied. Milestone 7 records their verification.
+The approved fixes are complete. A new High bootstrap finding needs a separate fix round.
 
 ## Summary
 
@@ -295,6 +295,10 @@ The fixes preserve requirements and public APIs.
 - [x] Prove preparation expiry and both startup-cancellation regressions before fixes.
 - [x] Run new asynchronous tests ten times and targeted checks. Root runs the full gate.
 - [x] Inspect the fixes, close their follow-up records, and record both outcomes.
-- [ ] Commit, push, run `cargo xtask review`, and watch CI. Report new findings only.
+- [x] Commit, push, run `cargo xtask review`, and watch CI. Report new findings only.
 
 Evidence: `.context/sandbox-capabilities-and-boat/reports/review-fixes-c-d.md`.
+Root acceptance: `.context/sandbox-capabilities-and-boat/review-fixes/root-acceptance.md`.
+Fix commit: `ff633a6`. Both selected outcomes are applied and verified.
+The fix review confirmed High finding 3. It remains pending under the report-only instruction.
+Its [follow-up record](follow-ups/boat-concurrent-bootstrap-initialization.md) preserves option B for a separate pre-merge fix round.
