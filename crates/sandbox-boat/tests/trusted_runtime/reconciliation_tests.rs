@@ -57,7 +57,7 @@ fn interrupted_handoff_reconciles_exact_bytes_and_preserves_visible_mode() {
     assert_eq!(prepare.status.code(), Some(0));
     assert_eq!(attempt.run("reconcile").status.code(), Some(51));
     let info = fs::metadata(fixture.destination("file")).unwrap();
-    assert_eq!(info.uid(), 65534);
+    assert_eq!(info.uid(), fixture.account.uid);
     assert_eq!(info.permissions().mode() & 0o777, 0o644);
     assert_eq!(fs::read(fixture.destination("file")).unwrap(), b"payload");
 }

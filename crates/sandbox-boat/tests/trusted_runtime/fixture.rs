@@ -14,7 +14,7 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 
-const BOOTSTRAP: &str = include_str!("../../src/trusted_runtime/helpers/bootstrap.py");
+use super::account::{self, Account, BOOTSTRAP};
 const LOADER: &str = include_str!("../../src/trusted_runtime/helpers/loader.py");
 
 pub struct Fixture {
@@ -23,6 +23,7 @@ pub struct Fixture {
     pub state: PathBuf,
     pub workspace: PathBuf,
     pub controller: String,
+    pub account: Account,
 }
 
 pub struct Attempt<'a> {
@@ -52,12 +53,14 @@ impl Fixture {
                 .unwrap()
                 .success()
         );
+        let account = account::select(&home, &state, &workspace, &controller);
         Self {
             temporary,
             home,
             state,
             workspace,
             controller,
+            account,
         }
     }
     pub fn attempt(&self, manifest: Value) -> Attempt<'_> {
@@ -68,7 +71,7 @@ impl Fixture {
                 self.state.to_str().unwrap(),
                 self.workspace.to_str().unwrap(),
                 &self.controller,
-                "nobody",
+                &self.account.name,
                 &id,
             ])
             .output()
@@ -101,8 +104,10 @@ impl Fixture {
                 STANDARD.encode(sandbox_runtime_assets::REGULAR_FILE_CLEANUP),
             ),
         ]);
-        let bundle = serde_json::to_vec(&json!({"version":1,"attempt":id,"workload_user":"nobody",
-            "workspace":self.workspace,"manifest":manifest,"sources":sources}))
+        let bundle = serde_json::to_vec(
+            &json!({"version":1,"attempt":id,"workload_user":self.account.name,
+            "workspace":self.workspace,"manifest":manifest,"sources":sources}),
+        )
         .unwrap();
         let digest = digest(&bundle);
         fs::write(
@@ -124,7 +129,7 @@ impl Fixture {
             .args([
                 "-n",
                 "-u",
-                "nobody",
+                &self.account.name,
                 "/usr/bin/env",
                 "-i",
                 "/usr/bin/python3",

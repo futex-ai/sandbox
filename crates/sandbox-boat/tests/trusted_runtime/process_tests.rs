@@ -13,10 +13,20 @@ use super::fixture::Fixture;
 #[test]
 fn supervisor_preserves_exact_argv_binary_output_and_actual_workload_identity() {
     let fixture = Fixture::new();
-    let script = "import os,sys,json,subprocess;assert os.getuid()==65534;assert os.getgroups()==[];assert 'NoNewPrivs:\t1' in open('/proc/self/status').read();assert subprocess.run(['/usr/bin/sudo','-n','/usr/bin/id'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0;sys.stdout.buffer.write(bytes([0,255,10])+json.dumps(sys.argv[1:],separators=(',',':')).encode());sys.stdout.flush();sys.stderr.buffer.write(bytes([254,0]));sys.stderr.flush()";
+    let script = format!(
+        "import os,sys,json,subprocess;assert os.getuid()=={};assert os.getgroups()==[];assert 'NoNewPrivs:\t1' in open('/proc/self/status').read();assert subprocess.run(['/usr/bin/sudo','-n','/usr/bin/id'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode!=0;sys.stdout.buffer.write(bytes([0,255,10])+json.dumps(sys.argv[1:],separators=(',',':')).encode());sys.stdout.flush();sys.stderr.buffer.write(bytes([254,0]));sys.stderr.flush()",
+        fixture.account.uid
+    );
     let long = "x".repeat(96 * 1024);
     let large_environment = "y".repeat(60 * 1024);
-    let args = vec!["-I", "-S", "-c", script, "a b'$(touch unexpected)\n", &long];
+    let args = vec![
+        "-I",
+        "-S",
+        "-c",
+        script.as_str(),
+        "a b'$(touch unexpected)\n",
+        &long,
+    ];
     let attempt = fixture.attempt(json!({"operation":"process","command":"/usr/bin/python3",
         "args":args,"cwd":fixture.workspace,"envs":{"EXACT":"value","LARGE":large_environment},"timeout_ms":10000}));
     let mut child = attempt.supervise();

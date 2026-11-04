@@ -37,7 +37,7 @@ fn atomic_replace_hands_owner_and_mode_to_an_isolated_workload() {
         bytes
     );
     let metadata = fs::metadata(fixture.destination("file")).unwrap();
-    assert_eq!(metadata.uid(), 65534);
+    assert_eq!(metadata.uid(), fixture.account.uid);
     assert_eq!(metadata.mode() & 0o777, 0o640);
     let probe = fixture.workload(&format!("import os\np={:?}\nopen(p+'/own', 'wb').write(b'allowed')\nfor p in [{:?}, {:?}]:\n try:\n  open(p+'/forged', 'wb').write(b'forged')\n except PermissionError:\n  continue\n raise SystemExit(7)", fixture.workspace, fixture.home, fixture.state));
     assert_eq!(probe.status.code(), Some(0));

@@ -267,6 +267,7 @@ for the owner's decision. Do not merge the pull request.
 - [x] Run `cargo xtask check` and resolve all compile and check failures.
 - [x] Audit removals against `origin/main`, documentation drift, and the full diff.
 - [x] Merge mainline documentation updates and rerun the complete gate.
+- [x] Fix the real-UID test fixture on the CI host without weakening isolation.
 - [x] Run `git add -A`, commit with Conventional Commits, and push this branch.
 - [x] Run `cargo xtask review` after the push against the clean pushed branch.
       Save and report every finding. Do not fix its findings automatically.
