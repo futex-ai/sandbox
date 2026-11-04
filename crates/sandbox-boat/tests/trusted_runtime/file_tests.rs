@@ -4,7 +4,7 @@ use std::{fs, os::unix::fs::MetadataExt, process::Command};
 
 use serde_json::{Value, json};
 
-use super::fixture::{Attempt, Fixture};
+use super::fixture::{Attempt, Fixture, read_root_file};
 
 #[test]
 fn atomic_replace_hands_owner_and_mode_to_an_isolated_workload() {
@@ -41,7 +41,7 @@ fn atomic_replace_hands_owner_and_mode_to_an_isolated_workload() {
     assert_eq!(metadata.mode() & 0o777, 0o640);
     let probe = fixture.workload(&format!("import os\np={:?}\nopen(p+'/own', 'wb').write(b'allowed')\nfor p in [{:?}, {:?}]:\n try:\n  open(p+'/forged', 'wb').write(b'forged')\n except PermissionError:\n  continue\n raise SystemExit(7)", fixture.workspace, fixture.home, fixture.state));
     assert_eq!(probe.status.code(), Some(0));
-    assert_eq!(fs::read(fixture.destination("own")).unwrap(), b"allowed");
+    assert_eq!(read_root_file(&fixture.destination("own")), b"allowed");
     assert_eq!(attempt.run("clean").status.code(), Some(0));
     assert!(!attempt.state_path("payload").exists());
     assert_eq!(

@@ -5,7 +5,7 @@ use std::{
     fs,
     ops::{Deref, DerefMut},
     os::unix::fs::PermissionsExt,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
 };
 
@@ -208,6 +208,20 @@ pub fn root_python(source: &str) -> Command {
         source,
     ]);
     command
+}
+
+pub fn read_root_file(path: &Path) -> Vec<u8> {
+    let output = root_python("import sys;sys.stdout.buffer.write(open(sys.argv[1], 'rb').read())")
+        .arg(path)
+        .output()
+        .unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "root read: {:?}",
+        output.stderr
+    );
+    output.stdout
 }
 
 pub fn digest(bytes: &[u8]) -> String {

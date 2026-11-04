@@ -4,7 +4,7 @@ use std::{fs, process::Command};
 
 use serde_json::{Value, json};
 
-use super::fixture::{Attempt, Fixture, root_python};
+use super::fixture::{Attempt, Fixture, read_root_file, root_python};
 
 #[test]
 fn a_replaced_visible_parent_cannot_redirect_a_bound_atomic_write() {
@@ -34,8 +34,8 @@ fn a_replaced_visible_parent_cannot_redirect_a_bound_atomic_write() {
         .output()
         .unwrap();
     assert_eq!(output.status.code(), Some(0), "{:?}", output.stderr);
-    assert_eq!(fs::read(moved.join("file")).unwrap(), b"exact");
-    assert_eq!(fs::read(outside.join("file")).unwrap(), b"outside");
+    assert_eq!(read_root_file(&moved.join("file")), b"exact");
+    assert_eq!(read_root_file(&outside.join("file")), b"outside");
 }
 
 #[test]

@@ -6,7 +6,7 @@ use std::{
     process::Command,
 };
 
-use super::fixture::{Attempt, Fixture};
+use super::fixture::{Attempt, Fixture, read_root_file};
 
 #[test]
 fn revoked_writer_cannot_commit_and_keeps_its_uncertain_fence() {
@@ -59,5 +59,5 @@ fn interrupted_handoff_reconciles_exact_bytes_and_preserves_visible_mode() {
     let info = fs::metadata(fixture.destination("file")).unwrap();
     assert_eq!(info.uid(), fixture.account.uid);
     assert_eq!(info.permissions().mode() & 0o777, 0o644);
-    assert_eq!(fs::read(fixture.destination("file")).unwrap(), b"payload");
+    assert_eq!(read_root_file(&fixture.destination("file")), b"payload");
 }
