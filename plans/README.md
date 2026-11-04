@@ -5,7 +5,7 @@ Other work uses the shared `plans` skill and its follow-up records.
 
 ## Active
 
-- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md)
+- [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md) — implementation and checks complete; two review choices await the owner.
 
 ## Completed
 

@@ -3,6 +3,8 @@
 Status: Active. Branch: `conductor/ciproxy-mvp-milestone-12-sandbox-capabilities-and-boat`.
 [PR #11](https://github.com/futex-ai/sandbox/pull/11) is open into `main`.
 This plan stays in the pull request at the owner's request.
+Implementation and verification are complete. Two checked review findings
+await the owner. Their records stay under `plans/follow-ups/`.
 
 ## Summary
 
@@ -273,10 +275,15 @@ for the owner's decision. Do not merge the pull request.
 - [x] Run `cargo xtask review` after the push against the clean pushed branch.
       Save and report every finding. Do not fix its findings automatically.
 - [x] Open the pull request into `main` with this plan, decisions, and validation.
-- [ ] Check the final commit's CI and report its exact results.
-- [ ] Update this plan's status and `plans/README.md` when all work is checked.
-      Keep outstanding owner findings explicit. Commit and push bookkeeping.
-      Re-run `cargo xtask review` if the reviewed commit changes.
+- [x] Check the implementation commit's CI and report its exact results.
+- [x] Record the checked review findings and owner choices. Keep this plan active.
+      Validate and push Markdown-only bookkeeping. Keep reviewed code unchanged.
+
+Review outcome: post-push review on `867637a` and two independent finding checks
+confirmed two Medium items. No fix is applied. The owner chooses the next work:
+
+- [Preparation expiry outcome](follow-ups/boat-preparation-expiry-outcome.md).
+- [Unopened stream cleanup](follow-ups/boat-unopened-stream-cleanup.md).
 
 Evidence: `.context/sandbox-capabilities-and-boat/` holds prompts, reports,
 public documentation extracts, and verification logs. No provider key is needed.
