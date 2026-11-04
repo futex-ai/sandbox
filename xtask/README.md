@@ -20,8 +20,8 @@ including staged, unstaged, and untracked files; `--all` scans every Rust file
 under `crates/` and `xtask/`. `review` fetches `origin/main`, proves the
 worktree is clean and the current commit is pushed, uses Codex's native
 base-branch reviewer, and verifies the worktree is still unchanged afterward.
-The repository instructions apply the reporting contract in
-`docs/implementation-review-prompt.md` to that reviewer.
+`review` is an optional manual check. An agent's post-push review follows the
+`implementation-review` skill of `futex-ai/skills`.
 
 External commands cross one injected runner boundary. Unit tests use a fake
 runner, so they do not contact Git remotes or invoke Codex.
@@ -57,5 +57,7 @@ manual developer action and is deliberately excluded from CI.
 
 ### Related Docs
 
-- [Implementation review prompt](../docs/implementation-review-prompt.md)
+- The `implementation-review` skill of
+  [`futex-ai/skills`](https://github.com/futex-ai/skills) is the source of the
+  review procedure and its prompt.
 - [Workspace README](../README.md)

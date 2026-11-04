@@ -42,6 +42,12 @@ Its `lifecycle` method returns `Arc<dyn SandboxLifecycle>`. Optional capability
 methods return `Result<Option<Arc<dyn Capability>>>`, with `None` for an
 unsupported capability. `SandboxReadOnly` exposes narrow consumer inspection.
 
+`Error::Internal` wraps `InternalError` from the `internal-error` crate. A
+consumer that converts its own `InternalError` values to or from `Error` must
+use the Git source and revision that this workspace's
+[`Cargo.toml`](../../Cargo.toml) pins. The compiler treats `InternalError`
+from another source or revision as a different type.
+
 Consumer IDs are UUIDv7 values. Provider references remain opaque, so callers
 cannot infer E2B or any future provider's identifier format. Bounded request
 types and backend adapters reject unsafe paths, oversized commands and files,

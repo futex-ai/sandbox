@@ -1,20 +1,12 @@
 # Plans
 
-Implementation plans for this workspace live here. Active plans describe work
-that has not landed yet; completed plans move to the completed section once all
-milestones are finished.
+The owner requested this change's plan and index in its pull request.
+Other work uses the shared `plans` skill and its follow-up records.
 
 ## Active
 
 - [Sandbox capabilities and Boat](sandbox-capabilities-and-boat.md)
-- [Add one-shot sandbox lifetimes](one-shot-sandbox-lifetime.md)
 
 ## Completed
 
-- [Stream process working directory, environment, and write redaction](stream-process-cwd-env-and-write-redaction.md)
-- [Stream process runs](stream-process-runs.md)
-- [Add egress allowlist policy](egress-allowlist-policy.md)
-- [Add direct process working directory and environment](process-run-cwd-and-env.md)
-- [Harden sandbox and terminal create recovery](harden-sandbox-and-terminal-create-recovery.md)
-- [Harden stream completion and credential routing](harden-stream-completion-and-credential-routing.md)
-- [Extract sandbox interface and E2B provider from Juno](extract-sandbox-interface-and-e2b.md)
+None in this index.
