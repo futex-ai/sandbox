@@ -1,13 +1,14 @@
 # xtask
 
 `xtask` is the repository's developer CLI for repeatable local and CI checks.
-It is not a runtime dependency of either published library crate.
+It is not a runtime dependency of the published library crates.
 
 ## Responsibilities
 
 - Run the complete credential-free workspace verification sequence.
 - Enforce the 300-line cap for Rust files under `crates/` and `xtask/`.
-- Construct the interface and E2B adapter without provider requests.
+- Construct E2B and each independent capability object without provider requests.
+- Construct Boat lifecycle, snapshot, process, file, and capacity objects without provider requests.
 - Delegate a manual, post-push branch review to the authenticated Codex CLI.
 
 ## What This Crate Does

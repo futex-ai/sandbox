@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use sandbox_interface::{ProviderRef, SandboxBackend, SandboxState};
+use sandbox_interface::{ProviderRef, SandboxResumableLifecycle, SandboxState};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{

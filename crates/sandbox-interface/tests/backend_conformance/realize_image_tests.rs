@@ -2,7 +2,7 @@
 
 use sandbox_interface::{
     BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
-    SandboxBackend, SandboxId,
+    SandboxId, SandboxImagePreparation,
 };
 
 use super::alternate_backend::AlternateBackend;

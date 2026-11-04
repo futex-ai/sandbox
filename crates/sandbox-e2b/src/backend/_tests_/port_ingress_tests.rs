@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use sandbox_interface::{BackendPortIngressRequest, Error, ProviderRef, SandboxBackend};
+use sandbox_interface::{BackendPortIngressRequest, Error, ProviderRef, SandboxPortIngress};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{ControlSandboxAccess, E2bAdapterConfig, E2bControlApiMock, E2bProfile};

@@ -20,10 +20,19 @@ using the provider-neutral interface.
 
 ## What This Crate Does
 
-`E2bSandboxBackend` implements `SandboxBackend`. Production construction builds
-an HTTPS control client and envd process transport; `with_transports` accepts
+`E2bSandboxBackend` implements `SandboxLifecycle`, `SandboxResumableLifecycle`,
+`SandboxSnapshots`, `SandboxImagePreparation`, `SandboxProcesses`, `SandboxFiles`,
+`SandboxTerminals`, `SandboxPortIngress`, and `SandboxScreens`. Each capability
+keeps its existing E2B behavior. Composition roots share the adapter with `Arc`
+and inject only the required `Arc<dyn Capability>` values.
+Production construction builds an HTTPS control client and envd process transport; `with_transports` accepts
 trait-backed test or alternate transports. Construction itself sends no E2B
 request.
+
+Set create `size` to `None` to keep the configured profile and exact existing
+provider body. E2B rejects both explicit provider sizes and resource selections
+with `UnsupportedSizeSelection` before create or recovery uses control access.
+This adapter does not implement `SandboxAccountCapacity`.
 
 `E2bAdapterConfig` validates the API origin, API key, idle timeout, logical
 profiles, template IDs, and denied IP/CIDR destinations, then keeps those
@@ -70,8 +79,11 @@ lifetime. Ambiguous delivery uses only metadata-filtered recovery reads and
 never sends a second create. Allowlist policy identity is verified separately
 on the returned row. Idle-auto-pause creation preserves the existing
 resumable request body. A one-shot create disables pause and resume and uses
-its validated 1-to-3600-second maximum as E2B's destruction timeout. Create and
-recovery reject invalid lifetimes before provider access. A sandbox ID must be
+its validated 1-to-3600-second maximum as E2B's destruction timeout.
+`E2B_ONE_SHOT_MAX_LIFETIME` owns this provider maximum. Shared lifetime types
+accept longer representable durations. Backend create, recovery, and the public
+control create client still reject durations above 3,600 seconds before provider
+access. Managed metadata above that E2B limit stays unknown. A sandbox ID must be
 a lowercase DNS-label fragment that fits every envd hostname. An accepted
 create with an unusable ID remains delivery-ambiguous; managed inventory
 rejects the same ID as provider unavailability, maps recognized consumer and
@@ -291,7 +303,8 @@ release project, not this crate.
 ## Quick Start
 
 ```rust
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
+use sandbox_interface::{SandboxLifecycle, SandboxProcesses};
 use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 
 let config = E2bAdapterConfig::new(
@@ -305,7 +318,9 @@ let config = E2bAdapterConfig::new(
     })]),
     600,
 )?;
-let _backend = E2bSandboxBackend::new(config)?;
+let backend = Arc::new(E2bSandboxBackend::new(config)?);
+let _lifecycle: Arc<dyn SandboxLifecycle> = backend.clone();
+let _processes: Arc<dyn SandboxProcesses> = backend;
 # Ok::<(), Box<dyn std::error::Error>>(())
 ```
 
@@ -352,7 +367,8 @@ deletable snapshot handle.
 
 - `src/config.rs` — validated profiles and adapter configuration.
 - `src/runtime_conventions.rs` — validated deployment and cleanup names.
-- `src/backend/configured.rs` — backend construction and trait dispatch.
+- `src/backend/configured.rs` — backend construction.
+- `src/backend/capabilities.rs` — independent capability implementations.
 - `src/backend/image_realization.rs` — one-shot caller-owned image preparation.
 - `src/backend/image_cache_cleanup.rs` — non-following cache removal.
 - `src/backend/terminal_storage.rs` — non-following terminal path helpers.
@@ -360,10 +376,13 @@ deletable snapshot handle.
 - `src/control/` — E2B control API boundary.
 - `src/network.rs` — allowlist translation, deny overlap, and recovery identity.
 - `src/process/helper_run.rs` — absolute helper execution and cleanup deadlines.
+- `sandbox-runtime-assets` — shared writer and reconciler source with unchanged E2B arguments and behavior.
 - `src/process/` — envd Connect framing and operations.
 - `src/process/stream_run.rs` — incremental events, timers, and cleanup.
 - `src/backend/sandboxes.rs` — metadata correlation and lifecycle mapping.
 - `src/backend/sandbox_metadata.rs` — lifetime and correlation metadata.
+- `src/lifetime.rs` — E2B's one-shot maximum for backend and public control creation.
+- `src/control/sandbox_access.rs` — existing non-mutating one-shot access rules.
 - `src/backend/screen_resize.rs` — deadline and termination guarantees.
 
 ### Related Docs

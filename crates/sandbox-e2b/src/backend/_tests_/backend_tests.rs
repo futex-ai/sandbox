@@ -5,7 +5,8 @@ use std::{collections::HashMap, sync::Arc};
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendSnapshotCreateOutcome,
     BackendSnapshotInventory, BackendSnapshotRecovery, Error, OperationId, ProviderRef,
-    ResourceOwner, SandboxBackend, SandboxId, SandboxState, SnapshotId,
+    ResourceOwner, SandboxId, SandboxLifecycle, SandboxResumableLifecycle, SandboxSnapshots,
+    SandboxState, SnapshotId,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -256,6 +257,7 @@ fn config() -> E2bAdapterConfig {
 
 fn sandbox_request(snapshot_provider_ref: Option<ProviderRef>) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         network: sandbox_interface::SandboxNetworkPolicy::Open,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),

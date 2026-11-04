@@ -6,6 +6,7 @@ mod backend;
 mod config;
 mod control;
 mod error;
+mod lifetime;
 mod network;
 mod process;
 mod response_body;
@@ -20,6 +21,7 @@ pub use self::control::{
     ReqwestE2bControlApi, SandboxMetadata,
 };
 pub use self::error::{Error as E2bAdapterError, Result as E2bAdapterResult};
+pub use self::lifetime::E2B_ONE_SHOT_MAX_LIFETIME;
 pub use self::process::{
     ConnectProcessTransport, DynProcessTransport, ProcessCommand, ProcessConnectOutput,
     ProcessConnection, ProcessFileChunk, ProcessFileValidation, ProcessInfo, ProcessOutputCapture,

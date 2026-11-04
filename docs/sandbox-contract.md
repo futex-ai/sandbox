@@ -1,8 +1,16 @@
 # Sandbox Contract
 
-This document defines the behavior owned by `sandbox-interface`. It describes
-the boundary between a trusted consumer and any concrete sandbox provider; it
-does not prescribe application persistence or orchestration.
+This contract defines the boundary between a trusted consumer and a sandbox
+provider. Application persistence and orchestration remain with the consumer.
+
+The linked pages are part of this contract:
+
+- [File safety](sandbox-file-safety.md).
+- [Processes](sandbox-process-contract.md).
+- [Terminals and screens](sandbox-terminal-screen-contract.md).
+- [Snapshots and image preparation](sandbox-image-contract.md).
+- [Transport and diagnostics](sandbox-transport-safety.md).
+- [Capability conformance](sandbox-conformance.md).
 
 ## Identity And Ownership
 
@@ -17,42 +25,91 @@ Managed inventory returns it when recognized and uses `None` for older
 resources that lack the metadata; adapters must not guess. Operations that are
 not valid for a class fail with a typed error before dispatch.
 
-`SandboxLifetime` gives both service and backend create requests one of two
-policies. `IdleAutoPause` is the default and preserves the existing resumable
-interactive lifecycle. `OneShot { max_lifetime }` never pauses, is not
-resumable, and remains running until the consumer destroys it or the provider
-timeout destroys it. A one-shot duration must be a whole number of seconds in
-`1..=3600`, bounded by `SANDBOX_ONE_SHOT_MAX_LIFETIME`; create and recovery must
-reject zero, fractional-second, or larger values before provider access.
-Consumers should explicitly destroy completed one-shot work instead of waiting
-for the timeout.
+## Independent Capabilities
 
-Adapters preserve the lifetime kind and, for one-shot sandboxes, its maximum
-duration in provider metadata used for recovery. Managed inventory returns
-`Some(lifetime)` only when that metadata is complete and valid. Missing,
-unknown, or malformed lifetime metadata remains `None`, never an inferred
-default. Reacquiring access to a running one-shot sandbox must use a
-non-mutating read path. Resume, connect, pause, or any other access operation
-must not move its destruction deadline beyond the original `max_lifetime`.
+Consumers depend on the capabilities that their work requires. A provider
+implements only the capabilities that it supports. No provider must implement
+an interface that requires every capability.
 
-## Backend Requirements
+| Capability | Required behavior |
+| --- | --- |
+| Lifecycle | Create, recover an uncertain create, inspect, list managed sandboxes, and destroy idempotently. |
+| Resumable lifecycle | Resume and pause sandboxes whose lifetime permits those operations. |
+| Saved snapshots | Inventory, create, recover uncertain creation, inspect, and delete saved snapshots. Lifecycle creation can restore a supported snapshot. |
+| Image preparation | Stage files, run setup and ordered verification, scrub, and return a measured size without allocating or deleting resources. |
+| Processes | Bounded direct-argv execution with collected or incremental stdout and stderr, plus stateless read-only execution. |
+| Files | Bounded regular-file reads and atomic replacement writes below a trusted root. |
+| Terminals | Create, recover, inspect exact identity, read bounded transcripts, send input, close, and clean restored terminals. |
+| Port ingress | Call-local HTTP ingress with an optional redacted credential. |
+| Screens | Idempotently ensure the screen stack and acknowledge an exact validated viewport resize. |
+| Account capacity | Report eligible provider sizes with resource amounts and hourly prices for the configured account. |
 
-Every `SandboxBackend` implementation must support:
+Each supported capability must satisfy all of its shared safety requirements.
+The split does not weaken a provider's existing behavior. E2B continues to
+support its existing lifecycle, snapshot, image, process, file, terminal,
+ingress, and screen behavior. Boat supports the subset defined in its
+[adapter contract](boat-adapter.md).
 
-- create, recover, inspect, resume, pause, and destroy;
-- managed-sandbox listing with optional consumer, lifetime, and correlation IDs;
-- snapshot inventory, creation, ambiguous-delivery recovery, inspection, and
-  deletion;
-- bounded regular-file reads and replacement writes below a trusted root;
-- bounded direct-argv process execution with collected and incremental stdout
-  and stderr variants;
-- terminal create/recovery, exact identity inspection, bounded transcript
-  reads, input, close, and restored-terminal cleanup;
-- call-local HTTP port ingress with a redacted optional credential;
-- caller-driven platform image phases for source creation, staged files, setup,
-  ordered verification, scrub, measured preparation, snapshot dispatch and
-  recovery, and explicit source cleanup; and
-- idempotent screen-stack ensure plus exact validated viewport resize.
+Managed inventory preserves recognized consumer, lifetime, and correlation
+values. Missing or malformed optional metadata stays unknown. An adapter must
+not infer those values from provider defaults.
+
+## Capacity And Start Results
+
+A create request can select a provider size or request vCPU, memory, and disk
+resources. These are alternatives. Resource amounts carry explicit units.
+An accepted resource request must not silently receive less capacity.
+A provider must preserve its existing profile behavior when no size is selected.
+Unsupported sizes or resource requests retain a typed refusal.
+
+Account capacity reports only sizes eligible for the configured account.
+Each offer identifies its provider size, vCPU count, memory amount, disk amount,
+and hourly price. Prices carry an explicit currency and billing unit.
+An adapter must not invent resource amounts or prices for an unknown size.
+
+Account capacity and remaining limits are advisory. They do not reserve a
+machine or guarantee that a later create will succeed. The create result
+settles whether the provider accepted that start.
+
+A temporary start refusal is distinct from ambiguous delivery. It confirms
+that the refused start did not run. It retains the provider's retry delay and
+next permitted start time when supplied. Consumers can use that timing without
+parsing diagnostic text.
+
+A plan-size refusal remains distinct from a billing refusal. A temporary
+capacity or start-window refusal must not hide either refusal. Account trial
+restrictions also remain typed provider refusals. A refusal must not look like
+a queued start or a successful create. An uncertain mutation remains subject
+to recover-only handling.
+
+## Sandbox Lifetimes
+
+Both service and backend create requests carry one of two lifetime policies:
+
+- `IdleAutoPause` is the default for resumable interactive sandboxes.
+- `OneShot { max_lifetime }` never pauses or resumes. It runs until explicit
+  destruction or the original provider deadline ends the sandbox.
+
+Shared one-shot validation requires a positive, whole-second duration that the
+provider request can represent. There is no shared one-hour maximum.
+Each adapter validates its own maximum before create or recovery accesses the
+provider. A duration beyond an account's allowance retains the provider's
+typed refusal when that allowance is determined by the provider.
+
+E2B retains its maximum of 3,600 seconds. Boat accepts six-hour one-shot work
+on an eligible paid account. Boat's paid maximum is 30 days. Its two-hour trial
+restriction remains a typed provider refusal. The
+[E2B](e2b-adapter.md#sandbox-lifetimes) and
+[Boat](boat-adapter.md#lifetimes) contracts define their provider behavior.
+
+Adapters preserve the lifetime kind and one-shot maximum in recovery metadata.
+Managed inventory returns a lifetime only when that metadata is complete and
+valid. Missing, unknown, or malformed metadata remains unknown.
+
+Access to a running one-shot sandbox must use a non-mutating path. Resume,
+connect, pause, process execution, and other access must not extend its original
+deadline. A stopped one-shot sandbox must not resume. Consumers should destroy
+completed work explicitly instead of waiting for the provider deadline.
 
 ## Network Policies
 
@@ -96,6 +153,8 @@ the policy applied by create, revalidate the recovery value, and return
 `SandboxNetworkPolicyMismatch` when the correlated sandbox used a different
 policy. It must not silently adopt that sandbox or dispatch a replacement.
 
+## Creation And Recovery
+
 Creation and snapshot methods separate an initial mutation from recovery. The
 trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
@@ -111,318 +170,22 @@ Snapshot inventory requires a nonempty source provider reference and nonempty
 correlation value before an authenticated provider request is built. Snapshot
 creation requires the same nonempty values before its mutation is sent.
 
-Image construction is a caller-persisted state machine:
+Provider idempotency support supplements this rule. It does not authorize the
+adapter to replay an uncertain create. Recovery must use the original owner,
+consumer, correlation, size, lifetime, network policy, and snapshot selection.
+It must never adopt a resource whose recorded request identity conflicts.
 
-1. Record source-create intent, call `create_sandbox` once, and use only
-   `recover_sandbox_create` after that call starts.
-2. Persist the source provider reference, call `prepare_image` once, and
-   persist the returned measured size. Preparation never allocates, snapshots,
-   or destroys a provider resource.
-3. Inventory the source-and-correlation pair, persist the complete snapshot
-   request and dispatch intent, and call `create_snapshot` once.
-4. Use only `recover_snapshot_create` for an uncertain, in-progress, or resumed
-   dispatch. Zero candidates remain in progress; multiple candidates require
-   reconciliation. If snapshot capture pauses the source, both outcomes keep it
-   paused; only exactly one completed candidate permits reconnecting it. Neither
-   outcome may replay preparation or redispatch.
-5. Persist the completed snapshot identity and measured size, then destroy the
-   source idempotently.
+## Common Failure Safety
 
-A process failure after intent is recorded but before delivery may require an
-operator decision; it is safer to retain the source than guess and duplicate a
-paid resource or non-idempotent build side effect. Preparation and recovery
-failures never implicitly destroy the caller-owned source.
-
-## Bounds And Failure Safety
-
-Paths must remain under their trusted absolute root and must identify regular
-files without following a symlink escape. Replacement writes must bind parent
-directories and replace the leaf atomically so concurrent path changes cannot
-redirect a write. The caller must calculate the requested payload digest before
-upload; both the remote writer and cleanup reconciliation must validate that
-identity, not size alone, before replacing the destination. Failed replacement
-attempts must make a bounded cleanup attempt for all provider-side staging and
-destination-temporary files. An uncertain writer must be fenced by an atomic
-revocation or reconciled as an already committed exact replacement. When
-cleanup finds the exact replacement already visible, it may report a commit
-only after resolving a validated non-root workload identity, preserving the
-opened target's mode, applying that owner, syncing the file, and syncing the
-destination directory. Without that usable workload identity, the outcome is
-unconfirmed. Any writer exit that could follow a commit claim uses the same
-reconciliation; definitive pre-commit validation failures preserve their typed
-errors. If no outcome can be proven, the backend returns
-`FileWriteUnconfirmed`; the caller must not retry on that sandbox until it is
-reconciled or destroyed. A normally completed replacement removes its resolved
-state marker. Cleanup for an upload failure or definitive writer rejection must
-also remove and sync its marker after all cleanup succeeds, because no writer
-remains; cleanup failure must leave that marker in place. An uncertain writer
-retains an atomic marker as its fence even when reconciliation proves that the
-replacement committed.
-The writer and reconciler must create that marker as a trusted identity in
-storage the workload cannot traverse, unlink, or replace; a marker in a shared
-temporary directory is not a valid fence. Using a trusted writer for that
-private marker must not leave the replaced workload file owned by the trusted
-identity. The verified temporary inode must remain outside workload control
-until its atomic rename. A provider may satisfy both that isolation and the
-same-filesystem rename requirement by creating a trusted `0700` directory next
-to the destination, retaining its verified descriptor, and renaming a private
-payload from that descriptor; a workload rename of the directory entry must
-not change the source inode. Cleanup must validate the same private directory
-before using it. An interrupted commit must retain enough trusted state to
-finish the intended ownership and mode handoff during reconciliation.
-File transfers are capped at 256 MiB. Every file in a multi-file
-image-preparation request must pass its path and size checks before the backend
-acquires provider access or writes any earlier file. Provider response and
-process output limits are enforced while bytes are consumed. A streaming frame
-decoder must validate the bounded frame header before retaining the rest of a
-provider chunk, and its partial-frame buffer may retain only the current
-allowed frame. A streaming protocol's end marker must also be decoded:
-malformed metadata or a reported application error must fail collection rather
-than look like an ordinary completion, and any bytes following that terminal
-marker are malformed. Once a process end event is observed, collection must
-continue until that final marker succeeds and the underlying transport reaches
-EOF. Later bytes, transport failure, or deadline expiry before that EOF are
-malformed completion, even after a valid marker. A bounded one-shot process
-must be terminated when collection fails after its PID is known. Credentialed HTTP
-clients must not follow redirects, and credentials may be attached only after
-the exact destination host is validated. Provider-returned routing fields are
-not authorities: credentialed process, read-only, and private-port hosts must
-come from validated adapter configuration even when a control transport is
-injected. A public concrete client must reject
-a non-HTTPS or non-root API origin, an empty or padded API key, an invalid
-routing domain, and a zero idle timeout before it constructs its credentialed
-transport. Empty opaque provider identifiers and
-identifiers equal to `.` or `..` must fail before authenticated route
-construction. Sandbox and snapshot creation and inventory must also reject
-returned identities that their later provider routes cannot use. For E2B, a
-sandbox ID must fit the lowercase DNS label used for envd. An accepted mutation
-remains delivery-ambiguous, while an invalid inventory row is provider
-unavailability. Snapshot inspection must reject a returned provider ID that
-differs from the requested ID.
 Port zero, empty required text, oversized values, unknown profiles, invalid or
 unsupported network policies, and allowlist conflicts with deployment denies
-fail before provider dispatch. A
-direct, streaming, or stateless process command cannot be empty, and its command and
-arguments total at most 128 KiB. Each direct stream or combined stateless
-output limit is at most 64 MiB. Collected direct, stateless read-only, and
-non-streaming process-transport durations are at most 300 seconds. Streaming
-execution instead accepts up to 3,600 seconds and requires a nonzero idle
-timeout no greater than the deadline. A terminal output long poll
-is at most 30 seconds. A terminal create or recovery request cannot set its
-provider transcript limit above the shared 256 MiB regular-file ceiling.
-Resumable sandboxes must stay available through accepted streaming deadlines;
-one-shot sandboxes retain their original destruction deadline. These
-bounds must be checked before acquiring provider sandbox access, and absolute
-deadlines must use checked arithmetic so no caller duration can panic. In
-particular, an
-oversized replacement write must fail before connecting to or resuming its
-sandbox.
+fail before provider dispatch. Bounds must be checked before provider access.
+Absolute deadlines use checked arithmetic so caller durations cannot panic.
 
-`SandboxBackend::stream_process` and the matching trusted-service method return
-a boxed stream after validation and sandbox access succeed, or a single
-`DeadlineExpired` outcome if connection consumes the budget. The service
-request identifies an owned sandbox; the backend uses its provider reference.
-`StreamProcessRequest` and `BackendStreamProcessRequest` carry argv, optional
-`cwd: Option<String>`, `envs: BTreeMap<String, String>`, separate output limits,
-an absolute deadline, and an idle timeout. Their execution context uses the
-same validation as collected runs. Backends must call
-`validate_execution_context()` first, then validate argv, output limits,
-deadline, and idle timeout, all before provider access.
-Events are ordered as `Started { pid }`, zero or more `Stdout(bytes)`
-or `Stderr(bytes)`, `Exited { exit_code, exited }`, then exactly one final
-`Outcome` followed by EOF. Before start, failure may emit only an outcome.
-Signal termination reports `exited: false`; `Completed` requires a provider
-success trailer and HTTP EOF, not a successful command exit. Missing or failed
-trailers, invalid ordering, malformed frames, bytes after the trailer, or timer
-expiry after `Exited` produces `TransportFailure`. Stdout and stderr overflow
-are distinct and emit only the bounded prefix. Silence before `Started` expires
-with `IdleTimeout`; EOF without a trailer still produces `TransportFailure`.
-The absolute budget begins before sandbox connection. The idle timer starts
-before the process transport opens and resets only on fresh stdout or stderr
-arrivals, never start, keep-alive, exit, or delayed consumer delivery. Coalesced
-HTTP fragments use their receipt time. The provider reader stages at most 32
-decoded events separately from the 16-event consumer queue; when staging is
-full it reports `ConsumerBackpressure`, so slow consumers cannot postpone timeout or
-cleanup. Overflow, backpressure, timeout, and transport failure trigger a
-bounded best-effort kill when a PID was decoded and no process end was decoded.
-Before staging or yielding, the reader records the first PID and any subsequent
-process end from each decoded batch. A failed frame ends that batch's processed
-prefix: the failure is staged, but later frames are ignored and cannot
-suppress cleanup.
-On consumer drop, a decoded but undelivered PID is still eligible for cleanup.
-If the start request may have been sent but no PID is known yet, the adapter
-keeps the pending open and reader alive for at most three seconds after the
-drop, never beyond the absolute deadline, to learn a PID before killing. The
-ordinary idle timer does not cut short this bounded cleanup grace. If none
-arrives, it releases the provider stream without a kill; a drop before
-the open was polled makes no provider call. A decoded process end prevents a
-kill even if its event was not delivered. Queued data and any separately
-retained final overflow prefix precede the terminal outcome; cleanup does
-not wait for consumer capacity.
-Trusted collected and streaming direct-process callers may select an optional
-working directory and environment map. Absent cwd and an empty map preserve
-the provider's existing default context. A working directory must be absolute,
-at most 4,096 UTF-8 bytes, and contain no NUL or control character. Environment
-names must match
-`[A-Za-z_][A-Za-z0-9_]*`; values may contain arbitrary UTF-8 except NUL. A map
-contains at most 256 entries and at most 64 KiB across the UTF-8 bytes of every
-name and value. `PATH`, `HOME`, every `LD_*` name, and every `DYLD_*` name are
-template-owned and cannot be overridden. The same interface-owned validation
-must run before provider access. Stateless read-only execution retains its
-required explicit working directory and does not accept an environment map.
-Helper processes may report success only after a normal exit; an exit-code
-field accompanying signal termination is not a successful completion.
-Trusted interpreter helpers must ignore caller-controlled module search paths,
-startup customization, and working-directory modules. User files and inherited
-language environment settings must not run code before the helper's own logic.
-Each provider process start event and process inventory row must contain a
-nonzero operating-system PID. Each process-data event must contain exactly one
-of PTY, stdout, or stderr output; an event with no channel or multiple channels
-is malformed.
-Inherited credential or drive helpers must be stopped with bounded escalation,
-and maintenance or image preparation fails unless their exit is confirmed.
-Provider-owned image verification, scrub, and measurement must not load a
-user-controlled login profile before executing; such a profile could otherwise
-skip a safety command or forge its result. Image-size traversal and I/O errors
-must fail the measurement rather than return a partial total. Measurement may
-use a trusted process identity when adapter-private storage is intentionally
-inaccessible to the workload; user-authored setup and verification remain on
-the configured workload identity. Image cache cleanup must open every parent
-without following symlinks and fail if an intermediate component is a symlink;
-child symlinks may be unlinked but their targets must never be traversed.
-Provider terminal storage creation and restored cleanup must traverse absolute
-paths through non-following directory descriptors. An intermediate symlink
-must fail closed without creating or removing anything through its target.
-File roots and relative paths must pass lexical shape and byte-length checks
-before an adapter acquires provider access.
+Capability-specific requirements remain mandatory for files, processes,
+terminals, screens, snapshots, and image preparation. Provider credentials,
+route validation, exact acknowledgments, and diagnostic privacy follow the
+[transport and diagnostics contract](sandbox-transport-safety.md).
 
-Terminal input and close operations must select the durable terminal identity
-atomically in the provider mutation. A separate list-then-mutate check is not a
-sufficient identity fence because a numeric process ID can be reused between
-the two calls. A successful transport status is not enough to prove terminal
-input delivery: the provider's typed acknowledgment must be exactly the
-expected empty object. Unknown fields or malformed JSON remain
-delivery-ambiguous. The same identity rule
-applies when killing terminals inherited by a restored sandbox. Provider-side
-transcripts enforce the requested byte count exactly, including limits that
-are smaller than or not aligned to 1 KiB, while the accepted limit stays within
-the shared 256 MiB reader ceiling. The
-provider must create, retain, and read the transcript as a trusted identity in
-storage inaccessible to the workload. A tagged trusted supervisor keeps the
-storage descriptor, clips bytes from a private recorder pipe, drains overflow,
-and waits for recorder exit. The recorder's child closes every private
-descriptor, drops to a validated non-root workload identity, and only then
-starts the interactive login shell. Reads must derive and verify the same
-terminal-owned path before provider access. Process discovery, input, and
-shutdown must use the trusted supervisor identity as well. Transcript capture
-starts before that shell, so login-profile output and exits remain captured
-without allowing the shell to replace, truncate, or forge the stored
-transcript.
-
-Before the interactive shell can run or exit, the provider must durably record
-the terminal's provider identity, consumer terminal ID, create-operation ID,
-and atomic process selector in the same trusted storage class as the
-transcript. Create and recovery must securely initialize that storage before
-attempting an identity read. The final record name must remain absent while
-its private inode is written and synced, then be published atomically without
-replacing another record and followed by a directory sync. Recovery validates
-that versioned record against the original request. If the process has already
-disappeared, recovery and inspection return the recorded provider reference and
-`Exited`; they never allocate a
-replacement. Unknown record versions, malformed records, identity conflicts,
-and duplicate selectors fail closed. A live legacy terminal without a record
-remains discoverable by its exact selector, but an exited legacy terminal has
-no recoverable provider identity. Input rejects an exited terminal. Explicit
-close stays idempotent and retains its identity record so final transcript
-bytes remain readable; restored-sandbox cleanup removes all retained terminal
-identity state.
-Inspection and output reads must share the same record-aware identity
-resolution. They validate any present record even while its exact process is
-live, and use selector-only compatibility only when no record exists. If an
-unrelated process reuses an exited terminal's numeric PID, the trusted record
-proves the original terminal is `Exited` and its retained transcript remains
-readable. A conflicting process using the expected terminal tag still fails
-closed. Only a typed missing-file result may enable the legacy fallback;
-provider-level terminal absence and every other read error must propagate.
-During bounded output polling, the identity helper receives an absolute
-completion deadline earlier than the outer deadline. The provider transport
-derives its execution cutoff by reserving the full termination window, and the
-remaining gap lets the completed helper result return to the caller.
-
-Sandbox create access is valid only when the provider returns both a nonblank
-process credential and a nonblank private-traffic credential. An accepted
-create with unusable credentials remains delivery-ambiguous. Ordinary connect
-requires the same credentials and maps missing values to retryable provider
-unavailability. Read-only access is valid when the provider returns a nonblank
-call-local process credential for an already-running sandbox whose automatic
-resume is disabled. This read path may omit a private-traffic credential; an
-operation that requires that credential must fail instead of mutating a
-one-shot sandbox's timeout. A missing or blank process credential is retryable
-provider unavailability and must not be sent to the provider process endpoint.
-
-Screen viewport width is `320..=3840`, height is `240..=2160`, and the product
-must not exceed 8,294,400 pixels. Resize success requires an exact
-version, width, and height acknowledgment with no extra fields, plus a confirmed
-normal helper exit. An adapter that cannot confirm resize process termination
-returns `ScreenViewportResizeUnconfirmed`; the caller must retain its session
-fence and arrange cleanup.
-
-[Process diagnostics](process-diagnostics.md) define the boundary between
-sensitive process data and automatic diagnostics. Process, terminal, and
-file-write request `Debug`, tracing, and handled image errors expose selected
-metadata only. They omit caller-controlled command text, paths, environment
-entries, input, and output
-contents instead of matching known secrets. Image failures retain exit and
-capture facts without output snippets; nested provider references hide their
-contents in `Debug`. Environment validation reports typed reasons without
-echoing a name or value. Unknown profile errors do not echo an untrusted name.
-Raw stdout/stderr, PTY output, and saved terminal transcripts remain unmasked
-within their existing bounds. Their explicit data access and transcript
-serialization must preserve content, even when it contains a secret.
-`WriteFileRequest` formats only its lifecycle operation ID, owner, sandbox ID,
-and input byte count. `BackendWriteFileRequest` formats only the input byte
-count. Neither includes the root, path, contents, or provider reference;
-explicit request fields and written bytes remain exact. File-read results
-are outside this file-write diagnostic guarantee.
-
-## Conformance
-
-The public `sandbox_interface::conformance::exercise_backend` harness checks
-shared lifecycle, recovery, process, ingress, image, and terminal guarantees.
-It includes `exercise_one_shot_lifetime`, which creates, recovers, explicitly
-destroys, and idempotently cleans up a bounded one-shot sandbox.
-The process probe runs one `/bin/sh` command with `/workspace` as its working
-directory and one `SANDBOX_PROBE` entry. It checks the exact `pwd` and
-environment bytes on stdout plus an independent deterministic token on stderr,
-so conforming images need a standard shell but no harness-only executable.
-The streaming probe selects cwd `/workspace` and
-`SANDBOX_PROBE=stream-environment-map`, then runs `/bin/sh -c` with
-`pwd; printf '%s' "$SANDBOX_PROBE"; printf '%s' 'stream-stderr' >&2`.
-It requires stdout `/workspace\nstream-environment-map` and stderr
-`stream-stderr`, a nonzero PID, output before exit, a completed outcome after
-exit, and no event after the outcome. Its environment value differs from the
-collected probe's `environment-map`, so reused collected context cannot pass.
-
-The separate `exercise_network_allowlist` capability probe applies only to
-adapters that support domain destinations. It creates a sandbox that permits
-only `example.com`, uses `/bin/sh -c` and `curl` to require an application
-response from that host, and requires a fetch from a different host to exit
-unsuccessfully. Both curl commands put `--disable` first so user or system
-startup configuration cannot redirect a request or fabricate a policy result.
-The probe also proves that recovery rejects a different policy.
-The main harness retains the exact request for every sandbox and snapshot
-create before dispatch. After every create result, including synchronous
-success, it proves the correlated provider identity through recover-only
-polling; it never redispatches creation. A pending recovery waits one second
-before the next poll, with no more than 60 waits.
-
-Each returned terminal, snapshot, or sandbox is recorded before later work can
-fail. Final cleanup attempts every tracked resource in dependency order and
-continues after individual cleanup errors. Requests still awaiting an identity
-receive one final recovery attempt so a newly visible resource can be tracked
-and removed. If the conformance operation already failed, that primary error
-is preserved; cleanup failures are returned only when the operation itself
-succeeded. Preparation errors may omit a retained-source diagnostic; when one
-is present, the harness requires it to identify the known source. Every
-provider adapter should run the harness in addition to its own edge-case and
-transport tests.
+Adapters run the applicable [conformance probes](sandbox-conformance.md).
+A provider needs no unsupported capability to run a supported probe.

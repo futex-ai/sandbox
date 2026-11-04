@@ -29,6 +29,10 @@ pub(crate) enum Error {
     SmokeConfig {
         source: sandbox_e2b::E2bAdapterError,
     },
+    #[error("[xtask/smoke] Boat configuration construction failed: {source}")]
+    SmokeBoatConfig {
+        source: sandbox_boat::BoatAdapterError,
+    },
     #[error("[xtask/smoke] interface value or E2B backend construction failed: {source}")]
     SmokeBackend { source: sandbox_interface::Error },
     #[error("[xtask/review] failed to start `{command}` during {stage}: {source}")]

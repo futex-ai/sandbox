@@ -1,5 +1,6 @@
 //! Provider-neutral E2B backend composition and dispatch.
 
+mod capabilities;
 pub(crate) mod configured;
 mod files;
 mod image_cache_cleanup;
@@ -29,6 +30,10 @@ mod backend_tests;
 #[cfg(test)]
 #[path = "_tests_/sandbox_create_tests.rs"]
 mod sandbox_create_tests;
+
+#[cfg(test)]
+#[path = "_tests_/sandbox_capacity_tests.rs"]
+mod sandbox_capacity_tests;
 
 #[cfg(test)]
 #[path = "_tests_/sandbox_network_policy_tests.rs"]

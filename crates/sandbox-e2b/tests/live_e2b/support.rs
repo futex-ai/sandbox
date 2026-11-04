@@ -12,8 +12,8 @@ use sandbox_e2b::{E2bAdapterConfig, E2bProfile, E2bSandboxBackend};
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendOutputRequest,
     BackendSandbox, BackendSnapshotRecovery, BackendTerminal, BackendTerminalCreateRequest,
-    Error as SandboxError, OperationId, ProviderRef, ResourceOwner, SandboxBackend,
-    SandboxConsumer, SandboxId, TerminalId,
+    Error as SandboxError, OperationId, ProviderRef, ResourceOwner, SandboxConsumer, SandboxId,
+    SandboxLifecycle, SandboxSnapshots, SandboxTerminals, TerminalId,
 };
 
 const LOG_LIMIT: usize = 2 * 1024 * 1024;
@@ -190,6 +190,7 @@ pub(super) fn sandbox_request(
     snapshot_provider_ref: Option<ProviderRef>,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         network: sandbox_interface::SandboxNetworkPolicy::Open,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),

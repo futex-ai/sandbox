@@ -6,9 +6,23 @@ mod backend;
 mod backend_files;
 mod backend_images;
 mod backend_terminal;
+mod capability_account_capacity;
+mod capability_files;
+mod capability_image_preparation;
+mod capability_lifecycle;
+mod capability_port_ingress;
+mod capability_processes;
+mod capability_resumable_lifecycle;
+mod capability_screens;
+mod capability_snapshots;
+mod capability_terminals;
+mod capacity;
 pub mod conformance;
+mod conformance_files;
 mod conformance_image;
 mod conformance_network;
+mod conformance_probes;
+mod conformance_process;
 mod conformance_process_stream;
 mod conformance_resources;
 mod constants;
@@ -30,13 +44,13 @@ mod registry;
 mod requests;
 mod screen_stack;
 mod service;
+mod start_refusal;
 mod states;
 
 pub use self::backend::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInspectSnapshotRequest,
     BackendManagedSandbox, BackendSandbox, BackendSnapshot, BackendSnapshotCreateOutcome,
-    BackendSnapshotInventory, BackendSnapshotRecovery, DynSandboxBackend, SandboxBackend,
-    SandboxBackendMock,
+    BackendSnapshotInventory, BackendSnapshotRecovery,
 };
 pub use self::backend_files::{
     BackendFileContent, BackendReadFileRequest, BackendWriteFileRequest,
@@ -45,6 +59,24 @@ pub use self::backend_images::{BackendPrepareImageRequest, BackendPreparedImage}
 pub use self::backend_terminal::{
     BackendInputRequest, BackendOutputRequest, BackendTerminal, BackendTerminalCreateRequest,
     BackendTerminalOutput, TERMINAL_OUTPUT_MAX_WAIT,
+};
+pub use self::capability_account_capacity::{SandboxAccountCapacity, SandboxAccountCapacityMock};
+pub use self::capability_files::{SandboxFiles, SandboxFilesMock};
+pub use self::capability_image_preparation::{
+    SandboxImagePreparation, SandboxImagePreparationMock,
+};
+pub use self::capability_lifecycle::{SandboxLifecycle, SandboxLifecycleMock};
+pub use self::capability_port_ingress::{SandboxPortIngress, SandboxPortIngressMock};
+pub use self::capability_processes::{SandboxProcesses, SandboxProcessesMock};
+pub use self::capability_resumable_lifecycle::{
+    SandboxResumableLifecycle, SandboxResumableLifecycleMock,
+};
+pub use self::capability_screens::{SandboxScreens, SandboxScreensMock};
+pub use self::capability_snapshots::{SandboxSnapshots, SandboxSnapshotsMock};
+pub use self::capability_terminals::{SandboxTerminals, SandboxTerminalsMock};
+pub use self::capacity::{
+    ExactDecimal, ResourceAmount, ResourceUnit, SandboxPrice, SandboxPriceUnit, SandboxResources,
+    SandboxSizeOffer, SandboxSizeSelection,
 };
 pub use self::constants::{
     FILE_TRANSFER_MAX_BYTES, FILE_TRANSFER_PATH_MAX_BYTES, IMAGE_COMMAND_OUTPUT_MAX_BYTES,
@@ -59,7 +91,7 @@ pub use self::error::{Error, Result};
 pub use self::error_kinds::{QuotaKind, ResourceKind};
 pub use self::ids::{ActionId, OperationId, SandboxId, SnapshotId, TerminalId};
 pub use self::image_command_failure::ImageCommandFailure;
-pub use self::lifetime::{SANDBOX_ONE_SHOT_MAX_LIFETIME, SandboxLifetime};
+pub use self::lifetime::SandboxLifetime;
 pub use self::network::{
     EGRESS_DESTINATION_MAX_ITEMS, EGRESS_DOMAIN_MAX_BYTES, EgressDestination, SandboxNetworkPolicy,
 };
@@ -81,9 +113,7 @@ pub use self::read_only::{
     ReadOnlyExecOutput, ReadOnlyExecRequest, ReadOnlyFileOutput, ReadOnlyFileRequest,
     ReadOnlySandbox, SandboxReadOnly, SandboxReadOnlyMock,
 };
-pub use self::registry::{
-    DynSandboxBackendRegistry, SandboxBackendRegistry, SandboxBackendRegistryMock,
-};
+pub use self::registry::{SandboxRegistry, SandboxRegistryMock};
 pub use self::requests::{
     AdoptSandboxRequest, CloseTerminalRequest, CreateSandboxRequest, CreateSnapshotRequest,
     CreateTerminalRequest, DeleteSnapshotRequest, DestroySandboxRequest, ExecuteTerminalRequest,
@@ -99,6 +129,10 @@ pub use self::screen_stack::{
     ScreenStackCapabilities, ScreenStackOutcome, ScreenViewportSize,
 };
 pub use self::service::{DynSandboxService, SandboxService, SandboxServiceMock};
+pub use self::start_refusal::{
+    BillingRefusalReason, PlanSizeRefusalReason, SandboxStartRefusal, SandboxStartRetry,
+    TemporaryStartRefusalReason,
+};
 pub use self::states::{
     CleanupState, SandboxState, SnapshotState, TerminalActionKind, TerminalActionState,
     TerminalState,

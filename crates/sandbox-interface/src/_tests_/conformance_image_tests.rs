@@ -2,34 +2,36 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    BackendPreparedImage, BackendSandbox, Error, ProviderRef, SandboxBackendMock, SandboxState,
-};
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
+
+use crate::{
+    BackendPreparedImage, BackendSandbox, Error, ProviderRef, SandboxImagePreparationMock,
+    SandboxLifecycleMock, SandboxSnapshotsMock, SandboxState,
+};
 
 use super::{exercise, exercise_failed_preparation};
 
 #[tokio::test]
 async fn preparation_transport_failure_cleans_the_created_source() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("prepared-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .returns(Ok(())),
     ));
 
-    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+    let result = exercise(&backend, &backend, &backend, "test", Uuid::now_v7()).await;
 
     assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
 }
@@ -37,24 +39,24 @@ async fn preparation_transport_failure_cleans_the_created_source() {
 #[tokio::test]
 async fn invalid_prepared_image_cleans_the_created_source() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("prepared-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Ok(BackendPreparedImage {
                 source_provider_ref: ProviderRef::new("different-source"),
                 size_bytes: 4096,
             })),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .returns(Ok(())),
     ));
 
-    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+    let result = exercise(&backend, &backend, &backend, "test", Uuid::now_v7()).await;
 
     assert!(matches!(result, Err(Error::Internal(_))));
 }
@@ -62,29 +64,29 @@ async fn invalid_prepared_image_cleans_the_created_source() {
 #[tokio::test]
 async fn snapshot_inventory_failure_cleans_the_created_source() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("prepared-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Ok(BackendPreparedImage {
                 source_provider_ref: ProviderRef::new("prepared-source"),
                 size_bytes: 4096,
             })),
-        SandboxBackendMock::snapshot_inventory
+        SandboxSnapshotsMock::snapshot_inventory
             .next_call(matching!(_, _))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .returns(Ok(())),
     ));
 
-    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+    let result = exercise(&backend, &backend, &backend, "test", Uuid::now_v7()).await;
 
     assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
 }
@@ -93,7 +95,7 @@ async fn snapshot_inventory_failure_cleans_the_created_source() {
 async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
     let dispatched = Arc::new(Mutex::new(None));
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .answers_arc({
                 let dispatched = dispatched.clone();
@@ -104,7 +106,7 @@ async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
                     })
                 })
             }),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .answers_arc({
                 let dispatched = dispatched.clone();
@@ -116,12 +118,12 @@ async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
                     Ok(Some(sandbox("recovered-source")))
                 })
             }),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .answers(&|_, provider_ref| {
                 assert_eq!(provider_ref, ProviderRef::new("recovered-source"));
@@ -129,7 +131,7 @@ async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
             }),
     ));
 
-    let result = exercise(&backend, "test", Uuid::now_v7()).await;
+    let result = exercise(&backend, &backend, &backend, "test", Uuid::now_v7()).await;
 
     assert!(matches!(result, Err(Error::BackendUnavailable { .. })));
 }
@@ -137,21 +139,21 @@ async fn uncertain_source_creation_recovers_the_exact_request_before_cleanup() {
 #[tokio::test]
 async fn intentional_failure_source_creation_recovers_before_preparation() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("failed-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::ImageSetupFailed {
                 command: None,
                 retained_sandbox: None,
             })),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .answers(&|_, provider_ref| {
                 assert_eq!(provider_ref, ProviderRef::new("failed-source"));
@@ -159,7 +161,7 @@ async fn intentional_failure_source_creation_recovers_before_preparation() {
             }),
     ));
 
-    exercise_failed_preparation(&backend, "test", Uuid::now_v7())
+    exercise_failed_preparation(&backend, &backend, "test", Uuid::now_v7())
         .await
         .expect("the recovered source should exercise and clean the expected failure");
 }

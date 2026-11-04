@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::{
     BackendCreateSandboxRequest, BackendSandbox, Error, OperationId, ProviderRef, ResourceOwner,
-    SandboxBackendMock, SandboxConsumer, SandboxId, SandboxNetworkPolicy, SandboxState,
+    SandboxConsumer, SandboxId, SandboxLifecycleMock, SandboxNetworkPolicy, SandboxState,
 };
 
 use crate::conformance_resources::{ConformanceResources, RecoverySleeperMock, finish};
@@ -16,18 +16,18 @@ use crate::conformance_resources::{ConformanceResources, RecoverySleeperMock, fi
 async fn uncertain_source_creation_uses_paced_recover_only_polling() {
     let request = sandbox_request();
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "test".to_owned(),
             })),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(None)),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(None)),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox()))),
     ));
@@ -40,9 +40,9 @@ async fn uncertain_source_creation_uses_paced_recover_only_polling() {
             .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
     ));
 
-    let mut resources = ConformanceResources::new(&backend, &sleeper);
+    let mut resources = ConformanceResources::new(&sleeper);
     let recovered = resources
-        .create_sandbox(request)
+        .create_sandbox(&backend, request)
         .await
         .expect("sandbox should recover after paced retries");
 
@@ -52,20 +52,20 @@ async fn uncertain_source_creation_uses_paced_recover_only_polling() {
 #[tokio::test]
 async fn cleanup_recovers_a_request_left_pending_by_a_recovery_error() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "create".to_owned(),
             })),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Err(Error::BackendUnavailable {
                 backend_id: "recover".to_owned(),
             })),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox()))),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .answers(&|_, provider_ref| {
                 assert_eq!(provider_ref, ProviderRef::new("recovered-source"));
@@ -73,9 +73,9 @@ async fn cleanup_recovers_a_request_left_pending_by_a_recovery_error() {
             }),
     ));
     let sleeper = Unimock::new(());
-    let mut resources = ConformanceResources::new(&backend, &sleeper);
+    let mut resources = ConformanceResources::new(&sleeper);
 
-    let outcome = resources.create_sandbox(sandbox_request()).await;
+    let outcome = resources.create_sandbox(&backend, sandbox_request()).await;
     let cleanup = resources.cleanup().await;
 
     assert!(matches!(outcome, Err(Error::BackendUnavailable { .. })));
@@ -96,6 +96,7 @@ fn operation_error_is_preserved_when_cleanup_also_fails() {
 
 fn sandbox_request() -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(Uuid::now_v7()),

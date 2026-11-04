@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
     BackendReadFileRequest, BackendWriteFileRequest, Error, FILE_TRANSFER_MAX_BYTES,
-    FILE_TRANSFER_PATH_MAX_BYTES, ProviderRef, SandboxBackend as _,
+    FILE_TRANSFER_PATH_MAX_BYTES, ProviderRef, SandboxFiles as _,
 };
 use unimock::{MockFn as _, Unimock, matching};
 

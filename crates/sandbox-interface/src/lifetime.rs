@@ -1,11 +1,8 @@
-//! Typed sandbox lifetime policies and shared validation bounds.
+//! Typed sandbox lifetime policies and shared whole-second representability.
 
 use std::time::Duration;
 
 use crate::{Error, Result};
-
-/// Maximum provider-enforced lifetime accepted for a one-shot sandbox.
-pub const SANDBOX_ONE_SHOT_MAX_LIFETIME: Duration = Duration::from_secs(3600);
 
 /// Provider-neutral lifetime policy selected when a sandbox is created.
 ///
@@ -19,25 +16,27 @@ pub enum SandboxLifetime {
     IdleAutoPause,
     /// Stay running until explicitly destroyed or the provider timeout expires.
     OneShot {
-        /// Whole-second provider timeout, from one second through the shared maximum.
+        /// Positive whole-second timeout representable as `u32` seconds.
         max_lifetime: Duration,
     },
 }
 
 impl SandboxLifetime {
-    /// Validates the shared one-shot duration bound.
+    /// Validates positive whole seconds representable by provider request DTOs.
+    ///
+    /// Each adapter must also validate its own maximum before provider access.
     pub fn validate(self) -> Result<()> {
         let Self::OneShot { max_lifetime } = self else {
             return Ok(());
         };
         if max_lifetime.is_zero()
-            || max_lifetime > SANDBOX_ONE_SHOT_MAX_LIFETIME
+            || max_lifetime.as_secs() > u64::from(u32::MAX)
             || max_lifetime.subsec_nanos() != 0
         {
             return Err(Error::InvalidSeconds {
                 field: "max_lifetime",
                 minimum: 1,
-                maximum: SANDBOX_ONE_SHOT_MAX_LIFETIME.as_secs(),
+                maximum: u64::from(u32::MAX),
             });
         }
         Ok(())

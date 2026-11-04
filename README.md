@@ -5,25 +5,50 @@ adapters. The workspace keeps application code dependent on a provider-neutral
 interface while composition roots choose a concrete provider.
 
 ```text
-application -> sandbox-interface <- sandbox-e2b
+application -> sandbox-interface <- sandbox-e2b / sandbox-boat
 ```
 
 ## Workspace
 
 | Crate | Purpose |
 | --- | --- |
-| [`sandbox-interface`](crates/sandbox-interface/README.md) | Stable IDs, data types, errors, service/backend traits, mocks, and the backend conformance harness. |
+| [`sandbox-interface`](crates/sandbox-interface/README.md) | Stable IDs, data types, errors, service and capability traits, mocks, and supported capability conformance probes. |
 | [`sandbox-e2b`](crates/sandbox-e2b/README.md) | The first concrete backend, implemented with E2B control and envd APIs. |
+| [`sandbox-boat`](crates/sandbox-boat/README.md) | Boat lifecycle, saved snapshots, processes, files, and account capacity over verified HTTPS. |
+| [`sandbox-runtime-assets`](crates/sandbox-runtime-assets/README.md) | Internal trusted file-writer and reconciliation assets shared by adapters. |
 | [`xtask`](xtask/README.md) | Repeatable formatting, linting, test, smoke, file-length, and review commands. |
 
 Consumers should depend on `sandbox-interface`. Only the process that selects
-and constructs providers should also depend on `sandbox-e2b`. This keeps E2B
+and constructs providers should also depend on the selected provider crate. This keeps provider
 credentials, payloads, access tokens, and errors out of higher-level services.
+The independent provider traits are `SandboxLifecycle`,
+`SandboxResumableLifecycle`, `SandboxSnapshots`, `SandboxImagePreparation`,
+`SandboxProcesses`, `SandboxFiles`, `SandboxTerminals`, `SandboxPortIngress`,
+`SandboxScreens`, and `SandboxAccountCapacity`. A provider implements only its supported capabilities.
+Consumers receive explicit `Arc<dyn Capability>` dependencies.
+`SandboxRegistry` resolves each capability by stable backend ID and returns
+`None` for an optional unsupported capability.
 Sandbox create requests carry their runtime-or-browser consumer class and typed
 lifetime through provider metadata. Interactive sandboxes keep idle auto-pause;
 bounded one-shot sandboxes remain running until explicit destroy or their
-maximum 3600-second provider timeout and are never resumed. Managed inventory
+provider timeout and are never resumed. Shared durations accept six hours.
+E2B keeps its 3,600-second maximum. Boat accepts one-shot lifetimes through
+30 days, preserves six-hour requests, and reports typed trial refusals.
+Boat creates exclude account environment data and disable snapshots and
+monitoring. Its snapshot capture uses a separate caller-owned capture-enabled
+source. Its account capacity filters the published catalogue through `/limits`.
+Boat exposes lifecycle, snapshots, processes, files, and capacity. Its trusted
+controller and restricted workload use separate operating-system identities.
+Detached HTTPS attach preserves exact binary output through private manifests
+and authenticated frames. Native file calls transfer protected chunks.
+Trusted helpers perform final descriptor-bound file operations. Managed inventory
 returns recognized metadata and leaves missing or malformed values unknown.
+Creates can select a provider size or minimum vCPU, memory, and disk amounts.
+Absent selection keeps existing profile behavior. E2B rejects explicit sizing.
+Optional account capacity reports eligible sizes and exact hourly prices.
+It reserves no capacity. The create result decides whether a start succeeded.
+Typed start refusals distinguish temporary, plan-size, billing, and trial
+lifetime restrictions. Temporary refusals preserve supplied retry timing.
 Creates can also select a typed deny-by-default egress allowlist of canonical
 IP, CIDR, and DNS destinations. E2B supports the IP and CIDR forms, rejects DNS
 policies before provider access, preserves private and deployment deny ranges,
@@ -35,8 +60,11 @@ one-shot preparation, snapshot dispatch, recover-only retries, and final source
 cleanup are separate backend calls so eventual consistency cannot silently
 duplicate provider work. A source remains paused while snapshot recovery finds
 no completed result or more than one candidate; it reconnects only after the
-adapter proves exactly one completed snapshot. Both snapshot probes in the
-shared conformance harness accept immediate or asynchronous completion. The
+adapter proves exactly one completed snapshot. Snapshot probes in the shared conformance harness accept immediate or
+asynchronous completion. Independent lifecycle, one-shot, process, file, and
+snapshot probes need only their supported capability. The standalone snapshot
+probe accepts a caller-owned capture-enabled source and never destroys it.
+The complete E2B harness receives explicit `BackendConformance` references. The
 harness retains every sandbox and snapshot create request before dispatch,
 proves each returned identity through bounded one-second-paced recovery, and
 runs its cwd, environment, and collected and streaming split-output checks
@@ -141,7 +169,8 @@ cargo xtask rust-file-length-lint --all
 cargo xtask smoke-test
 ```
 
-None of these commands contacts E2B. GitHub Actions runs the same deterministic
+None of these commands contacts Boat or E2B. Boat integration tests use a local
+TLS fake server with the production HTTPS client. GitHub Actions runs the same deterministic
 checks without provider secrets. Without `--all`, the file-length command
 checks branch, staged, unstaged, and untracked Rust files; `cargo xtask check`
 and the explicit `--all` form audit the complete workspace.
@@ -187,7 +216,8 @@ are not changed automatically.
 
 ## Provenance
 
-The two library crates were extracted from Juno commit
+The original `sandbox-interface` and `sandbox-e2b` library crates were extracted
+from Juno commit
 `64e6dd1c1fcc0d44c73fa1b31879cb4ba80448c6`. Workspace layout and automation
 were adapted from the standalone AI shared-library repository at commit
 `35da3dd9f5b7316bcfbdfa99c665e406220ffaec`.
@@ -207,6 +237,9 @@ copy application orchestration or provider template infrastructure.
   protocol.
 - [`docs/e2b-adapter.md`](docs/e2b-adapter.md) documents adapter guarantees and
   configuration.
+- [`crates/sandbox-boat/README.md`](crates/sandbox-boat/README.md) documents the
+  supported Boat capabilities, trusted runtime, and construction.
+- [`docs/boat-adapter.md`](docs/boat-adapter.md) defines Boat's adapter contract.
 - [`docs/process-diagnostics.md`](docs/process-diagnostics.md) separates exact
   sensitive process data from metadata-only diagnostics.
 - [`docs/juno-adoption.md`](docs/juno-adoption.md) describes the separate

@@ -3,8 +3,8 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendCreateSandboxRequest, Error, OperationId, ResourceOwner, SANDBOX_ONE_SHOT_MAX_LIFETIME,
-    SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy,
+    BackendCreateSandboxRequest, Error, OperationId, ResourceOwner, SandboxConsumer, SandboxId,
+    SandboxLifecycle, SandboxLifetime, SandboxNetworkPolicy,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -59,10 +59,7 @@ async fn invalid_one_shot_bounds_are_rejected_before_create_provider_access() {
         Arc::new(Unimock::new(())),
     );
 
-    for max_lifetime in [
-        Duration::ZERO,
-        SANDBOX_ONE_SHOT_MAX_LIFETIME + Duration::from_secs(1),
-    ] {
+    for max_lifetime in [Duration::ZERO, Duration::from_secs(3601)] {
         let result = backend
             .create_sandbox(request(
                 "general",
@@ -95,7 +92,7 @@ async fn recovery_revalidates_one_shot_lifetime_before_provider_access() {
             "general",
             SandboxConsumer::Runtime,
             SandboxLifetime::OneShot {
-                max_lifetime: SANDBOX_ONE_SHOT_MAX_LIFETIME + Duration::from_secs(1),
+                max_lifetime: Duration::from_secs(3601),
             },
         ))
         .await;
@@ -189,6 +186,7 @@ fn request(
     lifetime: SandboxLifetime,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),

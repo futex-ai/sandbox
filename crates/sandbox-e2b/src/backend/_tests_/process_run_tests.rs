@@ -8,7 +8,7 @@ use std::{
 
 use sandbox_interface::{
     BackendRunProcessRequest, Error, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_DEADLINE,
-    PROCESS_RUN_MAX_STREAM_BYTES, ProcessRunContextError, ProviderRef, SandboxBackend,
+    PROCESS_RUN_MAX_STREAM_BYTES, ProcessRunContextError, ProviderRef, SandboxProcesses,
 };
 use unimock::{MockFn, Unimock, matching};
 

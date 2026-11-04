@@ -5,7 +5,8 @@ use std::{collections::HashMap, sync::Arc};
 use sandbox_interface::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendPrepareImageRequest,
     BackendSnapshotInventory, BackendSnapshotRecovery, Error, OperationId, ProviderRef,
-    ResourceOwner, SandboxBackend, SandboxId, SandboxNetworkPolicy, SnapshotId,
+    ResourceOwner, SandboxId, SandboxImagePreparation, SandboxLifecycle, SandboxNetworkPolicy,
+    SandboxSnapshots, SnapshotId,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -105,6 +106,7 @@ fn prepare_request() -> BackendPrepareImageRequest {
 
 fn source_request() -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(Uuid::now_v7()),

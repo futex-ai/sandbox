@@ -2,64 +2,56 @@
 
 use std::time::Duration;
 
+use unimock::{MockFn, Unimock, matching};
+use uuid::Uuid;
+
 use crate::{
     BackendCreateSnapshotRequest, BackendPreparedImage, BackendSandbox, BackendSnapshot,
     BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery, Error,
-    OperationId, ProviderRef, RetainedSandboxRef, SandboxBackendMock, SandboxState, SnapshotId,
-    SnapshotState,
+    OperationId, ProviderRef, RetainedSandboxRef, SandboxImagePreparationMock,
+    SandboxLifecycleMock, SandboxSnapshotsMock, SandboxState, SnapshotId, SnapshotState,
 };
-use unimock::{MockFn, Unimock, matching};
-use uuid::Uuid;
 
 use super::exercise;
 use crate::conformance_resources::{ConformanceResources, RecoverySleeperMock};
 
 #[tokio::test]
 async fn in_progress_snapshot_recovers_and_optional_diagnostics_cleanup() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::InProgress, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("in-progress image snapshot should recover");
+    let backend = backend(BackendSnapshotCreateOutcome::InProgress, None);
+    exercise(&backend, &backend, &backend, "test", Uuid::now_v7())
+        .await
+        .expect("in-progress image snapshot should recover");
 }
 
 #[tokio::test]
 async fn ambiguous_snapshot_recovers_without_replaying_preparation() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("ambiguous image snapshot should recover");
+    let backend = backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None);
+    exercise(&backend, &backend, &backend, "test", Uuid::now_v7())
+        .await
+        .expect("ambiguous image snapshot should recover");
 }
 
 #[tokio::test]
 async fn omitted_retained_source_diagnostic_is_valid_and_cleanup_still_runs() {
-    exercise(
-        &backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None),
-        "test",
-        Uuid::now_v7(),
-    )
-    .await
-    .expect("the caller-known source should not require duplicate diagnostics");
+    let backend = backend(BackendSnapshotCreateOutcome::DeliveryAmbiguous, None);
+    exercise(&backend, &backend, &backend, "test", Uuid::now_v7())
+        .await
+        .expect("the caller-known source should not require duplicate diagnostics");
 }
 
 #[tokio::test]
 async fn in_progress_recovery_waits_one_second_before_each_retry() {
     let backend = Unimock::new((
-        SandboxBackendMock::create_snapshot
+        SandboxSnapshotsMock::create_snapshot
             .next_call(matching!(_))
             .returns(Ok(BackendSnapshotCreateOutcome::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
+        SandboxSnapshotsMock::recover_snapshot_create
             .next_call(matching!(_))
             .returns(Ok(BackendSnapshotRecovery::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
+        SandboxSnapshotsMock::recover_snapshot_create
             .next_call(matching!(_))
             .returns(Ok(BackendSnapshotRecovery::InProgress)),
-        SandboxBackendMock::recover_snapshot_create
+        SandboxSnapshotsMock::recover_snapshot_create
             .next_call(matching!(_))
             .returns(Ok(BackendSnapshotRecovery::Recovered(snapshot()))),
     ));
@@ -72,9 +64,9 @@ async fn in_progress_recovery_waits_one_second_before_each_retry() {
             .answers(&|_, duration| assert_eq!(duration, Duration::from_secs(1))),
     ));
 
-    let mut resources = ConformanceResources::new(&backend, &sleeper);
+    let mut resources = ConformanceResources::new(&sleeper);
     let recovered = resources
-        .create_snapshot(snapshot_request())
+        .create_snapshot(&backend, snapshot_request())
         .await
         .expect("snapshot should recover after paced retries");
 
@@ -86,47 +78,47 @@ fn backend(
     retained_sandbox: Option<RetainedSandboxRef>,
 ) -> Unimock {
     Unimock::new((
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("prepared-source"))),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("prepared-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Ok(BackendPreparedImage {
                 source_provider_ref: ProviderRef::new("prepared-source"),
                 size_bytes: 4096,
             })),
-        SandboxBackendMock::snapshot_inventory
+        SandboxSnapshotsMock::snapshot_inventory
             .next_call(matching!(_, _))
             .returns(Ok(BackendSnapshotInventory::default())),
-        SandboxBackendMock::create_snapshot
+        SandboxSnapshotsMock::create_snapshot
             .next_call(matching!(_))
             .returns(Ok(snapshot_outcome)),
-        SandboxBackendMock::recover_snapshot_create
+        SandboxSnapshotsMock::recover_snapshot_create
             .each_call(matching!(_))
             .answers(&|_, _| Ok(BackendSnapshotRecovery::Recovered(snapshot())))
             .at_least_times(0),
-        SandboxBackendMock::create_sandbox
+        SandboxLifecycleMock::create_sandbox
             .next_call(matching!(_))
             .returns(Ok(sandbox("failed-source"))),
-        SandboxBackendMock::recover_sandbox_create
+        SandboxLifecycleMock::recover_sandbox_create
             .next_call(matching!(_))
             .returns(Ok(Some(sandbox("failed-source")))),
-        SandboxBackendMock::prepare_image
+        SandboxImagePreparationMock::prepare_image
             .next_call(matching!(_))
             .returns(Err(Error::ImageSetupFailed {
                 command: None,
                 retained_sandbox,
             })),
-        SandboxBackendMock::delete_snapshot
+        SandboxSnapshotsMock::delete_snapshot
             .next_call(matching!(_))
             .returns(Ok(())),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .returns(Ok(())),
-        SandboxBackendMock::destroy_sandbox
+        SandboxLifecycleMock::destroy_sandbox
             .next_call(matching!(_))
             .returns(Ok(())),
     ))

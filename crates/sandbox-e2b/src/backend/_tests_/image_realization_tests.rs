@@ -10,7 +10,7 @@ use std::{
 
 use sandbox_interface::{
     BackendPrepareImageRequest, Error, FILE_TRANSFER_MAX_BYTES, ProviderRef, RealizeImageFileInput,
-    ResourceOwner, SandboxBackend, SandboxId,
+    ResourceOwner, SandboxId, SandboxImagePreparation, SandboxLifecycle,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;

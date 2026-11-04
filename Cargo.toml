@@ -2,6 +2,8 @@
 members = [
     "crates/sandbox-interface",
     "crates/sandbox-e2b",
+    "crates/sandbox-boat",
+    "crates/sandbox-runtime-assets",
     "xtask",
 ]
 resolver = "2"
@@ -15,4 +17,6 @@ authors = ["Futex"]
 [workspace.dependencies]
 internal-error = { version = "0.1.0", git = "https://github.com/futex-ai/internal-error.git", rev = "6477922a1c4db8c3e35189af69f0147464004b99", package = "internal-error" }
 sandbox-e2b = { version = "0.2.0", path = "crates/sandbox-e2b" }
+sandbox-boat = { version = "0.2.0", path = "crates/sandbox-boat" }
 sandbox-interface = { version = "0.2.0", path = "crates/sandbox-interface" }
+sandbox-runtime-assets = { path = "crates/sandbox-runtime-assets" }

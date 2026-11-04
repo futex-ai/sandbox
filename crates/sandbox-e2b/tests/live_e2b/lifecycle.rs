@@ -5,7 +5,8 @@ use std::io;
 use sandbox_e2b::{E2bAdapterConfig, E2bSandboxBackend};
 use sandbox_interface::{
     BackendCreateSnapshotRequest, BackendInputRequest, BackendSnapshotCreateOutcome,
-    BackendTerminal, OperationId, ProviderRef, ResourceOwner, SandboxBackend, SnapshotId,
+    BackendTerminal, OperationId, ProviderRef, ResourceOwner, SandboxResumableLifecycle,
+    SandboxSnapshots, SandboxTerminals, SnapshotId,
 };
 
 use super::support::{

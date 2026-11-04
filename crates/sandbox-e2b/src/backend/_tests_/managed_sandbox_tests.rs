@@ -3,7 +3,7 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    OperationId, SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxState,
+    OperationId, SandboxConsumer, SandboxId, SandboxLifecycle, SandboxLifetime, SandboxState,
 };
 use unimock::{MockFn, Unimock, matching};
 

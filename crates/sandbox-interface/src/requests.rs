@@ -2,7 +2,7 @@
 
 use crate::{
     ActionId, OperationId, ResourceOwner, SandboxConsumer, SandboxId, SandboxLifetime,
-    SandboxNetworkPolicy, SnapshotId, TerminalId,
+    SandboxNetworkPolicy, SandboxSizeSelection, SnapshotId, TerminalId,
 };
 
 /// Parent source for one workspace-platform image realization.
@@ -53,6 +53,8 @@ pub struct CreateSandboxRequest {
     pub consumer: SandboxConsumer,
     /// Lifetime policy; defaults to idle auto-pause when the caller does not override it.
     pub lifetime: SandboxLifetime,
+    /// Optional provider size or minimum resources; absence preserves profile behavior.
+    pub size: Option<SandboxSizeSelection>,
     /// Typed per-session network policy validated before provider dispatch.
     pub network: SandboxNetworkPolicy,
     /// Optional deployment-owned logical profile.

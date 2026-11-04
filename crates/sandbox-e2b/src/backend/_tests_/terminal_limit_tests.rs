@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
     BackendTerminalCreateRequest, Error, FILE_TRANSFER_MAX_BYTES, OperationId, ProviderRef,
-    SandboxBackend, TerminalId,
+    SandboxTerminals, TerminalId,
 };
 use unimock::Unimock;
 

@@ -6,6 +6,7 @@ mod helpers;
 mod http;
 mod pagination;
 mod request;
+mod sandbox_access;
 mod types;
 
 pub use self::api::{DynE2bControlApi, E2bControlApi, E2bControlApiMock};

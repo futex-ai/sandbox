@@ -9,7 +9,7 @@ use std::{
 use futures_util::{StreamExt, stream};
 use sandbox_interface::{
     BackendStreamProcessRequest, Error, PROCESS_RUN_MAX_STREAM_BYTES, ProcessRunContextError,
-    ProcessStreamEvent, ProcessStreamOutcome, ProviderRef, SandboxBackend,
+    ProcessStreamEvent, ProcessStreamOutcome, ProviderRef, SandboxProcesses,
 };
 use unimock::{MockFn, Unimock, matching};
 

@@ -2,7 +2,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use sandbox_interface::{Error, SandboxBackend, ScreenStackCapabilities, ScreenStackOutcome};
+use sandbox_interface::{Error, SandboxScreens, ScreenStackCapabilities, ScreenStackOutcome};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::backend::configured::E2bSandboxBackend;

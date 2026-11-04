@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
     BackendReadOnlyExecRequest, Error, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_STREAM_BYTES,
-    ProviderRef, SandboxBackend,
+    ProviderRef, SandboxProcesses,
 };
 use unimock::{MockFn as _, Unimock, matching};
 
