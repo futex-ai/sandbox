@@ -6,14 +6,14 @@ use futures_util::StreamExt;
 
 use crate::{
     BackendStreamProcessRequest, Error, ProcessStreamEvent, ProcessStreamOutcome, ProviderRef,
-    Result, SandboxBackend,
+    Result, SandboxProcesses,
 };
 
 const STREAM_PROCESS_SCRIPT: &str =
     "pwd; printf '%s' \"$SANDBOX_PROBE\"; printf '%s' 'stream-stderr' >&2";
 
 pub(crate) async fn exercise(
-    backend: &dyn SandboxBackend,
+    backend: &dyn SandboxProcesses,
     sandbox_provider_ref: ProviderRef,
 ) -> Result<()> {
     let mut stream = backend

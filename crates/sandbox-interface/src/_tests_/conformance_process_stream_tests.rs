@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use futures_util::stream;
 use unimock::{MockFn, Unimock, matching};
 
-use crate::{Error, ProcessStreamEvent, ProcessStreamOutcome, ProviderRef, SandboxBackendMock};
+use crate::{Error, ProcessStreamEvent, ProcessStreamOutcome, ProviderRef, SandboxProcessesMock};
 
 use super::exercise;
 
@@ -28,7 +28,7 @@ async fn backend_ignoring_streaming_context_fails_the_probe() {
 
 fn backend(stdout: &'static [u8]) -> Unimock {
     Unimock::new(
-        SandboxBackendMock::stream_process
+        SandboxProcessesMock::stream_process
             .next_call(matching!(_))
             .answers_arc(Arc::new(move |_, request| {
                 assert_eq!(request.sandbox_provider_ref, ProviderRef::new("provider"));

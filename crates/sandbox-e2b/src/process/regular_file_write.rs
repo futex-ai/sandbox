@@ -16,7 +16,7 @@ use super::{
 };
 
 const WRITE_TIMEOUT: Duration = Duration::from_secs(300);
-const WRITER: &str = include_str!("helpers/regular_file_write.py");
+const WRITER: &str = sandbox_runtime_assets::REGULAR_FILE_WRITE;
 const TRUSTED_PROCESS_USER: &str = "root";
 const WRITE_STATE_ROOT: &str = "/var/lib";
 const WRITE_STATE_DIRECTORY: &str = "sandbox-e2b/write-fences";

@@ -5,8 +5,8 @@ use thiserror::Error;
 
 use crate::{
     ActionId, ImageCommandFailure, ProcessRunContextError, RetainedSandboxRef, SandboxConsumer,
-    SandboxNetworkPolicy, SandboxState, SnapshotState, TerminalActionState, TerminalId,
-    TerminalState,
+    SandboxNetworkPolicy, SandboxSizeSelection, SandboxStartRefusal, SandboxState, SnapshotState,
+    TerminalActionState, TerminalId, TerminalState,
     error_kinds::{QuotaKind, ResourceKind},
 };
 
@@ -19,6 +19,20 @@ pub enum Error {
     /// A logical profile is not configured for the selected backend.
     #[error("[sandbox_interface/error] sandbox profile is not configured")]
     UnknownProfile,
+    /// The provider cannot honor the explicit requested size or resources.
+    #[error("[sandbox_interface/error] sandbox size selection is unsupported")]
+    UnsupportedSizeSelection {
+        /// Exact rejected size selection; no provider start was dispatched.
+        selection: SandboxSizeSelection,
+    },
+    /// The provider definitively refused a start, with no queued or running work.
+    #[error("[sandbox_interface/error] backend `{backend_id}` refused start: {refusal}")]
+    SandboxStartRefused {
+        /// Stable configured backend ID.
+        backend_id: String,
+        /// Typed refusal with exact retry timing when supplied.
+        refusal: SandboxStartRefusal,
+    },
     /// A stable backend ID is absent from the runtime registry.
     #[error("[sandbox_interface/error] sandbox backend `{backend_id}` is not configured")]
     UnknownBackend {

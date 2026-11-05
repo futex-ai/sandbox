@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use crate::{Error, SANDBOX_ONE_SHOT_MAX_LIFETIME, SandboxLifetime};
+use crate::{Error, SandboxLifetime};
 
 #[test]
 fn idle_auto_pause_is_the_default_lifetime() {
@@ -11,7 +11,10 @@ fn idle_auto_pause_is_the_default_lifetime() {
 
 #[test]
 fn one_shot_lifetime_accepts_the_inclusive_shared_bounds() {
-    for max_lifetime in [Duration::from_secs(1), SANDBOX_ONE_SHOT_MAX_LIFETIME] {
+    for max_lifetime in [
+        Duration::from_secs(1),
+        Duration::from_secs(u64::from(u32::MAX)),
+    ] {
         let lifetime = SandboxLifetime::OneShot { max_lifetime };
 
         lifetime.validate().expect("inclusive lifetime bound");
@@ -28,7 +31,7 @@ fn one_shot_lifetime_accepts_the_inclusive_shared_bounds() {
 fn one_shot_lifetime_rejects_zero_over_limit_and_fractional_seconds() {
     for max_lifetime in [
         Duration::ZERO,
-        SANDBOX_ONE_SHOT_MAX_LIFETIME + Duration::from_secs(1),
+        Duration::from_secs(u64::from(u32::MAX)) + Duration::from_secs(1),
         Duration::from_millis(1500),
     ] {
         assert!(matches!(
@@ -36,7 +39,7 @@ fn one_shot_lifetime_rejects_zero_over_limit_and_fractional_seconds() {
             Err(Error::InvalidSeconds {
                 field: "max_lifetime",
                 minimum: 1,
-                maximum: 3600,
+                maximum: 4_294_967_295,
             })
         ));
     }
@@ -67,7 +70,26 @@ fn lifetime_metadata_round_trips_without_guessing_incomplete_values() {
     );
     assert_eq!(
         SandboxLifetime::from_metadata("one_shot", Some("3601")),
+        Some(SandboxLifetime::OneShot {
+            max_lifetime: Duration::from_secs(3601)
+        })
+    );
+    assert_eq!(
+        SandboxLifetime::from_metadata("one_shot", Some("4294967296")),
         None
     );
     assert_eq!(SandboxLifetime::from_metadata("unknown", Some("90")), None);
+}
+
+#[test]
+fn one_shot_lifetime_represents_six_hours_without_a_shared_provider_limit() {
+    let lifetime = SandboxLifetime::OneShot {
+        max_lifetime: Duration::from_secs(21_600),
+    };
+
+    assert_eq!(lifetime.one_shot_timeout_seconds().ok(), Some(Some(21_600)));
+    assert_eq!(
+        SandboxLifetime::from_metadata("one_shot", Some("21600")),
+        Some(lifetime)
+    );
 }

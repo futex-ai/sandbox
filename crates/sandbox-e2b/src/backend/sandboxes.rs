@@ -11,7 +11,7 @@ use crate::{
     config::E2bProfile,
     control::{ControlCreateSandbox, ControlSandbox, SandboxMetadata},
     error::{Error as AdapterError, Result as AdapterResult},
-    network,
+    lifetime, network,
     runtime_conventions::E2bRuntimeConventions,
 };
 
@@ -124,7 +124,12 @@ fn validate_request<'a>(
     backend: &'a E2bSandboxBackend,
     request: &BackendCreateSandboxRequest,
 ) -> Result<(&'a E2bProfile, SandboxNetworkPolicy)> {
-    request.lifetime.validate()?;
+    lifetime::validate(request.lifetime)?;
+    if let Some(selection) = &request.size {
+        return Err(Error::UnsupportedSizeSelection {
+            selection: selection.clone(),
+        });
+    }
     let profile = backend
         .config
         .profile(&request.profile)

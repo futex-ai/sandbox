@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use sandbox_interface::{BackendCreateSandboxRequest, SandboxLifetime};
 
-use crate::{control::SandboxMetadata, runtime_conventions::E2bRuntimeConventions};
+use crate::{control::SandboxMetadata, lifetime, runtime_conventions::E2bRuntimeConventions};
 
 pub(super) fn for_create(
     conventions: &E2bRuntimeConventions,
@@ -65,5 +65,5 @@ pub(super) fn lifetime(
     let seconds = metadata
         .get(&conventions.metadata_key("one_shot_max_lifetime_seconds"))
         .map(String::as_str);
-    SandboxLifetime::from_metadata(kind, seconds)
+    SandboxLifetime::from_metadata(kind, seconds).filter(|value| lifetime::validate(*value).is_ok())
 }

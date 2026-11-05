@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 clap = { version = "4.6.1", features = ["derive"] }
 sandbox-e2b.workspace = true
+sandbox-boat.workspace = true
 sandbox-interface.workspace = true
 thiserror = "2.0.18"
 

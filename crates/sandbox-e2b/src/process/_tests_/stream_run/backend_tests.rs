@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use futures_util::{StreamExt, stream};
 use sandbox_interface::{
     BackendStreamProcessRequest, ProcessStreamEvent, ProcessStreamOutcome, ProviderRef,
-    SandboxBackend,
+    SandboxProcesses,
 };
 use tokio::time::Instant;
 use unimock::{MockFn, Unimock, matching};

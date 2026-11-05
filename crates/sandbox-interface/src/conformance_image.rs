@@ -5,51 +5,67 @@ use uuid::Uuid;
 use crate::{
     BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendPrepareImageRequest,
     BackendSnapshot, Error, OperationId, ProviderRef, RealizeImageFileInput, ResourceOwner, Result,
-    SandboxBackend, SandboxConsumer, SandboxId, SandboxNetworkPolicy, SnapshotId,
+    SandboxConsumer, SandboxId, SandboxImagePreparation, SandboxLifecycle, SandboxLifetime,
+    SandboxNetworkPolicy, SandboxSnapshots, SnapshotId,
     conformance_resources::{ConformanceResources, TokioRecoverySleeper, finish},
 };
 
 pub(crate) async fn exercise(
-    backend: &dyn SandboxBackend,
+    lifecycle: &dyn SandboxLifecycle,
+    snapshots: &dyn SandboxSnapshots,
+    images: &dyn SandboxImagePreparation,
     profile: &str,
     workspace_id: Uuid,
 ) -> Result<()> {
     let sleeper = TokioRecoverySleeper;
-    let mut resources = ConformanceResources::new(backend, &sleeper);
-    let outcome = exercise_with_resources(backend, &mut resources, profile, workspace_id).await;
+    let mut resources = ConformanceResources::new(&sleeper);
+    let outcome = exercise_with_resources(
+        lifecycle,
+        snapshots,
+        images,
+        &mut resources,
+        profile,
+        workspace_id,
+    )
+    .await;
     let cleanup = resources.cleanup().await;
     finish(outcome, cleanup)
 }
 
-async fn exercise_with_resources(
-    backend: &dyn SandboxBackend,
-    resources: &mut ConformanceResources<'_>,
+async fn exercise_with_resources<'a>(
+    lifecycle: &'a dyn SandboxLifecycle,
+    snapshots: &'a dyn SandboxSnapshots,
+    images: &dyn SandboxImagePreparation,
+    resources: &mut ConformanceResources<'a>,
     profile: &str,
     workspace_id: Uuid,
 ) -> Result<()> {
     let sandbox_id = SandboxId::new();
     let source = resources
-        .create_sandbox(source_request(sandbox_id, profile, workspace_id))
+        .create_sandbox(lifecycle, source_request(sandbox_id, profile, workspace_id))
         .await?;
     prepare_and_snapshot(
-        backend,
+        snapshots,
+        images,
         resources,
         sandbox_id,
         &source.provider_ref,
         workspace_id,
     )
     .await?;
-    exercise_failed_preparation_with_resources(backend, resources, profile, workspace_id).await
+    exercise_failed_preparation_with_resources(lifecycle, images, resources, profile, workspace_id)
+        .await
 }
 
-async fn prepare_and_snapshot(
-    backend: &dyn SandboxBackend,
-    resources: &mut ConformanceResources<'_>,
+async fn prepare_and_snapshot<'a>(
+    snapshots: &'a dyn SandboxSnapshots,
+    images: &dyn SandboxImagePreparation,
+    resources: &mut ConformanceResources<'a>,
     sandbox_id: SandboxId,
     source_provider_ref: &ProviderRef,
     workspace_id: Uuid,
 ) -> Result<BackendSnapshot> {
-    let prepared = backend
+    let prepared = images
         .prepare_image(BackendPrepareImageRequest {
             sandbox_id,
             source_provider_ref: source_provider_ref.clone(),
@@ -69,46 +85,56 @@ async fn prepare_and_snapshot(
         ));
     }
     let correlation_name = format!("sandbox-conformance-image-{}", OperationId::new());
-    let before = backend
+    let before = snapshots
         .snapshot_inventory(source_provider_ref.clone(), correlation_name.clone())
         .await?;
     resources
-        .create_snapshot(BackendCreateSnapshotRequest {
-            snapshot_id: SnapshotId::new(),
-            operation_id: OperationId::new(),
-            source_provider_ref: source_provider_ref.clone(),
-            correlation_name,
-            before,
-        })
+        .create_snapshot(
+            snapshots,
+            BackendCreateSnapshotRequest {
+                snapshot_id: SnapshotId::new(),
+                operation_id: OperationId::new(),
+                source_provider_ref: source_provider_ref.clone(),
+                correlation_name,
+                before,
+            },
+        )
         .await
 }
 
 #[cfg(test)]
 pub(crate) async fn exercise_failed_preparation(
-    backend: &dyn SandboxBackend,
+    lifecycle: &dyn SandboxLifecycle,
+    images: &dyn SandboxImagePreparation,
     profile: &str,
     workspace_id: Uuid,
 ) -> Result<()> {
     let sleeper = TokioRecoverySleeper;
-    let mut resources = ConformanceResources::new(backend, &sleeper);
-    let outcome =
-        exercise_failed_preparation_with_resources(backend, &mut resources, profile, workspace_id)
-            .await;
+    let mut resources = ConformanceResources::new(&sleeper);
+    let outcome = exercise_failed_preparation_with_resources(
+        lifecycle,
+        images,
+        &mut resources,
+        profile,
+        workspace_id,
+    )
+    .await;
     let cleanup = resources.cleanup().await;
     finish(outcome, cleanup)
 }
 
-async fn exercise_failed_preparation_with_resources(
-    backend: &dyn SandboxBackend,
-    resources: &mut ConformanceResources<'_>,
+async fn exercise_failed_preparation_with_resources<'a>(
+    lifecycle: &'a dyn SandboxLifecycle,
+    images: &dyn SandboxImagePreparation,
+    resources: &mut ConformanceResources<'a>,
     profile: &str,
     workspace_id: Uuid,
 ) -> Result<()> {
     let sandbox_id = SandboxId::new();
     let source = resources
-        .create_sandbox(source_request(sandbox_id, profile, workspace_id))
+        .create_sandbox(lifecycle, source_request(sandbox_id, profile, workspace_id))
         .await?;
-    let preparation = backend
+    let preparation = images
         .prepare_image(BackendPrepareImageRequest {
             sandbox_id,
             source_provider_ref: source.provider_ref.clone(),
@@ -142,11 +168,12 @@ fn source_request(
     workspace_id: Uuid,
 ) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         sandbox_id,
         operation_id: OperationId::new(),
         owner: ResourceOwner::platform(workspace_id),
         consumer: SandboxConsumer::Runtime,
-        lifetime: crate::SandboxLifetime::IdleAutoPause,
+        lifetime: SandboxLifetime::IdleAutoPause,
         deployment_id: "backend-conformance".to_owned(),
         profile: profile.to_owned(),
         network: SandboxNetworkPolicy::Open,

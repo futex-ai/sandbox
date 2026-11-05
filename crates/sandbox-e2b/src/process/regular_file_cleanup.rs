@@ -13,7 +13,7 @@ const TRUSTED_PROCESS_USER: &str = "root";
 
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(30);
 const COMMITTED_EXIT_CODE: i32 = 51;
-const CLEANER: &str = include_str!("helpers/regular_file_cleanup.py");
+const CLEANER: &str = sandbox_runtime_assets::REGULAR_FILE_CLEANUP;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum CleanupOutcome {

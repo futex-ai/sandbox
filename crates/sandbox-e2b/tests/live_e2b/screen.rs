@@ -4,8 +4,8 @@ use std::{io, time::Duration};
 
 use sandbox_e2b::E2bSandboxBackend;
 use sandbox_interface::{
-    BackendEnsureScreenStackRequest, BackendPortIngressRequest, ResourceOwner, SandboxBackend,
-    ScreenStackOutcome,
+    BackendEnsureScreenStackRequest, BackendPortIngressRequest, ResourceOwner, SandboxPortIngress,
+    SandboxScreens, ScreenStackOutcome,
 };
 
 use super::support::{

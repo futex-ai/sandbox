@@ -2,6 +2,7 @@
 
 mod alternate_backend;
 mod alternate_backend_faults;
+mod alternate_capabilities;
 mod alternate_file;
 mod alternate_image_realization;
 mod alternate_process;

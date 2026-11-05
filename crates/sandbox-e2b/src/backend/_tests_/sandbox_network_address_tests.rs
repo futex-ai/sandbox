@@ -2,7 +2,7 @@
 
 use std::net::{IpAddr, Ipv4Addr};
 
-use sandbox_interface::{EgressDestination, Error, SandboxBackend, SandboxNetworkPolicy};
+use sandbox_interface::{EgressDestination, Error, SandboxLifecycle, SandboxNetworkPolicy};
 use unimock::Unimock;
 
 use super::sandbox_network_policy_tests::{backend, config, request};

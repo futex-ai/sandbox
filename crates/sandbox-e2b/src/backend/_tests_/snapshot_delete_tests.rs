@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use sandbox_interface::{BackendInspectSnapshotRequest, Error, ProviderRef, SandboxBackend};
+use sandbox_interface::{BackendInspectSnapshotRequest, Error, ProviderRef, SandboxSnapshots};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{

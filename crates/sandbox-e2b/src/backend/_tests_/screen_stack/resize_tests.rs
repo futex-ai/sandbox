@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use sandbox_interface::{
-    BackendResizeScreenStackRequest, Error, ProviderRef, SandboxBackend, ScreenViewportSize,
+    BackendResizeScreenStackRequest, Error, ProviderRef, SandboxScreens, ScreenViewportSize,
 };
 use unimock::{MockFn, Unimock, matching};
 

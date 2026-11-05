@@ -8,16 +8,20 @@ use super::alternate_backend::AlternateBackend;
 
 #[tokio::test]
 async fn asynchronous_alternate_backend_satisfies_the_shared_conformance_harness() {
-    exercise_backend(&AlternateBackend::default(), "alternate")
+    exercise_backend(AlternateBackend::default().capabilities(), "alternate")
         .await
         .expect("alternate backend should conform");
 }
 
 #[tokio::test]
 async fn alternate_backend_satisfies_the_domain_allowlist_probe() {
-    exercise_network_allowlist(&AlternateBackend::default(), "alternate")
-        .await
-        .expect("alternate backend should support domain allowlists");
+    exercise_network_allowlist(
+        &AlternateBackend::default(),
+        &AlternateBackend::default(),
+        "alternate",
+    )
+    .await
+    .expect("alternate backend should support domain allowlists");
 }
 
 #[tokio::test]
@@ -37,7 +41,7 @@ async fn ambiguous_sandbox_creation_is_recovered_without_redispatch() {
     let backend = AlternateBackend::default();
     backend.faults.make_next_create_ambiguous();
 
-    exercise_backend(&backend, "alternate")
+    exercise_backend(backend.capabilities(), "alternate")
         .await
         .expect("an accepted create with an ambiguous response should recover");
 }
@@ -47,7 +51,7 @@ async fn eventually_consistent_sandbox_recovery_is_polled() {
     let backend = AlternateBackend::default();
     backend.faults.set_recovery_misses(1);
 
-    exercise_backend(&backend, "alternate")
+    exercise_backend(backend.capabilities(), "alternate")
         .await
         .expect("one empty recovery inventory should be retried");
 }
@@ -57,7 +61,7 @@ async fn cleanup_is_attempted_for_every_resource_after_a_failure() {
     let backend = AlternateBackend::default();
     backend.faults.fail_snapshot_deletes();
 
-    exercise_backend(&backend, "alternate")
+    exercise_backend(backend.capabilities(), "alternate")
         .await
         .expect_err("the injected snapshot cleanup failure should be preserved");
 
@@ -69,7 +73,7 @@ async fn cleanup_continues_after_terminal_close_failure() {
     let backend = AlternateBackend::default();
     backend.faults.fail_terminal_closes();
 
-    exercise_backend(&backend, "alternate")
+    exercise_backend(backend.capabilities(), "alternate")
         .await
         .expect_err("the injected terminal cleanup failure should be preserved");
 

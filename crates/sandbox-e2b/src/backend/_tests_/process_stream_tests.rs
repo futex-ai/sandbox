@@ -6,7 +6,7 @@ use futures_util::{StreamExt, stream};
 use sandbox_interface::{
     BackendStreamProcessRequest, Error, PROCESS_RUN_MAX_ARGV_BYTES, PROCESS_RUN_MAX_STREAM_BYTES,
     PROCESS_STREAM_MAX_DEADLINE, ProcessEventStream, ProcessStreamEvent, ProcessStreamOutcome,
-    ProviderRef, SandboxBackend,
+    ProviderRef, SandboxProcesses,
 };
 use unimock::{MockFn, Unimock, matching};
 

@@ -4,7 +4,7 @@ use std::{collections::HashMap, fs, os::unix::fs::PermissionsExt, process::Comma
 
 use sandbox_interface::{
     BackendPrepareImageRequest, Error, ProviderRef, RealizeImageFileInput, ResourceOwner,
-    SandboxBackend, SandboxId,
+    SandboxId, SandboxImagePreparation,
 };
 use unimock::Unimock;
 use uuid::Uuid;

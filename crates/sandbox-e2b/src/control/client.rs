@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{
     error::{Error, Result},
-    network,
+    lifetime, network,
 };
 
 use super::{
@@ -15,10 +15,11 @@ use super::{
     },
     http::{E2bHttpTransport, Method},
     pagination,
+    sandbox_access::{is_one_shot, read_access},
     types::{
         AutoResumeBody, ConnectBody, ControlCreateSandbox, ControlSandbox, ControlSandboxAccess,
-        ControlSandboxReadAccess, ControlSandboxState, ControlSnapshot, CreateSandboxBody,
-        NetworkBody, PauseBody, SandboxAccessBody, SandboxMetadata, SnapshotBody, SnapshotInfoBody,
+        ControlSandboxReadAccess, ControlSnapshot, CreateSandboxBody, NetworkBody, PauseBody,
+        SandboxAccessBody, SandboxMetadata, SnapshotBody, SnapshotInfoBody,
     },
 };
 
@@ -65,6 +66,9 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 
     async fn create_sandbox(&self, request: ControlCreateSandbox) -> Result<ControlSandboxAccess> {
+        if lifetime::validate(request.lifetime).is_err() {
+            return Err(Error::InvalidRequest);
+        }
         let network = network::validate_control_create(
             request.allow_public_egress,
             request.allowed_destinations,
@@ -227,39 +231,6 @@ impl E2bControlApi for ReqwestE2bControlApi {
     }
 }
 
-fn read_access(
-    response: super::types::SandboxDetailBody,
-    sandbox_domain: &str,
-) -> Result<ControlSandboxReadAccess> {
-    if map_state(response.state) != ControlSandboxState::Running {
-        return Err(Error::Unavailable);
-    }
-    let Some(lifecycle) = response.lifecycle else {
-        return Err(Error::Unavailable);
-    };
-    if lifecycle.auto_resume {
-        return Err(Error::Unavailable);
-    }
-    let Some(token) = response
-        .envd_access_token
-        .filter(|token| !token.trim().is_empty())
-    else {
-        return Err(Error::Unavailable);
-    };
-    Ok(ControlSandboxReadAccess {
-        sandbox_id: response.sandbox_id,
-        domain: sandbox_domain.to_owned(),
-        envd_access_token: token,
-    })
-}
-
-fn is_one_shot(response: &super::types::SandboxDetailBody, lifetime_metadata_key: &str) -> bool {
-    response
-        .metadata
-        .get(lifetime_metadata_key)
-        .is_some_and(|value| value == "one_shot")
-}
-
 #[cfg(test)]
 #[path = "_tests_/control_client_tests.rs"]
 mod control_client_tests;
@@ -290,3 +261,7 @@ mod control_response_validation_tests;
 #[cfg(test)]
 #[path = "_tests_/sandbox_lifetime_tests.rs"]
 mod sandbox_lifetime_tests;
+
+#[cfg(test)]
+#[path = "_tests_/provider_lifetime_tests.rs"]
+mod provider_lifetime_tests;

@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use sandbox_interface::{
     BackendInputRequest, BackendOutputRequest, Error, OperationId, ProviderRef, ResourceKind,
-    SandboxBackend, TerminalId,
+    SandboxTerminals, TerminalId,
 };
 use unimock::{MockFn, Unimock, matching};
 

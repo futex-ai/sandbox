@@ -16,11 +16,76 @@ workspace's [`Cargo.toml`](../Cargo.toml). The
 reason.
 
 Then update Rust imports to `sandbox_interface` and `sandbox_e2b`, remove the
-old local crate members, and run Juno's full workspace checks. Every
-`BackendCreateSandboxRequest` must set its typed `SandboxConsumer` value. Code
+old local crate members, and run Juno's full workspace checks.
+
+## Capability And Create Migration
+
+The backend interface now has independent capabilities. Replace dependencies
+on a required all-capability backend with `SandboxLifecycle`,
+`SandboxResumableLifecycle`, `SandboxSnapshots`, `SandboxImagePreparation`,
+`SandboxProcesses`, `SandboxFiles`, `SandboxTerminals`, `SandboxPortIngress`,
+`SandboxScreens`, and `SandboxAccountCapacity` as each consumer needs them.
+E2B continues to supply all of its existing behavior.
+Use `Arc<dyn Capability>` for each injected dependency. Share one
+`Arc<E2bSandboxBackend>` at the composition root and coerce its clones into the
+required capability objects. Replace `SandboxBackendRegistry` with
+`SandboxRegistry`. Resolve `lifecycle` directly and handle `None` from optional
+capability methods. Replace `SandboxBackendMock` expectations with the
+corresponding capability mock, such as `SandboxLifecycleMock` or
+`SandboxProcessesMock`. Remove `DynSandboxBackend`,
+`DynSandboxBackendRegistry`, and calls to `E2bSandboxBackend::into_backend`.
+Use explicit capability objects in their place.
+Run the applicable conformance probes. A provider needs no unsupported
+capability to run a supported probe.
+
+Boat adoption in Juno remains separate. This repository's Boat adapter serves
+ciproxy's approved scope. This change does not switch Juno's provider or edit
+Juno or ciproxy.
+
+E2B and Boat share the internal `sandbox-runtime-assets` package. Cargo resolves
+that package from the same reviewed repository revision. Juno needs no direct
+dependency or helper invocation change. E2B keeps its existing helper arguments,
+defaults, and filesystem behavior.
+
+Every `BackendCreateSandboxRequest` must set its typed `SandboxConsumer` value. Code
 that reads `BackendManagedSandbox` must treat a missing consumer as an older
 provider resource with unknown class rather than assuming `Runtime`; newly
 created resources preserve the value in provider metadata.
+
+Set `size` on every service and backend create request.
+Use `None` to keep E2B's existing profile behavior. E2B rejects `Some` with
+`Error::UnsupportedSizeSelection` before provider access.
+Other providers can accept `SandboxSizeSelection::ProviderSize(String)` or
+`SandboxSizeSelection::Resources(SandboxResources)`. Resources contain `vcpus`,
+`memory`, and `disk`. Each memory or disk `ResourceAmount` includes an integer
+`amount` and explicit `ResourceUnit`.
+
+Use the registry's optional `account_capacity` accessor for
+`Arc<dyn SandboxAccountCapacity>`. Its `account_capacity` method returns
+`Vec<SandboxSizeOffer>`. Offers include `provider_size`, `resources`, and
+`hourly_price`. The price uses `ExactDecimal { coefficient, scale }`, an explicit
+currency code, and `SandboxPriceUnit::Hour`. For example, coefficient 18 at
+scale 3 means 0.018 currency units per hour. Do not convert prices through
+binary floating point. E2B has no account capacity capability.
+
+Account capacity and remaining limits are advisory. The create result decides
+whether the provider accepted a start. Match `Error::SandboxStartRefused` and
+its `SandboxStartRefusal` value. Handle `Temporary`, `PlanSize`, `Billing`, and
+`TrialAutoStopRequired` separately. Temporary refusals preserve a typed reason
+and `SandboxStartRetry`, with optional relative `retry_after` and absolute UTC
+`next_start_at`. Missing timing stays absent. These refusals prove no start ran
+or queued. They require no uncertain-create recovery. Keep recover-only
+handling for ambiguous delivery.
+
+Keep the selected lifetime in create intent and recovery requests. Shared
+validation no longer imposes a one-hour maximum. E2B still rejects one-shot
+durations above 3,600 seconds. Juno must not infer a longer E2B limit from the
+shared type. Access must not extend a one-shot sandbox's original deadline.
+Remove uses of the shared `SANDBOX_ONE_SHOT_MAX_LIFETIME` constant.
+Shared validation now checks positive whole seconds representable as `u32`.
+Use `sandbox_e2b::E2B_ONE_SHOT_MAX_LIFETIME` only for E2B-specific policy.
+
+## Durable Image Orchestration
 
 Replace the old monolithic backend image call with durable orchestration. Store
 a source-create intent before calling `create_sandbox` once. If that call is
@@ -41,6 +106,8 @@ action rather than guess and duplicate work.
 
 `FileWriteUnconfirmed` requires the sandbox to stay fenced until it is
 reconciled or destroyed; do not immediately retry the write.
+
+## Process Context And Existing Resources
 
 For streaming process calls, Juno's trusted service must call
 `StreamProcessRequest::validate_execution_context()` before provider access

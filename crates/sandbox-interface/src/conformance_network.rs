@@ -4,21 +4,23 @@ use std::{collections::BTreeMap, time::Duration};
 
 use crate::{
     BackendCreateSandboxRequest, BackendRunProcessRequest, EgressDestination, Error, OperationId,
-    ProviderRef, ResourceOwner, Result, SandboxBackend, SandboxConsumer, SandboxId,
-    SandboxLifetime, SandboxNetworkPolicy, SandboxProcessOutput,
+    ProviderRef, ResourceOwner, Result, SandboxConsumer, SandboxId, SandboxLifecycle,
+    SandboxLifetime, SandboxNetworkPolicy, SandboxProcessOutput, SandboxProcesses,
     conformance_resources::ConformanceResources,
 };
 
 const ALLOWED_FETCH: &str = "curl --disable --noproxy '*' --fail --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://example.com/";
 const DISALLOWED_FETCH: &str = "curl --disable --noproxy '*' --silent --show-error --connect-timeout 10 --max-time 15 --output /dev/null https://www.google.com/";
 
-pub(crate) async fn exercise(
-    backend: &dyn SandboxBackend,
-    resources: &mut ConformanceResources<'_>,
+pub(crate) async fn exercise<'a>(
+    lifecycle: &'a dyn SandboxLifecycle,
+    processes: &dyn SandboxProcesses,
+    resources: &mut ConformanceResources<'a>,
     owner: ResourceOwner,
     profile: &str,
 ) -> Result<()> {
     let request = BackendCreateSandboxRequest {
+        size: None,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner,
@@ -29,10 +31,10 @@ pub(crate) async fn exercise(
         network: SandboxNetworkPolicy::allowlist(vec![EgressDestination::domain("example.com")?])?,
         snapshot_provider_ref: None,
     };
-    let sandbox = resources.create_sandbox(request.clone()).await?;
-    assert_mismatched_recovery_fails(backend, request).await?;
+    let sandbox = resources.create_sandbox(lifecycle, request.clone()).await?;
+    assert_mismatched_recovery_fails(lifecycle, request).await?;
 
-    let allowed = fetch(backend, &sandbox.provider_ref, ALLOWED_FETCH).await?;
+    let allowed = fetch(processes, &sandbox.provider_ref, ALLOWED_FETCH).await?;
     if !allowed.exited
         || allowed.exit_code != Some(0)
         || allowed.stdout_overflowed
@@ -43,7 +45,7 @@ pub(crate) async fn exercise(
         ));
     }
 
-    let disallowed = fetch(backend, &sandbox.provider_ref, DISALLOWED_FETCH).await?;
+    let disallowed = fetch(processes, &sandbox.provider_ref, DISALLOWED_FETCH).await?;
     if !disallowed.exited
         || disallowed.exit_code.is_none_or(|code| code == 0)
         || disallowed.stdout_overflowed
@@ -57,7 +59,7 @@ pub(crate) async fn exercise(
 }
 
 async fn assert_mismatched_recovery_fails(
-    backend: &dyn SandboxBackend,
+    backend: &dyn SandboxLifecycle,
     mut request: BackendCreateSandboxRequest,
 ) -> Result<()> {
     request.network =
@@ -71,7 +73,7 @@ async fn assert_mismatched_recovery_fails(
 }
 
 async fn fetch(
-    backend: &dyn SandboxBackend,
+    backend: &dyn SandboxProcesses,
     sandbox_provider_ref: &ProviderRef,
     script: &str,
 ) -> Result<SandboxProcessOutput> {

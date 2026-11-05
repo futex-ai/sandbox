@@ -6,23 +6,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
 use sandbox_interface::{
-    BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendEnsureScreenStackRequest,
-    BackendFileContent, BackendInputRequest, BackendInspectSnapshotRequest, BackendManagedSandbox,
-    BackendOutputRequest, BackendPortIngressRequest, BackendPrepareImageRequest,
-    BackendPreparedImage, BackendReadFileRequest, BackendReadOnlyExecRequest,
-    BackendResizeScreenStackRequest, BackendRunProcessRequest, BackendSandbox, BackendSnapshot,
-    BackendSnapshotCreateOutcome, BackendSnapshotInventory, BackendSnapshotRecovery,
-    BackendStreamProcessRequest, BackendTerminal, BackendTerminalCreateRequest,
-    BackendTerminalOutput, BackendWriteFileRequest, Error, OperationId, PortIngress,
-    ProcessEventStream, ProviderRef, ReadOnlyExecOutput, Result, SandboxBackend,
-    SandboxNetworkPolicy, SandboxProcessOutput, SandboxState, ScreenStackCapabilities,
-    ScreenStackOutcome, ScreenViewportSize, SnapshotState, TerminalState,
+    BackendCreateSandboxRequest, BackendCreateSnapshotRequest, BackendInspectSnapshotRequest,
+    BackendManagedSandbox, BackendPrepareImageRequest, BackendPreparedImage, BackendSandbox,
+    BackendSnapshot, BackendSnapshotCreateOutcome, BackendSnapshotInventory,
+    BackendSnapshotRecovery, Error, OperationId, ProviderRef, Result, SandboxImagePreparation,
+    SandboxLifecycle, SandboxNetworkPolicy, SandboxResumableLifecycle, SandboxSnapshots,
+    SandboxState, SnapshotState,
 };
 
-use super::{
-    alternate_backend_faults::AlternateBackendFaults, alternate_file, alternate_image_realization,
-    alternate_process, alternate_terminal,
-};
+use sandbox_interface::conformance::BackendConformance;
+
+use super::{alternate_backend_faults::AlternateBackendFaults, alternate_image_realization};
 
 #[derive(Default)]
 pub(super) struct AlternateBackend {
@@ -30,19 +24,12 @@ pub(super) struct AlternateBackend {
     next_snapshot: AtomicU64,
     sandboxes: Mutex<HashMap<OperationId, (ProviderRef, SandboxNetworkPolicy)>>,
     snapshots: Mutex<Vec<ProviderRef>>,
-    files: Mutex<HashMap<String, Vec<u8>>>,
+    pub(super) files: Mutex<HashMap<String, Vec<u8>>>,
     pub(super) faults: AlternateBackendFaults,
 }
 
 #[async_trait]
-impl SandboxBackend for AlternateBackend {
-    async fn prepare_image(
-        &self,
-        request: BackendPrepareImageRequest,
-    ) -> Result<BackendPreparedImage> {
-        alternate_image_realization::prepare(request)
-    }
-
+impl SandboxLifecycle for AlternateBackend {
     async fn list_managed_sandboxes(
         &self,
         _deployment_id: String,
@@ -100,35 +87,16 @@ impl SandboxBackend for AlternateBackend {
         })
     }
 
+    async fn destroy_sandbox(&self, provider_ref: ProviderRef) -> Result<()> {
+        self.faults.record_sandbox_destroy(&provider_ref);
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl SandboxResumableLifecycle for AlternateBackend {
     async fn resume_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox> {
         self.inspect_sandbox(provider_ref).await
-    }
-
-    async fn port_ingress(&self, request: BackendPortIngressRequest) -> Result<PortIngress> {
-        Ok(PortIngress::new(
-            format!(
-                "https://{}-{}.alternate.invalid",
-                request.port,
-                request.sandbox_provider_ref.as_str()
-            ),
-            None,
-        ))
-    }
-
-    async fn ensure_screen_stack(
-        &self,
-        _request: BackendEnsureScreenStackRequest,
-    ) -> Result<ScreenStackOutcome> {
-        Ok(ScreenStackOutcome::Ready {
-            capabilities: ScreenStackCapabilities::default(),
-        })
-    }
-
-    async fn resize_screen_stack(
-        &self,
-        request: BackendResizeScreenStackRequest,
-    ) -> Result<ScreenViewportSize> {
-        Ok(request.viewport)
     }
 
     async fn pause_sandbox(&self, provider_ref: ProviderRef) -> Result<BackendSandbox> {
@@ -137,12 +105,10 @@ impl SandboxBackend for AlternateBackend {
             state: SandboxState::Paused,
         })
     }
+}
 
-    async fn destroy_sandbox(&self, provider_ref: ProviderRef) -> Result<()> {
-        self.faults.record_sandbox_destroy(&provider_ref);
-        Ok(())
-    }
-
+#[async_trait]
+impl SandboxSnapshots for AlternateBackend {
     async fn snapshot_inventory(
         &self,
         _source_provider_ref: ProviderRef,
@@ -206,92 +172,29 @@ impl SandboxBackend for AlternateBackend {
         }
         Ok(())
     }
+}
 
-    async fn clean_restored_terminals(&self, _sandbox_provider_ref: ProviderRef) -> Result<()> {
-        Ok(())
-    }
-
-    async fn run_process(&self, request: BackendRunProcessRequest) -> Result<SandboxProcessOutput> {
-        alternate_process::run(request)
-    }
-
-    async fn stream_process(
+#[async_trait]
+impl SandboxImagePreparation for AlternateBackend {
+    async fn prepare_image(
         &self,
-        request: BackendStreamProcessRequest,
-    ) -> Result<ProcessEventStream> {
-        alternate_process::stream(request)
+        request: BackendPrepareImageRequest,
+    ) -> Result<BackendPreparedImage> {
+        alternate_image_realization::prepare(request)
     }
+}
 
-    async fn read_file(&self, request: BackendReadFileRequest) -> Result<BackendFileContent> {
-        alternate_file::read(&self.files, request)
-    }
-
-    async fn read_only_exec(
-        &self,
-        request: BackendReadOnlyExecRequest,
-    ) -> Result<ReadOnlyExecOutput> {
-        Ok(ReadOnlyExecOutput {
-            bytes: request.args.join("\0").into_bytes(),
-            exit_code: 0,
-        })
-    }
-
-    async fn write_file(&self, request: BackendWriteFileRequest) -> Result<()> {
-        alternate_file::write(&self.files, request)
-    }
-
-    async fn create_terminal(
-        &self,
-        request: BackendTerminalCreateRequest,
-    ) -> Result<BackendTerminal> {
-        let terminal =
-            alternate_terminal::terminal(ProviderRef::new(request.terminal_id.to_string()));
-        self.faults.record_terminal_create(&terminal.provider_ref);
-        Ok(terminal)
-    }
-
-    async fn recover_terminal_create(
-        &self,
-        request: BackendTerminalCreateRequest,
-    ) -> Result<Option<BackendTerminal>> {
-        Ok(Some(alternate_terminal::terminal(ProviderRef::new(
-            request.terminal_id.to_string(),
-        ))))
-    }
-
-    async fn inspect_terminal(
-        &self,
-        _sandbox_provider_ref: ProviderRef,
-        terminal_provider_ref: ProviderRef,
-    ) -> Result<BackendTerminal> {
-        Ok(alternate_terminal::terminal(terminal_provider_ref))
-    }
-
-    async fn read_terminal(&self, request: BackendOutputRequest) -> Result<BackendTerminalOutput> {
-        Ok(BackendTerminalOutput {
-            bytes: Vec::new(),
-            next_offset: request.offset,
-            total_size: request.offset,
-            state: TerminalState::Ready,
-            exit_code: None,
-            overflowed: false,
-        })
-    }
-
-    async fn write_terminal(&self, _request: BackendInputRequest) -> Result<()> {
-        Ok(())
-    }
-
-    async fn close_terminal(
-        &self,
-        _sandbox_provider_ref: ProviderRef,
-        terminal_provider_ref: ProviderRef,
-    ) -> Result<()> {
-        if self.faults.record_terminal_close(&terminal_provider_ref) {
-            return Err(Error::BackendUnavailable {
-                backend_id: "alternate".to_owned(),
-            });
+impl AlternateBackend {
+    pub(super) fn capabilities(&self) -> BackendConformance<'_> {
+        BackendConformance {
+            lifecycle: self,
+            resumable: self,
+            snapshots: self,
+            images: self,
+            processes: self,
+            files: self,
+            terminals: self,
+            ingress: self,
         }
-        Ok(())
     }
 }

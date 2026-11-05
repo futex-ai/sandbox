@@ -8,7 +8,7 @@ use std::{
 
 use sandbox_interface::{
     BackendCreateSandboxRequest, EgressDestination, Error, OperationId, ResourceOwner,
-    SandboxBackend, SandboxConsumer, SandboxId, SandboxLifetime, SandboxNetworkPolicy,
+    SandboxConsumer, SandboxId, SandboxLifecycle, SandboxLifetime, SandboxNetworkPolicy,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;
@@ -229,6 +229,7 @@ pub(super) fn config(denied_destinations: Vec<&str>) -> E2bAdapterConfig {
 
 pub(super) fn request(network: SandboxNetworkPolicy) -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
+        size: None,
         sandbox_id: SandboxId::new(),
         operation_id: OperationId::new(),
         owner: ResourceOwner::agent(Uuid::now_v7(), Uuid::now_v7()),

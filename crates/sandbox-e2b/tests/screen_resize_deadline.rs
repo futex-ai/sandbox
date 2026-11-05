@@ -12,7 +12,7 @@ use sandbox_e2b::{
     ProcessSplitOutput, ProcessTransportMock,
 };
 use sandbox_interface::{
-    BackendResizeScreenStackRequest, Error, ProviderRef, SandboxBackend, ScreenViewportSize,
+    BackendResizeScreenStackRequest, Error, ProviderRef, SandboxScreens, ScreenViewportSize,
 };
 use unimock::{MockFn, Unimock, matching};
 

@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use sandbox_interface::conformance::exercise_backend;
+use sandbox_interface::conformance::{BackendConformance, exercise_backend};
 use unimock::{MockFn, Unimock, matching};
 
 use crate::{
@@ -153,7 +153,19 @@ async fn e2b_adapter_satisfies_the_shared_conformance_harness() {
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control), Arc::new(process));
 
-    exercise_backend(&backend, "general")
-        .await
-        .expect("E2B adapter should conform");
+    exercise_backend(
+        BackendConformance {
+            lifecycle: &backend,
+            resumable: &backend,
+            snapshots: &backend,
+            images: &backend,
+            processes: &backend,
+            files: &backend,
+            terminals: &backend,
+            ingress: &backend,
+        },
+        "general",
+    )
+    .await
+    .expect("E2B adapter should conform");
 }

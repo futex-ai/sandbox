@@ -3,8 +3,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use sandbox_interface::{
-    BackendPrepareImageRequest, Error, ImageCommandFailure, ProviderRef, ResourceOwner,
-    SandboxBackend, SandboxId,
+    BackendPrepareImageRequest, Error, ImageCommandFailure, ProviderRef, ResourceOwner, SandboxId,
+    SandboxImagePreparation,
 };
 use unimock::{MockFn, Unimock, matching};
 use uuid::Uuid;

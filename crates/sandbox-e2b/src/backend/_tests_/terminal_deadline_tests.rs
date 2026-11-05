@@ -7,7 +7,7 @@ use std::{
 };
 
 use sandbox_interface::{
-    BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxBackend, TerminalId,
+    BackendOutputRequest, Error, ProviderRef, ResourceKind, SandboxTerminals, TerminalId,
     TerminalState,
 };
 use unimock::{MockFn, Unimock, matching};
