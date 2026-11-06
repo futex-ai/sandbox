@@ -93,7 +93,8 @@ impl E2bControlApi for ReqwestE2bControlApi {
                 allow_out: network.allow_out,
             },
             auto_pause,
-            auto_pause_memory,
+            // E2B rejects `autoPauseMemory` unless `autoPause` is true.
+            auto_pause_memory: auto_pause.then_some(auto_pause_memory),
             auto_resume: AutoResumeBody { enabled: false },
             timeout,
         })?;
