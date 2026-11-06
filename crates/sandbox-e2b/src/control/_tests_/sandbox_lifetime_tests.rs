@@ -90,9 +90,11 @@ async fn one_shot_create_disables_pause_and_uses_its_maximum_lifetime() {
     let request = requests.lock().expect("request lock")[0].clone();
     let body: Value = serde_json::from_slice(request.body.as_deref().expect("create body"))
         .expect("body should be JSON");
-    assert_eq!(body.as_object().map(|body| body.len()), Some(9));
+    // E2B answers HTTP 400 when `autoPauseMemory` comes without `autoPause`:
+    // "autoPauseMemory=false only applies when autoPause is true."
+    assert_eq!(body.as_object().map(|body| body.len()), Some(8));
     assert_eq!(body["autoPause"], false);
-    assert_eq!(body["autoPauseMemory"], false);
+    assert!(body.get("autoPauseMemory").is_none());
     assert_eq!(body["autoResume"]["enabled"], false);
     assert_eq!(body["timeout"], 90);
 }
