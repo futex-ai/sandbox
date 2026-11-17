@@ -95,6 +95,11 @@ The base image needs absolute Python 3, sudo, useradd, and standard Linux PID
 and file-descriptor support. Every helper uses isolated Python with site
 startup disabled. Incompatible runtime images fail before caller code starts.
 
+Native upload and download acknowledgments accept absolute paths or paths
+relative to Boat's `/home/user` directory. Both use one checked path comparison.
+It normalizes separators and `.` parts, rejects every `..` part, and requires
+the same file inside that home directory.
+
 Native files only transfer protected chunks of at most 4 MiB. The public
 transfer bound remains 256 MiB. Trusted descriptor traversal performs final
 reads and replacements. Upload assembly and atomic replacement both verify
