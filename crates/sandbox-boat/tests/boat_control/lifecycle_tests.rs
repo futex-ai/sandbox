@@ -93,7 +93,8 @@ async fn unsupported_network_size_lifetime_and_source_fail_before_dispatch() {
             .unwrap();
     assert!(matches!(
         fixture.backend.create_sandbox(network.clone()).await,
-        Err(Error::UnsupportedNetworkPolicy { .. })
+        Err(Error::SandboxCreateNotSent { source })
+            if matches!(*source, Error::UnsupportedNetworkPolicy { .. })
     ));
     assert!(matches!(
         fixture.backend.recover_sandbox_create(network).await,
@@ -103,7 +104,8 @@ async fn unsupported_network_size_lifetime_and_source_fail_before_dispatch() {
     size.size = Some(SandboxSizeSelection::ProviderSize("unknown".to_owned()));
     assert!(matches!(
         fixture.backend.create_sandbox(size).await,
-        Err(Error::UnsupportedSizeSelection { .. })
+        Err(Error::SandboxCreateNotSent { source })
+            if matches!(*source, Error::UnsupportedSizeSelection { .. })
     ));
     for duration in [
         Duration::ZERO,
@@ -117,7 +119,8 @@ async fn unsupported_network_size_lifetime_and_source_fail_before_dispatch() {
         assert!(
             matches!(
                 fixture.backend.create_sandbox(request).await,
-                Err(Error::InvalidSeconds { .. })
+                Err(Error::SandboxCreateNotSent { source })
+                    if matches!(*source, Error::InvalidSeconds { .. })
             ),
             "{duration:?}"
         );
@@ -126,15 +129,32 @@ async fn unsupported_network_size_lifetime_and_source_fail_before_dispatch() {
     interactive.lifetime = SandboxLifetime::IdleAutoPause;
     assert!(matches!(
         fixture.backend.create_sandbox(interactive).await,
-        Err(Error::Internal(_))
+        Err(Error::SandboxCreateNotSent { source })
+            if matches!(*source, Error::Internal(_))
     ));
     let mut browser = requests::create();
     browser.consumer = SandboxConsumer::Browser;
     browser.snapshot_provider_ref = Some(ProviderRef::new("capture-name"));
     assert!(matches!(
         fixture.backend.create_sandbox(browser).await,
-        Err(Error::RuntimeConsumerRequired { .. })
+        Err(Error::SandboxCreateNotSent { source })
+            if matches!(*source, Error::RuntimeConsumerRequired { .. })
     ));
+    for source in [
+        String::new(),
+        "-leading".to_owned(),
+        "Uppercase".to_owned(),
+        "invalid_plain_name".to_owned(),
+        "a".repeat(64),
+    ] {
+        let mut invalid = requests::create();
+        invalid.snapshot_provider_ref = Some(ProviderRef::new(source));
+        assert!(matches!(
+            fixture.backend.create_sandbox(invalid).await,
+            Err(Error::SandboxCreateNotSent { source })
+                if matches!(*source, Error::Internal(_))
+        ));
+    }
     assert_eq!(fixture.captured().len(), 0);
     let mut maximum = requests::create();
     maximum.lifetime = SandboxLifetime::OneShot {

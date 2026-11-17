@@ -7,6 +7,13 @@ use thiserror::Error;
 /// Boat transport and control failures interpreted by the adapter.
 #[derive(Debug, Error, internal_error::ErrorContract)]
 pub enum Error {
+    /// Sandbox creation failed before a provider request was sent.
+    #[error("[sandbox_boat/error] sandbox create request was not sent")]
+    CreateNotSent {
+        /// Original typed pre-dispatch failure.
+        #[source]
+        source: Box<Error>,
+    },
     /// Configuration, a route, or an input is invalid.
     #[error("[sandbox_boat/error] invalid configuration or request")]
     InvalidRequest,

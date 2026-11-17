@@ -13,12 +13,17 @@ use super::types::{
 #[async_trait]
 pub trait BoatControlApi: Send + Sync {
     /// Dispatches one sandbox start without provider preflight.
+    ///
+    /// `CreateNotSent` preserves a failure before dispatch. `InvalidRequest`
+    /// also proves that no create request was sent. Ambiguous delivery must
+    /// never return either error.
     async fn create_sandbox(&self, request: BoatCreateSandbox) -> Result<BoatSandbox>;
     /// Reads bounded, paginated inventory with the supplied labels.
     async fn list_sandboxes(&self, labels: BoatLabels) -> Result<Vec<BoatSandbox>>;
     /// Reads one sandbox without extending its TTL.
     async fn get_sandbox(&self, id: &str) -> Result<BoatSandbox>;
     /// Repeats sandbox DELETE until completion or terminal absence.
+    /// Every transport request derives its confirmation from its own target.
     async fn delete_sandbox(&self, id: &str) -> Result<()>;
     /// Reads one exact saved-snapshot name.
     async fn get_snapshot(&self, name: &str) -> Result<BoatSavedSnapshot>;

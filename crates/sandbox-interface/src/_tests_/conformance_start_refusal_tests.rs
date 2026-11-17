@@ -95,6 +95,44 @@ async fn definitive_start_refusals_retain_details_without_recovery() {
     }
 }
 
+#[tokio::test]
+async fn unsent_creates_keep_original_causes_without_recovery_or_cleanup() {
+    let recoveries = Arc::new(AtomicUsize::new(0));
+    let backend = Unimock::new((
+        SandboxLifecycleMock::create_sandbox
+            .some_call(matching!(_))
+            .returns(Err(Error::SandboxCreateNotSent {
+                source: Box::new(Error::UnknownProfile),
+            })),
+        SandboxLifecycleMock::recover_sandbox_create
+            .each_call(matching!(_))
+            .answers_arc({
+                let recoveries = recoveries.clone();
+                Arc::new(move |_, _| {
+                    recoveries.fetch_add(1, Ordering::SeqCst);
+                    Ok(Some(BackendSandbox {
+                        provider_ref: ProviderRef::new("unrelated-existing"),
+                        state: SandboxState::Ready,
+                    }))
+                })
+            })
+            .at_least_times(0),
+    ))
+    .no_verify_in_drop();
+    let sleeper = Unimock::new(());
+    let mut resources = ConformanceResources::new(&sleeper);
+
+    let result = resources.create_sandbox(&backend, request()).await;
+
+    assert!(
+        matches!(result, Err(Error::SandboxCreateNotSent { ref source })
+            if matches!(source.as_ref(), Error::UnknownProfile)),
+        "an unsent create must keep its local cause: {result:?}"
+    );
+    resources.cleanup().await.unwrap();
+    assert_eq!(recoveries.load(Ordering::SeqCst), 0);
+}
+
 fn request() -> BackendCreateSandboxRequest {
     BackendCreateSandboxRequest {
         sandbox_id: SandboxId::new(),

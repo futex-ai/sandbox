@@ -6,7 +6,7 @@ use crate::{
     catalogue,
     config::canonical,
     error::{Error, Result},
-    transport::request::{BoatHttpMethod, BoatHttpRequest, BoatRoute, valid_snapshot_name},
+    transport::request::{BoatHttpMethod, BoatHttpRequest, BoatRoute, valid_snapshot_source},
 };
 
 use super::{
@@ -21,16 +21,22 @@ pub(super) async fn create(
     client: &ReqwestBoatControlApi,
     request: BoatCreateSandbox,
 ) -> Result<BoatSandbox> {
-    validate_create(&request)?;
-    let response = client
-        .transport
-        .send(BoatHttpRequest {
-            method: BoatHttpMethod::Post,
-            route: payload::create_route(),
-            body: Some(payload::encode(&request)?),
-            idempotency_key: Some(request.operation.clone()),
-        })
-        .await?;
+    let outgoing = match create_request(&request) {
+        Ok(outgoing) => outgoing,
+        Err(source) => {
+            return Err(Error::CreateNotSent {
+                source: Box::new(source),
+            });
+        }
+    };
+    let response = match client.transport.send(outgoing).await {
+        Err(Error::InvalidRequest) => {
+            return Err(Error::CreateNotSent {
+                source: Box::new(Error::InvalidRequest),
+            });
+        }
+        response => response?,
+    };
     if response.status != 202 {
         if let Some(refusal) = refusal::start_refusal(&response) {
             return Err(Error::StartRefused { refusal });
@@ -152,6 +158,16 @@ async fn list_pages(
     Err(Error::InvalidPagination)
 }
 
+fn create_request(request: &BoatCreateSandbox) -> Result<BoatHttpRequest> {
+    validate_create(request)?;
+    Ok(BoatHttpRequest {
+        method: BoatHttpMethod::Post,
+        route: payload::create_route(),
+        body: Some(payload::encode(request)?),
+        idempotency_key: Some(request.operation.clone()),
+    })
+}
+
 fn validate_create(request: &BoatCreateSandbox) -> Result<()> {
     if catalogue::offer(&request.machine_type).is_none()
         || !(1..=2_592_000).contains(&request.ttl_seconds)
@@ -161,7 +177,7 @@ fn validate_create(request: &BoatCreateSandbox) -> Result<()> {
         || request
             .from
             .as_deref()
-            .is_some_and(|name| !valid_snapshot_name(name))
+            .is_some_and(|source| !valid_snapshot_source(source))
         || !canonical(&request.operation)
         || request.operation.len() > 128
         || !request

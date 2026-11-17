@@ -1,8 +1,9 @@
 //! Exact durable create identity preserved in provider labels.
 
 use sandbox_interface::{BackendCreateSandboxRequest, SandboxLifetime, SandboxSizeSelection};
+use sha2::{Digest, Sha256};
 
-use crate::control::types::BoatLabels;
+use crate::{control::types::BoatLabels, transport::request::shared_snapshot_reference};
 
 pub(super) const DEPLOYMENT: &str = "sandbox.deployment";
 pub(super) const OPERATION: &str = "sandbox.operation";
@@ -49,10 +50,23 @@ pub(super) fn labels(
             "sandbox.from".to_owned(),
             request.snapshot_provider_ref.as_ref().map_or_else(
                 || "none".to_owned(),
-                |source| format!("saved:{}", source.as_str()),
+                |source| snapshot_source(source.as_str()),
             ),
         ),
     ])
+}
+
+fn snapshot_source(source: &str) -> String {
+    if !shared_snapshot_reference(source) {
+        return format!("saved:{source}");
+    }
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut value = String::from("shared:sha256:");
+    for byte in Sha256::digest(source.as_bytes()) {
+        value.push(char::from(HEX[usize::from(byte >> 4)]));
+        value.push(char::from(HEX[usize::from(byte & 15)]));
+    }
+    value
 }
 
 pub(super) fn lifetime(labels: &BoatLabels) -> Option<SandboxLifetime> {

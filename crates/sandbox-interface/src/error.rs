@@ -13,6 +13,13 @@ use crate::{
 /// Errors returned by sandbox backends and lifecycle services.
 #[derive(Debug, Error, internal_error::ErrorContract)]
 pub enum Error {
+    /// Sandbox creation failed before any provider create request was sent.
+    #[error("[sandbox_interface/error] sandbox create request was not sent")]
+    SandboxCreateNotSent {
+        /// Original typed local rejection.
+        #[source]
+        source: Box<Error>,
+    },
     /// Both profile and snapshot were provided for sandbox creation.
     #[error("[sandbox_interface/error] profile and snapshot_id are mutually exclusive")]
     ConflictingSandboxSource,

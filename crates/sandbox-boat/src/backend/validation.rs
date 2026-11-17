@@ -7,7 +7,7 @@ use sandbox_interface::{
 
 use crate::{
     catalogue, config::canonical, control::types::BoatCreateSandbox,
-    transport::request::valid_snapshot_name,
+    transport::request::valid_snapshot_source,
 };
 
 use super::{configured::BoatSandboxBackend, identity};
@@ -58,7 +58,7 @@ pub(super) fn create(
                 consumer: request.consumer,
             });
         }
-        if !valid_snapshot_name(source.as_str()) {
+        if !valid_snapshot_source(source.as_str()) {
             return Err(Error::internal_message(
                 "Boat saved-snapshot reference is invalid",
             ));

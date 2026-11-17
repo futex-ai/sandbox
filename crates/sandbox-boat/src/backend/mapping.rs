@@ -10,6 +10,23 @@ use crate::{
     error::{Error as AdapterError, Result as AdapterResult},
 };
 
+pub(super) fn create_result(
+    result: AdapterResult<BoatSandbox>,
+    backend_id: &str,
+) -> Result<BoatSandbox> {
+    match result {
+        Err(AdapterError::CreateNotSent { source }) => Err(create_not_sent(*source)),
+        Err(AdapterError::InvalidRequest) => Err(create_not_sent(AdapterError::InvalidRequest)),
+        result => control_result(result, backend_id, Some(ResourceKind::Sandbox)),
+    }
+}
+
+fn create_not_sent(source: AdapterError) -> Error {
+    Error::SandboxCreateNotSent {
+        source: Box::new(Error::internal_with(source, "Boat create request")),
+    }
+}
+
 pub(super) fn control_result<T>(
     result: AdapterResult<T>,
     backend_id: &str,
