@@ -89,9 +89,11 @@ impl fmt::Display for EgressDestination {
 /// does not present either hostname are filtered only by IP or CIDR rules.
 /// Destination support is adapter-specific. An adapter that cannot enforce a
 /// policy or one of its destination kinds without weakening deployment rules
-/// must reject the complete policy with
+/// must reject the complete policy before provider mutation. The rejection identifies
 /// [`Error::UnsupportedNetworkPolicy`](crate::Error::UnsupportedNetworkPolicy)
-/// before provider mutation. The same rule applies to future variants.
+/// directly or as the typed cause inside
+/// [`Error::SandboxCreateNotSent`](crate::Error::SandboxCreateNotSent).
+/// The same rule applies to future variants.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

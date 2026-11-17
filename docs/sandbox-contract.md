@@ -142,9 +142,10 @@ IPv4 as its mapped IPv6 range so broader IPv6 CIDRs cannot bypass an IPv4 deny.
 An implicitly allowed DNS resolver must pass the same check.
 
 Destination kinds describe the provider-neutral policy vocabulary, not a
-promise that every adapter can enforce every kind. If a provider cannot apply
-the complete policy without weakening private or deployment deny rules, its
-adapter must return `UnsupportedNetworkPolicy` before any provider request.
+promise that every adapter can enforce every kind. An adapter must reject any
+policy that it cannot apply without weakening private or deployment deny rules.
+It must report `UnsupportedNetworkPolicy` as the typed rejection cause before
+any provider request.
 The adapter must not silently omit the unsupported destination or partially
 apply the policy.
 
@@ -160,6 +161,9 @@ trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
 same request unless a typed result proves that no create request was sent.
 A caller can correct a locally rejected unsent create and start again.
+A result that proves no create request was sent must retain the original typed
+local rejection as its cause. A requirement for a local create error permits
+that error either directly or as this typed cause.
 An empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.

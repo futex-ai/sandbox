@@ -63,9 +63,9 @@ URL-style legacy IP literals cannot masquerade as domains. Domains may use one
 leading `*.` label, which matches subdomains at any depth but not the apex, and
 are limited to HTTP/80 and TLS/443 hostname matching; other traffic requires an
 IP or CIDR rule. A provider-neutral destination kind does not imply that every
-adapter can enforce it safely. An adapter rejects the complete policy with
-`UnsupportedNetworkPolicy` before provider mutation when the provider cannot
-preserve deployment deny rules for one of its destinations. Raw or deserialized
+adapter can enforce it safely. An adapter rejects the complete policy before
+provider mutation if it cannot preserve deployment deny rules for any destination.
+The typed rejection cause is `UnsupportedNetworkPolicy`. Raw or deserialized
 values are revalidated by adapters. Recovery must reject a policy that differs
 from the one used to create the correlated sandbox.
 After local validation, sandbox creation dispatches its one provider mutation
@@ -74,6 +74,7 @@ reads may follow. Ambiguous delivery never permits a second create.
 `Error::SandboxCreateNotSent` proves that no create request was sent. It retains
 the typed local cause in `source`. The caller can correct that request and start
 again without recovery. Adapters must not return it after possible dispatch.
+A named local create error can be returned directly or through this typed cause.
 Creation also carries `SandboxLifetime`. `IdleAutoPause` is the default for
 resumable interactive sessions. `OneShot { max_lifetime }` never pauses or
 resumes. Shared validation accepts positive whole seconds representable by
