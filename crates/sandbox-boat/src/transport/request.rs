@@ -48,6 +48,26 @@ pub struct BoatHttpRequest {
     pub idempotency_key: Option<String>,
 }
 
+impl BoatHttpRequest {
+    /// Constructs one sandbox deletion from its exact target identity.
+    pub fn sandbox_delete(id: impl Into<String>) -> Self {
+        Self {
+            method: BoatHttpMethod::Delete,
+            route: BoatRoute::Sandbox(id.into()),
+            body: None,
+            idempotency_key: None,
+        }
+    }
+
+    /// Derives the sandbox deletion confirmation from this request's target.
+    pub fn delete_confirmation(&self) -> Option<&str> {
+        match (self.method, &self.route) {
+            (BoatHttpMethod::Delete, BoatRoute::Sandbox(id)) => Some(id),
+            _ => None,
+        }
+    }
+}
+
 impl fmt::Debug for BoatHttpRequest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
@@ -110,4 +130,14 @@ pub(crate) fn valid_snapshot_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
+pub(crate) fn valid_snapshot_source(source: &str) -> bool {
+    valid_snapshot_name(source) || shared_snapshot_reference(source)
+}
+
+pub(crate) fn shared_snapshot_reference(source: &str) -> bool {
+    source
+        .strip_prefix("bsh_")
+        .is_some_and(|code| !code.is_empty())
 }

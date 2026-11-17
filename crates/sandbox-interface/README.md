@@ -69,8 +69,11 @@ preserve deployment deny rules for one of its destinations. Raw or deserialized
 values are revalidated by adapters. Recovery must reject a policy that differs
 from the one used to create the correlated sandbox.
 After local validation, sandbox creation dispatches its one provider mutation
-without a fallible inventory preflight. Once that call starts, only recovery
-reads may follow; ambiguous delivery never permits a second create.
+without a fallible inventory preflight. After possible dispatch, only recovery
+reads may follow. Ambiguous delivery never permits a second create.
+`Error::SandboxCreateNotSent` proves that no create request was sent. It retains
+the typed local cause in `source`. The caller can correct that request and start
+again without recovery. Adapters must not return it after possible dispatch.
 Creation also carries `SandboxLifetime`. `IdleAutoPause` is the default for
 resumable interactive sessions. `OneShot { max_lifetime }` never pauses or
 resumes. Shared validation accepts positive whole seconds representable by
@@ -226,7 +229,7 @@ and return time before the outer deadline.
 
 Image construction uses explicit durable phases. The caller records source
 create intent before calling `create_sandbox`, uses only
-`recover_sandbox_create` after that first call begins, persists the recovered
+`recover_sandbox_create` after possible dispatch, persists the recovered
 source, and calls `prepare_image` once. After persisting its measured size, the
 caller records one snapshot request and dispatches it once; every retry uses
 `recover_snapshot_create` with that same request. A provider that pauses the

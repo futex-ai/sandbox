@@ -35,14 +35,14 @@ See [key scopes](https://docs.boat.dev/api-keys/scopes.md).
 
 ## Disposable Creation And Recovery
 
-Every adapter create sends one `POST /sandboxes` with these settings:
+Every valid adapter create sends one `POST /sandboxes` with these settings:
 
 - `noEnv: true`.
 - `snapshots: false`.
 - `monitoring: false`.
 - The selected provider size and one-shot TTL.
 - Stable labels for owner, consumer, operation, and request correlation.
-- The saved snapshot reference when the request selects restoration.
+- The saved snapshot name or shared reference when the request selects restoration.
 
 The adapter derives `Idempotency-Key` from the durable create operation.
 It preserves the same request identity for recovery. It does not perform an
@@ -52,6 +52,11 @@ remains in progress. Conflicting or multiple candidates fail closed.
 Boat retains create idempotency keys for 24 hours. That limit does not permit
 an adapter to replay a create after recovery becomes uncertain.
 See [create sandbox](https://docs.boat.dev/api/reference/sandboxes/create-sandbox.md).
+
+A local create rejection must report that no request was sent. It must remain
+distinct from uncertain delivery. The caller can correct the rejected request
+and start again without provider reconciliation. A failure after possible
+dispatch must never claim that nothing was sent.
 
 Inspection and managed inventory preserve recognized owner, consumer, size,
 network, lifetime, and correlation metadata. Missing or malformed optional
@@ -151,6 +156,12 @@ Saved snapshots use `/saved-snapshots`. Automatic sandbox snapshots are a
 different provider resource. Create-from-snapshot restores a saved snapshot
 into a disposable sandbox with all required create settings.
 
+Restoration accepts a plain saved-snapshot name or a secret share code with the
+`bsh_` prefix. Plain names retain their existing validation. Shared references
+must reach the create request unchanged. Recovery must verify the same source
+without placing the secret share code in provider labels or diagnostics.
+See [shared saved snapshots](https://docs.boat.dev/snapshots/templates.md#share-a-saved-snapshot-with-another-account).
+
 Snapshots-disabled sandboxes cannot be captured. Every adapter-created sandbox
 keeps snapshots disabled, including a sandbox restored from a saved snapshot.
 Saved-snapshot capture accepts a separately prepared source with snapshots
@@ -206,8 +217,10 @@ Resolved transient staging is removed with bounded trusted cleanup.
 
 ## Destruction And Conformance
 
-Destruction repeatedly uses `DELETE /sandboxes/{id}` with the exact deletion
-confirmation header. It completes only after a confirmed completed response or
+Destruction repeatedly uses `DELETE /sandboxes/{id}` with
+`X-Ascii-Confirm-Delete` equal to that request's target sandbox ID. The deletion
+operation derives confirmation from its own target. The caller supplies no
+separate confirmation value. It completes only after a confirmed completed response or
 terminal 404. Pending deletion remains incomplete. Destruction must not depend
 on `/deletion-operations/{id}`. Saved snapshots remain independent resources.
 See [sandbox deletion](https://docs.boat.dev/api/reference/sandboxes/permanently-delete-sandbox-data.md).

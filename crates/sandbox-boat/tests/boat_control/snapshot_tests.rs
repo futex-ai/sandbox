@@ -101,6 +101,7 @@ async fn saving_is_pending_ready_is_recovered_and_restore_keeps_disposable_setti
         .unwrap()
         .body;
     assert_eq!(payload["from"], "owned-capture");
+    assert_eq!(payload["labels"]["sandbox.from"], "saved:owned-capture");
     assert_eq!(payload["noEnv"], true);
     assert_eq!(payload["snapshots"], false);
     assert_eq!(payload["monitoring"], false);

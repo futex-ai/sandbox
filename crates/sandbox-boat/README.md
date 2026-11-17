@@ -17,12 +17,23 @@ Application services should receive the supported interface trait objects.
 
 ## What This Crate Does
 
-Each create sends one `POST /sandboxes` with `noEnv: true`, `snapshots: false`,
+Each valid create sends one `POST /sandboxes` with `noEnv: true`, `snapshots: false`,
 and `monitoring: false`. It sends the durable operation as `Idempotency-Key`.
 The original owner, consumer, profile, requested size, resolved size, deployment,
-network, lifetime, source, and correlation values remain in labels.
+network, lifetime, source identity, and correlation values remain in labels.
 Recovery verifies one exact match. Missing inventory remains pending.
 Conflicting or multiple matches fail closed.
+
+Restoration accepts a saved-snapshot name or a secret `bsh_...` share code from
+another Boat account. Plain names keep their lowercase name validation.
+The create request sends the exact reference in `from`. Recovery labels retain
+only a SHA-256 digest of a share code.
+
+A local create rejection returns `Error::SandboxCreateNotSent` with its typed
+cause in `source`. It proves that no provider request was sent. The caller can
+correct the request and start again. An uncertain create still requires
+`recover_sandbox_create` with the original request. Definitive provider refusals
+remain `Error::SandboxStartRefused`.
 
 Profiles select a default published Boat size. Explicit sizing can select a
 published name or minimum vCPU, memory, and disk amounts. Resource selection
@@ -48,8 +59,11 @@ Only `ready` confirms a successful capture. A known failed capture retains its
 name and `Failed` state so cleanup can delete it. The caller retains ownership
 of the source.
 
-Sandbox deletion repeats scoped DELETE with `X-Ascii-Confirm-Delete` until a
+Sandbox deletion derives `X-Ascii-Confirm-Delete` from its own target ID.
+Each scoped DELETE includes that exact ID, including repeated requests until a
 completed response or terminal 404. It never uses deletion-operation routes.
+Injected transports must send `BoatHttpRequest::delete_confirmation()` as that
+header when the value is present.
 Saved-snapshot deletion validates its separate deleted acknowledgment.
 
 Transport requires an HTTPS origin or its exact `/api/v1` base. It uses that
@@ -162,7 +176,7 @@ key and contact no Boat or E2B service.
 - `sandbox-runtime-assets` owns the shared atomic writer and reconciler.
 - `src/control/api.rs` defines the typed, injectable control boundary.
 - `src/transport/http.rs` enforces HTTPS, credentials, and response budgets.
-- `src/transport/request.rs` builds only validated provider routes.
+- `src/transport/request.rs` validates routes and derives sandbox deletion confirmation.
 - `src/catalogue.rs` owns published resources and exact prices.
 - `tests/boat_control/mod.rs` runs HTTP contracts and supported shared probes.
 

@@ -71,8 +71,9 @@ impl<'a> ConformanceResources<'a> {
                 (Some(sandbox), None)
             }
             Err(
-                error
-                @ (Error::SandboxStartRefused { .. } | Error::UnsupportedSizeSelection { .. }),
+                error @ (Error::SandboxCreateNotSent { .. }
+                | Error::SandboxStartRefused { .. }
+                | Error::UnsupportedSizeSelection { .. }),
             ) => {
                 self.pending_sandboxes
                     .retain(|(_, pending)| pending != &request);

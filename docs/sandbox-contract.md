@@ -158,7 +158,9 @@ policy. It must not silently adopt that sandbox or dispatch a replacement.
 Creation and snapshot methods separate an initial mutation from recovery. The
 trusted caller must durably record dispatch intent before the first mutation.
 After that call begins, every retry uses the matching recovery method with the
-same request; an empty eventual-consistency inventory remains in progress and
+same request unless a typed result proves that no create request was sent.
+A caller can correct a locally rejected unsent create and start again.
+An empty eventual-consistency inventory remains in progress and
 must not trigger another create. If delivery cannot be proven, the provider
 uses stable correlation data to recover exactly one resource or fails closed.
 Sandbox creation must dispatch its one provider mutation directly after local

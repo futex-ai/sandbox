@@ -6,7 +6,7 @@ use serde::Deserialize;
 
 use crate::{
     error::{Error, Result},
-    transport::request::{BoatHttpMethod, BoatHttpRequest, BoatRoute},
+    transport::request::BoatHttpRequest,
 };
 
 use super::{acknowledgment, client::ReqwestBoatControlApi, payload};
@@ -23,12 +23,7 @@ async fn delete_until_complete(client: &ReqwestBoatControlApi, id: &str) -> Resu
     loop {
         let response = client
             .transport
-            .send(BoatHttpRequest {
-                method: BoatHttpMethod::Delete,
-                route: BoatRoute::Sandbox(id.to_owned()),
-                body: None,
-                idempotency_key: None,
-            })
+            .send(BoatHttpRequest::sandbox_delete(id))
             .await?;
         if response.status == 404 {
             return Ok(());

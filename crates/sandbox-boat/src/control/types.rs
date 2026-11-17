@@ -24,7 +24,7 @@ pub struct BoatCreateSandbox {
     pub monitoring: bool,
     /// Exact durable request identity.
     pub labels: BoatLabels,
-    /// Exact saved-snapshot name, when restoring.
+    /// Exact saved-snapshot name or secret share reference, when restoring.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<String>,
     /// Durable create operation, sent only in the idempotency header.

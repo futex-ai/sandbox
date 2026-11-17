@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::{
-    request::{BoatHttpMethod, BoatHttpRequest, BoatRoute},
+    request::{BoatHttpMethod, BoatHttpRequest},
     settings::BoatHttpSettings,
 };
 
@@ -28,6 +28,9 @@ pub struct BoatHttpResponse {
 #[async_trait]
 pub trait BoatHttpTransport: Send + Sync {
     /// Sends one request. It must never replay a mutating request.
+    ///
+    /// `InvalidRequest` proves that no request was sent. Implementations apply
+    /// [`BoatHttpRequest::delete_confirmation`] as `X-Ascii-Confirm-Delete`.
     async fn send(&self, request: BoatHttpRequest) -> Result<BoatHttpResponse>;
 }
 
@@ -100,13 +103,11 @@ impl BoatHttpTransport for ReqwestBoatHttpTransport {
         if let Some(org) = self.config.organization() {
             builder = builder.header("X-Boat-Org", org);
         }
+        if let Some(id) = request.delete_confirmation() {
+            builder = builder.header("X-Ascii-Confirm-Delete", id);
+        }
         if let Some(key) = request.idempotency_key {
             builder = builder.header("Idempotency-Key", key);
-        }
-        if request.method == BoatHttpMethod::Delete
-            && let BoatRoute::Sandbox(id) = request.route
-        {
-            builder = builder.header("X-Ascii-Confirm-Delete", id);
         }
         if let Some(body) = request.body {
             builder = builder

@@ -137,7 +137,8 @@ async fn resource_selection_uses_explicit_units_without_downsizing_or_preflight(
     }));
     assert!(matches!(
         fixture.backend.create_sandbox(excessive).await,
-        Err(Error::UnsupportedSizeSelection { .. })
+        Err(Error::SandboxCreateNotSent { source })
+            if matches!(*source, Error::UnsupportedSizeSelection { .. })
     ));
     assert_eq!(
         fixture

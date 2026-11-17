@@ -13,11 +13,17 @@ pub(super) async fn create(
     backend: &BoatSandboxBackend,
     request: BackendCreateSandboxRequest,
 ) -> Result<BackendSandbox> {
-    let request = validation::create(backend, &request)?;
-    let value = mapping::control_result(
+    let request = match validation::create(backend, &request) {
+        Ok(request) => request,
+        Err(source) => {
+            return Err(Error::SandboxCreateNotSent {
+                source: Box::new(source),
+            });
+        }
+    };
+    let value = mapping::create_result(
         backend.control.create_sandbox(request).await,
         backend.config.backend_id(),
-        Some(ResourceKind::Sandbox),
     )?;
     Ok(mapping::sandbox(value))
 }

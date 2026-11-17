@@ -22,9 +22,12 @@ pub trait SandboxLifecycle: Send + Sync {
     /// use recovery reads but must not dispatch a second mutation.
     /// Account capacity is advisory and cannot determine create success.
     /// A typed start refusal proves no work started or queued and needs no recovery.
+    /// [`crate::Error::SandboxCreateNotSent`] proves no provider request was sent.
+    /// Its original typed cause can be corrected before a fresh create.
     ///
     /// Once invocation starts, retries must call `recover_sandbox_create`
-    /// instead of this method until the outcome is reconciled.
+    /// instead of this method until the outcome is reconciled, unless creation
+    /// returned `SandboxCreateNotSent`.
     async fn create_sandbox(&self, request: BackendCreateSandboxRequest) -> Result<BackendSandbox>;
     /// Reconciles a correlated sandbox create without dispatching a new create.
     ///
