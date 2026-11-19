@@ -209,7 +209,16 @@ partial inner frames. Heartbeats and reconnect do not extend idle time.
 
 Native file calls transfer only protected chunks of at most 4 MiB. They never
 read or write a caller's final workload path. The public file bound remains
-256 MiB. Trusted reads use one no-follow descriptor traversal and preserve the
+256 MiB. Upload and download acknowledgments must name the requested file after
+path normalization. Relative acknowledgment paths resolve against Boat's
+documented `/home/user` directory. Repeated separators and `.` parts do not
+change file identity. Any `..` part, path outside that home, or different file
+must fail acknowledgment validation. Success, encoding, and byte-count checks
+still apply.
+See [file writes](https://docs.boat.dev/api/reference/agent/write-sandbox-file.md)
+and [file reads](https://docs.boat.dev/api/reference/agent/read-sandbox-file.md).
+
+Trusted reads use one no-follow descriptor traversal and preserve the
 full original size. Trusted writes verify the full caller-computed digest
 before atomic replacement. Uncertain writes retain their trusted fence and
 return `FileWriteUnconfirmed` unless exact commit or revocation is proven.

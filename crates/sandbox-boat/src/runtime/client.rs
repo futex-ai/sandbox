@@ -14,7 +14,10 @@ use crate::{
     },
 };
 
-use super::api::{AttachRequest, BoatRuntimeApi, DetachedProcess, HelperOutput};
+use super::{
+    api::{AttachRequest, BoatRuntimeApi, DetachedProcess, HelperOutput},
+    file_path,
+};
 
 /// Production runtime API retaining the transport's origin and credential policy.
 pub struct HttpsBoatRuntimeApi {
@@ -146,7 +149,7 @@ impl BoatRuntimeApi for HttpsBoatRuntimeApi {
         if !result.ok
             || !result.success
             || result.kind != "file.written"
-            || result.path != path
+            || !file_path::matches(&path, &result.path)
             || result.encoding != "base64"
             || result.size != length
         {
@@ -171,7 +174,7 @@ impl BoatRuntimeApi for HttpsBoatRuntimeApi {
         if !result.ok
             || !result.success
             || result.kind != "file.read"
-            || result.path != path
+            || !file_path::matches(&path, &result.path)
             || result.encoding != "base64"
             || result.size > 4 * 1024 * 1024
         {
