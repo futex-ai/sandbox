@@ -117,7 +117,8 @@ pub(super) struct CreateSandboxBody {
     pub(super) allow_internet_access: bool,
     pub(super) network: NetworkBody,
     pub(super) auto_pause: bool,
-    pub(super) auto_pause_memory: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(super) auto_pause_memory: Option<bool>,
     pub(super) auto_resume: AutoResumeBody,
     pub(super) timeout: u32,
 }

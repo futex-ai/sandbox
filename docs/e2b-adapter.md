@@ -86,8 +86,9 @@ payload:
 - `IdleAutoPause` sends `autoPause: true`, `autoPauseMemory: true`,
   `autoResume: { enabled: false }`, and the configured idle timeout.
 - `OneShot { max_lifetime }` sends `autoPause: false`,
-  `autoPauseMemory: false`, `autoResume: { enabled: false }`, and that validated
-  whole-second maximum as `timeout`.
+  `autoResume: { enabled: false }`, and that validated whole-second maximum as
+  `timeout`. It omits `autoPauseMemory`, because E2B rejects that field
+  without `autoPause: true` with HTTP 400.
 
 The one-shot maximum is 3600 seconds, inclusive. Create and recover apply the
 same validation before provider access. Exact recovery metadata includes
