@@ -38,10 +38,11 @@ async fn initialization_timeout_kills_the_helper_and_its_children_before_returni
         ProcessTransportMock::run_split
             .next_call(matching!(_, _))
             .answers_arc(Arc::new(move |_, _, command| {
-                assert_eq!(command.command, "/usr/bin/timeout");
-                assert_eq!(command.args[2], "/usr/local/bin/sandbox-screen");
+                assert_eq!(command.command, "/usr/bin/python3");
+                assert_eq!(&command.args[..3], ["-I", "-S", "-c"]);
+                assert_eq!(command.args[5], "/usr/local/bin/sandbox-screen");
                 let output = Command::new(&command.command)
-                    .args(&command.args[..2])
+                    .args(&command.args[..5])
                     .args(["/usr/bin/python3", "-c", HELPER])
                     .arg(&process_started)
                     .arg(&process_mutation)

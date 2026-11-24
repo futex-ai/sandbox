@@ -294,9 +294,10 @@ output and provider-side user scoping cannot hide the terminal from lifecycle
 operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
-accepts only the exact version, width, and height response with no extra fields,
-keeps one absolute deadline, reserves cleanup time, and reports an unconfirmed
-termination separately so callers do not release a possibly active session.
+accepts only the exact version, width, and height response with no extra fields.
+Initialization uses the template's `/usr/bin/python3` to supervise resize.
+It reserves cleanup time within one absolute deadline. The adapter reports
+an unconfirmed termination separately so callers retain their session fence.
 Compatible custom template publication belongs to the external template
 release project, not this crate.
 

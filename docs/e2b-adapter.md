@@ -444,7 +444,11 @@ partial total.
 Screen ensure and capability discovery invoke the configured helper with
 bounded streams. Resize accepts only the exact version, width, and height
 object with no extra fields and requires a normal helper exit before reporting
-success. Port zero is rejected before connecting to a sandbox. A custom
+success. If the initialization resize budget expires, the adapter sends
+`SIGKILL` to the helper's process group and waits for the helper to exit
+before reporting a confirmed failure.
+
+Port zero is rejected before connecting to a sandbox. A custom
 screen-capable template is built and
 published by the separate template release project;
 `E2B_SCREEN_TEMPLATE_ID` selects one only for the ignored live smoke test.
