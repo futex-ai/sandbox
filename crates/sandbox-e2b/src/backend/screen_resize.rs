@@ -22,19 +22,45 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
+watched_signals = {
+    signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGQUIT,
+    signal.SIGALRM, signal.SIGCHLD,
+}
+signal.pthread_sigmask(signal.SIG_BLOCK, watched_signals)
+signal.signal(signal.SIGCHLD, signal.SIG_DFL)
 budget = int(sys.argv[1]) / 1000
-helper = subprocess.Popen(sys.argv[2:], start_new_session=True)
+cutoff = time.monotonic() + budget
+helper = subprocess.Popen(
+    sys.argv[2:],
+    start_new_session=True,
+    preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_SETMASK, []),
+)
+
+while True:
+    remaining = cutoff - time.monotonic()
+    if remaining <= 0:
+        break
+    received = signal.sigtimedwait(watched_signals, min(remaining, 0.05))
+    if received is not None and received.si_signo != signal.SIGCHLD:
+        break
+    observed_exit = os.waitid(
+        os.P_PID, helper.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT
+    )
+    if observed_exit is None:
+        continue
+    if time.monotonic() >= cutoff:
+        break
+    status = helper.wait()
+    sys.exit(128 - status if status < 0 else status)
+
 try:
-    status = helper.wait(timeout=budget)
-except subprocess.TimeoutExpired:
-    try:
-        os.killpg(helper.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    helper.wait()
-    sys.exit(124)
-sys.exit(128 - status if status < 0 else status)
+    os.killpg(helper.pid, signal.SIGKILL)
+except ProcessLookupError:
+    pass
+helper.wait()
+sys.exit(124)
 "#;
 
 #[derive(Deserialize)]

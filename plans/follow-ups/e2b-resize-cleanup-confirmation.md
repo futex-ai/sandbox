@@ -5,7 +5,7 @@
 - **Category:** Product bug.
 - **Added:** 2026-11-24, from the branch
   `calummoore/e2b-fix-screen-cleanup-test-in-ci-tcpd`, review finding 1 and
-  two problems that its finding checks found.
+  a problem that its finding checks found.
 - **Location:** `crates/sandbox-e2b/src/backend/screen_resize.rs:20-38`,
   `crates/sandbox-e2b/src/backend/screen_resize.rs:83`,
   `crates/sandbox-e2b/src/backend/_tests_/screen_stack/deadline_tests.rs:97-114`.
@@ -36,22 +36,25 @@
   replaced GNU `timeout`, because uutils `timeout` on Ubuntu 26.04 does not
   kill the group. The adapter still maps every supervisor exit code to a
   confirmed result.
-- **Problem:** Three cases report a confirmed result while a helper process
+- **Problem:** Two cases report a confirmed result while a helper process
   can still run:
-  - Something outside the adapter sends `SIGKILL` to the supervisor. The
-    helper is in its own session and keeps running. envd reports a signal
-    exit, and the adapter returns `BackendUnavailable`. GNU `timeout` on
-    `origin/main` had the same gap, because a `SIGKILL` to its PID left the
-    helper alive in its group. The transport itself sends `SIGKILL` to one
-    PID only at its own deadline, and then `run_split` fails, so the adapter
-    returns `ScreenViewportResizeUnconfirmed` in that case.
-  - The supervisor gets `SIGTERM`, `SIGINT`, `SIGHUP`, or `SIGQUIT`. It has
-    no handler, so it dies and the helper keeps running. GNU `timeout`
-    forwarded these signals to the helper's group and waited for the
-    helper. No adapter code sends these signals.
+  - envd's own `SendSignal` sends `SIGKILL` or `SIGTERM` to the supervisor,
+    or the supervisor dies by `SIGKILL` after the helper closed its output
+    pipes. envd normally sends its end event only after end-of-file on the
+    supervisor's stdout and stderr, which the helper and its children hold.
+    Its own `SendSignal` cancels that wait. The helper is in its own session
+    and keeps running. envd reports a signal exit, and the adapter returns
+    `BackendUnavailable`. GNU `timeout` on `origin/main` had the same gap.
+    The transport itself sends `SIGKILL` to one PID only at its own
+    deadline, and then `run_split` fails, so the adapter returns
+    `ScreenViewportResizeUnconfirmed` in that case.
   - The helper exits, normally or with an error, before the budget ends, and
     leaves a child running. The supervisor exits at once without a group
     kill. GNU `timeout` behaved the same.
+
+  The supervisor already handles `SIGTERM`, `SIGINT`, `SIGHUP`, `SIGQUIT`,
+  and `SIGALRM`: it kills the helper's group, reaps the helper, and exits
+  with status 124.
 - **Impact if no action:** In these rare cases the caller can release its
   session fence while an old resize process can still change the viewport.
 - **Root question:** What evidence must the adapter have before it reports a
@@ -66,31 +69,24 @@
     of `a_supervisor_exit_confirms_deadline_cleanup` to
     `ScreenViewportResizeUnconfirmed`, and add a unit test that status 124
     gives `BackendUnavailable`. Effort: Medium.
-  - **C.** Do B, and add handlers for `SIGTERM`, `SIGINT`, `SIGHUP`, and
-    `SIGQUIT` that kill the helper's group, reap the helper, and exit with
-    the confirmed-cleanup status. The handler must leave the interrupted
-    `Popen.wait` before it reaps, because that wait can hold Popen's lock.
-    Effort: Medium.
-  - **D.** Do C, and also kill the helper's group after the helper exits
+  - **C.** Do B, and also kill the helper's group after the helper exits
     before the budget ends. Risk: the kill also stops a process that the
     template helper leaves on purpose. Effort: Medium.
-  - **E.** After an outcome that is not on the allow-list, run a second
+  - **D.** After an outcome that is not on the allow-list, run a second
     trusted command in the termination allowance. It finds the helper's
     processes, kills them, and confirms that none remains. Effort: Large.
 - **Left out:** Using envd's end-of-file wait as the evidence, because envd
   skips that wait after its own `SIGKILL` or `SIGTERM`. Rebuilding the GNU
   self-kill design, because a self-kill looks the same as an outside
   `SIGKILL`.
-- **Wider fix:** C. The allow-list removes the false confirmation for every
+- **Wider fix:** B. The allow-list removes the false confirmation for every
   unexpected supervisor outcome.
 - **Previous examples:** The Boat supervisor requires child exit, trusted
   completion, and a normal supervisor exit as separate evidence
   (`docs/boat-adapter.md`).
-- **Related:** `plans/follow-ups/e2b-resize-late-success-after-cutoff.md`
-  changes the same supervisor wait. Settle both in one change, so that the
-  status table has a value for a completion seen after the cutoff.
-- **Recommendation:** C. It requires affirmative evidence before a confirmed
-  result, and it restores the signal forwarding that GNU `timeout` gave.
-- **Action:** ask the user, because options B to E reverse the expected
+- **Related:** None.
+- **Recommendation:** B. It requires affirmative evidence before a confirmed
+  result.
+- **Action:** ask the user, because options B to D reverse the expected
   result of the `origin/main` unit test
   `a_supervisor_exit_confirms_deadline_cleanup`, which is live functionality.
