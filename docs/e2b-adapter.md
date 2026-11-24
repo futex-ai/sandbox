@@ -88,7 +88,7 @@ payload:
 - `OneShot { max_lifetime }` sends `autoPause: false`,
   `autoResume: { enabled: false }`, and the validated whole-second maximum as
   `timeout`. The request omits `autoPauseMemory`.
-  E2B rejects `autoPauseMemory` when `autoPause` is `false`.
+  E2B rejects `autoPauseMemory: false` when `autoPause` is `false`.
 
 The one-shot maximum is 3600 seconds, inclusive. Create and recover apply the
 same validation before provider access. Exact recovery metadata includes

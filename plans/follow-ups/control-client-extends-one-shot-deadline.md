@@ -13,7 +13,7 @@
   `crates/sandbox-e2b/src/control/client.rs:256-261`,
   `crates/sandbox-e2b/src/control/request.rs:45`,
   `crates/sandbox-e2b/src/control/request.rs:49-52`,
-  `crates/sandbox-e2b/src/control/types.rs:175-179`.
+  `crates/sandbox-e2b/src/control/types.rs:176-180`.
 - **Reason:** The plan that found this problem on 2026-09-22 left the choice
   of the fix to a maintainer, and nobody has chosen yet.
 
@@ -38,7 +38,7 @@
     pause, or any other access operation must not move its destruction
     deadline beyond the original `max_lifetime`." Lines 213-214 say:
     "one-shot sandboxes retain their original destruction deadline."
-  - The adapter promise. `docs/e2b-adapter.md:99-103` says that the concrete
+  - The adapter promise. `docs/e2b-adapter.md:100-104` says that the concrete
     control client reads sandbox detail before connect or pause. For a
     running one-shot sandbox, "it never sends connect, resume, pause, or
     timeout updates". `crates/sandbox-e2b/README.md:79-82` and the trait docs
@@ -46,8 +46,9 @@
     same. No doc tells a direct caller to add the marker.
   - Create. `create_sandbox` at `crates/sandbox-e2b/src/control/client.rs:67-112`
     sends a one-shot body at lines 73-95: `autoPause: false`,
-    `autoPauseMemory: false`, `autoResume.enabled: false`, and a `timeout`
-    equal to `max_lifetime`. It copies the caller's metadata unchanged at
+    `autoResume.enabled: false`, and a `timeout` equal to `max_lifetime`.
+    It omits `autoPauseMemory`, because E2B rejects `autoPauseMemory: false`
+    when `autoPause` is `false`. It copies the caller's metadata unchanged at
     line 83. It never adds the marker.
   - Later access. `connect_sandbox` at `client.rs:130-133`,
     `connect_sandbox_with_timeout` at lines 135-155, and `pause_sandbox` at
@@ -109,7 +110,7 @@
     is only extended". The file is at
     <https://github.com/e2b-dev/E2B/blob/451a696c62d9a2fa764d523f2b1c1c7eb10e9708/spec/openapi.yml>.
   - The repository decodes only `autoResume`. `SandboxLifecycleBody` at
-    `types.rs:175-179` has no `onTimeout` field. `read_access` at
+    `types.rs:176-180` has no `onTimeout` field. `read_access` at
     `client.rs:237-239` returns `Unavailable` when the detail has no
     `lifecycle`.
   - Tests. No test covers the direct client from create to connect or pause.
@@ -153,8 +154,8 @@
     - Add regressions from create to connect and from create to pause, for
       both public paths. Add `lifecycle` with `onTimeout` to the test details
       that rely on the marker.
-    - Update `docs/e2b-adapter.md:99-103`, `crates/sandbox-e2b/README.md:79-82`,
-      and the trait docs at `api.rs:28-43`. `docs/e2b-adapter.md` has 471
+    - Update `docs/e2b-adapter.md:100-104`, `crates/sandbox-e2b/README.md:79-82`,
+      and the trait docs at `api.rs:28-43`. `docs/e2b-adapter.md` has 472
       lines. The `documentation` skill from `futex-ai/skills` says: "When you
       touch a doc that passes the target, split it into linked pages in the
       same change." The target is about 250 lines.
