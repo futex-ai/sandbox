@@ -79,8 +79,8 @@ impl E2bControlApi for ReqwestE2bControlApi {
             Err(_) => return Err(Error::InvalidRequest),
         };
         let (auto_pause, auto_pause_memory, timeout) = match one_shot_timeout {
-            Some(timeout) => (false, false, timeout),
-            None => (true, true, request.idle_timeout_seconds),
+            Some(timeout) => (false, None, timeout),
+            None => (true, Some(true), request.idle_timeout_seconds),
         };
         let body = encode(&CreateSandboxBody {
             template_id: request.template_id,

@@ -90,9 +90,9 @@ async fn one_shot_create_disables_pause_and_uses_its_maximum_lifetime() {
     let request = requests.lock().expect("request lock")[0].clone();
     let body: Value = serde_json::from_slice(request.body.as_deref().expect("create body"))
         .expect("body should be JSON");
-    assert_eq!(body.as_object().map(|body| body.len()), Some(9));
     assert_eq!(body["autoPause"], false);
-    assert_eq!(body["autoPauseMemory"], false);
+    assert_eq!(body.get("autoPauseMemory"), None);
+    assert_eq!(body.as_object().map(|body| body.len()), Some(8));
     assert_eq!(body["autoResume"]["enabled"], false);
     assert_eq!(body["timeout"], 90);
 }
