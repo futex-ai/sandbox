@@ -10,7 +10,8 @@ use unimock::{MockFn, Unimock, matching};
 
 use crate::backend::configured::E2bSandboxBackend;
 use crate::{
-    ControlSandboxReadAccess, E2bControlApiMock, ProcessSplitOutput, ProcessTransportMock,
+    ControlSandboxReadAccess, E2bControlApiMock, E2bRuntimeConventions, ProcessSplitOutput,
+    ProcessTransportMock,
 };
 
 use super::support::{config, split_success};
@@ -32,23 +33,24 @@ async fn expired_initialization_never_connects_or_starts_a_helper() {
 
 #[tokio::test]
 async fn initialization_uses_read_only_credentials_and_reserves_termination_time() {
+    let config = config().with_runtime_conventions(
+        E2bRuntimeConventions::new("tenant", "tenant-terminal-", "/opt/tenant/screen-helper")
+            .expect("valid runtime conventions"),
+    );
     let processes = Unimock::new(
         ProcessTransportMock::run_split
             .next_call(matching!(_, _))
             .answers(&|_, _, command| {
-                assert_eq!(command.command, "/usr/bin/timeout");
-                assert_eq!(command.args[0], "--signal=KILL");
-                let duration: f64 = command.args[1]
-                    .trim_end_matches('s')
-                    .parse()
-                    .expect("timeout seconds");
-                assert!(duration > 0.0 && duration <= 15.0);
+                assert_eq!(command.command, "/usr/bin/python3");
+                assert_eq!(&command.args[..3], ["-I", "-S", "-c"]);
+                let budget_ms: u64 = command.args[4].parse().expect("timeout milliseconds");
+                assert!((1..=15_000).contains(&budget_ms));
                 assert_eq!(
-                    &command.args[2..],
-                    ["/usr/local/bin/sandbox-screen", "resize", "704", "768"]
+                    &command.args[5..],
+                    ["/opt/tenant/screen-helper", "resize", "704", "768"]
                 );
                 assert!(
-                    command.deadline >= Duration::from_secs_f64(duration) + Duration::from_secs(3)
+                    command.deadline >= Duration::from_millis(budget_ms) + Duration::from_secs(3)
                 );
                 Ok(split_success(
                     br#"{"version":1,"width":704,"height":768}"#,
@@ -57,7 +59,7 @@ async fn initialization_uses_read_only_credentials_and_reserves_termination_time
             }),
     );
     let backend =
-        E2bSandboxBackend::with_transports(config(), Arc::new(control()), Arc::new(processes));
+        E2bSandboxBackend::with_transports(config, Arc::new(control()), Arc::new(processes));
     assert_eq!(
         backend
             .resize_screen_stack(request())
