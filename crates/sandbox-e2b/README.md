@@ -295,11 +295,15 @@ operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
 accepts only the exact version, width, and height response with no extra fields.
-Initialization uses the template's `/usr/bin/python3` to supervise resize.
-It reserves cleanup time within one absolute deadline. The adapter reports
-an unconfirmed termination separately so callers retain their session fence.
-Compatible custom template publication belongs to the external template
-release project, not this crate.
+A resize with a deadline, which bounded initialization uses, runs the helper
+under a trusted supervisor on the template's `/usr/bin/python3`. The adapter
+reserves cleanup time within that one absolute deadline. Only a normal
+supervisor exit that reports helper success, helper failure, or a kill of the
+helper's process group confirms that the helper ended. A confirmed failure
+returns `BackendUnavailable`. Every other result, including a signal exit of
+the supervisor, returns `ScreenViewportResizeUnconfirmed`, so callers retain
+their session fence. Compatible custom template publication belongs to the
+external template release project, not this crate.
 
 ## Quick Start
 

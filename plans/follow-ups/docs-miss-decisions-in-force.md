@@ -235,12 +235,12 @@
 - **Options:**
   - **A.** Add each entry above to its home with its text. Effort: Large.
     - Split `docs/sandbox-contract.md`, with 428 lines, and
-      `docs/e2b-adapter.md`, with 471 lines, into linked pages of about 250
+      `docs/e2b-adapter.md`, with 488 lines, into linked pages of about 250
       lines or less, as the `documentation` skill requires.
-    - Two sections pass that target alone, with 252 and 255 lines, so each
+    - Two sections pass that target alone, with 252 and 271 lines, so each
       needs its own split:
       - "Bounds And Failure Safety", `docs/sandbox-contract.md:136-387`.
-      - "Files, Processes, Terminals, And Screens", `docs/e2b-adapter.md:197-451`.
+      - "Files, Processes, Terminals, And Screens", `docs/e2b-adapter.md:198-468`.
     - The same skill requires a second move in each protocol doc that the
       change touches. The change moves out function names, private type
       names, internal call order, and descriptions of mechanics. Entry points

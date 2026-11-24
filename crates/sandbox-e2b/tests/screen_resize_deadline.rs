@@ -140,14 +140,22 @@ async fn initialization_signal_kills_the_helper_and_its_children_before_returnin
 #[tokio::test]
 async fn initialization_resize_reports_the_supervised_helper_outcome() {
     let viewport = ScreenViewportSize::new(704, 768).expect("viewport");
-    for (helper_exit, succeeds) in [("0", true), ("1", false), ("SIGTERM", false)] {
+    for (helper_exit, succeeds, supervisor_exit) in
+        [("0", true, 0), ("1", false, 3), ("SIGTERM", false, 3)]
+    {
         let directory = tempfile::tempdir().expect("fixture directory");
         let result = resize_with_helper(
             viewport,
             directory.path(),
             ACKNOWLEDGMENT_HELPER,
             ("SCREEN_TEST_HELPER_EXIT", helper_exit),
-            |_| {},
+            move |exit_code| {
+                assert_eq!(
+                    exit_code,
+                    Some(supervisor_exit),
+                    "unexpected supervisor exit code for helper exit {helper_exit}"
+                );
+            },
         )
         .await;
         let matches_expected = match &result {

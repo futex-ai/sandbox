@@ -155,7 +155,7 @@
       both public paths. Add `lifecycle` with `onTimeout` to the test details
       that rely on the marker.
     - Update `docs/e2b-adapter.md:100-104`, `crates/sandbox-e2b/README.md:79-82`,
-      and the trait docs at `api.rs:28-43`. `docs/e2b-adapter.md` has 472
+      and the trait docs at `api.rs:28-43`. `docs/e2b-adapter.md` has 488
       lines. The `documentation` skill from `futex-ai/skills` says: "When you
       touch a doc that passes the target, split it into linked pages in the
       same change." The target is about 250 lines.

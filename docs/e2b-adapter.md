@@ -450,6 +450,22 @@ screen-capable template is built and
 published by the separate template release project;
 `E2B_SCREEN_TEMPLATE_ID` selects one only for the ignored live smoke test.
 
+A resize with a deadline runs the helper in its own process group under a
+trusted Python supervisor. The adapter confirms resize process termination only
+when the supervisor exits normally with a status that reports one of three
+outcomes, each after the supervisor reaped the helper: the helper exited
+normally with status zero before its time budget ended; the helper ended with a
+non-zero status or a signal before then; or the supervisor killed the helper's
+process group at the end of the budget or on a termination signal that it
+handles. Success requires the first outcome and the exact acknowledgment. Any
+other confirmed result returns `BackendUnavailable`. Every result without that
+confirmation, including a signal exit of the supervisor, returns
+`ScreenViewportResizeUnconfirmed`. A signal exit does not confirm cleanup,
+because an outside kill of the supervisor gives the same exit while the helper
+can keep running. When the helper ends before its budget, the supervisor does
+not kill the helper's process group, because that kill would also stop a
+process that the template helper leaves running on purpose.
+
 ## Live Tests
 
 The `live-e2b` feature only compiles credentialed tests. Every live test is also
