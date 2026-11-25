@@ -454,17 +454,22 @@ A resize that fails before the adapter tries to send the resize command returns
 the typed error of that failure and needs no cleanup, because no resize process
 exists. For example, a deadline that leaves no time to run the helper returns
 `BackendUnavailable`. After that attempt, a resize with a deadline accepts only
-three outcomes as proof that the helper ended: the helper ended successfully
-before its time budget ended, the helper ended with an error or a signal before
-then, or the adapter stopped the helper and every process in its group. Success
-requires the first outcome and the exact acknowledgment. Every other proven
-outcome returns `BackendUnavailable`. Every result without that proof returns
-`ScreenViewportResizeUnconfirmed`, including a transport error, a helper that
-cannot start, and a signal end of the process that runs the helper. A signal
-end is not proof, because an outside kill gives the same report while the
-helper can keep running. When the helper ends before its budget, the adapter
-does not stop the other processes in its group, because that would also stop a
-process that the template helper leaves running on purpose.
+three outcomes as proof that the helper ended: the adapter saw the helper end
+successfully before its time budget ended, the adapter saw the helper end with
+an error or a signal before then, or the adapter stopped the helper and every
+process in its group. The adapter stops the group when the budget ends or a
+termination request arrives before it sees the helper end. A helper end that
+the adapter sees only at or after the end of the budget also counts as a stop
+of the group. Success requires the first outcome and the exact acknowledgment.
+Every other proven outcome returns `BackendUnavailable`. Every result without
+that proof returns `ScreenViewportResizeUnconfirmed`, including a transport
+error, a helper that cannot start, and a signal end of the process that runs
+the helper. A signal end is not proof, because an outside kill gives the same
+report while the helper can keep running. When the adapter sees the helper end
+before its budget ends, it does not stop the other processes in the helper's
+group, because that would also stop a process that the template helper leaves
+running on purpose. A process that must outlive every resize cannot rely on
+this, because a late helper end or a termination request stops the group.
 
 ## Live Tests
 

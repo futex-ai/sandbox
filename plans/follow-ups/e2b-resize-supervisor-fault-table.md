@@ -6,8 +6,8 @@
 - **Added:** 2026-11-25, from the branch
   `calummoore/e2b-confirm-resize-cleanup-and-ci-time-7p51`, PR #17, the
   wider fix of review finding 2.
-- **Location:** `crates/sandbox-e2b/tests/screen_resize_deadline.rs:195`,
-  `crates/sandbox-e2b/src/backend/screen_resize.rs:46`.
+- **Location:** `crates/sandbox-e2b/tests/screen_resize_deadline.rs:198`,
+  `crates/sandbox-e2b/src/backend/screen_resize.rs:50`.
 - **Reason:** A fault table is a test for a class of defects, and the
   always-on rules keep that choice for the user.
 

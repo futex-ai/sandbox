@@ -40,9 +40,13 @@ const SUPERVISOR_TIMEOUT_CLEANUP: i32 = 124;
 /// The helper runs in its own session and process group so the supervisor
 /// can kill the group and reap the helper.
 ///
-/// The supervisor reaps the helper before it returns 0 or 3. On an early exit,
-/// it leaves the group alone so any processes the template helper keeps
-/// running on purpose can continue.
+/// When the supervisor observes the helper exit before the cutoff, it reaps
+/// the helper, leaves the group alone, and exits 0 or 3. This lets processes
+/// the template helper keeps running on purpose continue.
+///
+/// On budget expiry, including a helper exit seen at or after the cutoff, the
+/// supervisor kills the group, reaps the helper, and exits 124. It takes the
+/// same path if it receives a watched termination signal first.
 const RESIZE_SUPERVISOR: &str = r#"
 # Keep exit codes in sync with SUPERVISOR_HELPER_FAILURE and
 # SUPERVISOR_TIMEOUT_CLEANUP in Rust.

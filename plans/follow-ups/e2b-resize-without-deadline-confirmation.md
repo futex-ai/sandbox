@@ -6,7 +6,7 @@
 - **Added:** 2026-11-25, from the branch
   `calummoore/e2b-confirm-resize-cleanup-and-ci-time-7p51`, PR #17, the
   finding check of review finding 3.
-- **Location:** `crates/sandbox-e2b/src/backend/screen_resize.rs:143`,
+- **Location:** `crates/sandbox-e2b/src/backend/screen_resize.rs:147`,
   `crates/sandbox-e2b/src/backend/_tests_/screen_stack/resize_tests.rs:134`.
 - **Reason:** The user's decision of 2026-11-24 covered only a resize with
   a deadline, and each fix except option A changes a tested result on

@@ -40,12 +40,51 @@ def readiness_monotonic():
 time.monotonic = readiness_monotonic
 "#;
 
+/// The child inherits the helper's process group and stdio. It closes the
+/// readiness pipe after writing its marker, then waits for stdin release.
+const CHILD_FIXTURE: &str = r#"
+import os
+import subprocess
+import sys
+
+child_script = '''
+import os, pathlib, signal, sys
+
+marker, supervisor, signal_name, ready_fd = sys.argv[1:]
+pathlib.Path(marker).write_text('started')
+os.close(int(ready_fd))
+if signal_name:
+    os.kill(int(supervisor), getattr(signal, signal_name))
+sys.stdin.buffer.read(1)
+pathlib.Path('late-mutation').write_text('late resize')
+'''
+
+def start_child(marker, signal_name=''):
+    read_fd, write_fd = os.pipe()
+    with os.fdopen(read_fd, 'rb') as ready, os.fdopen(write_fd, 'wb') as writer:
+        child = subprocess.Popen(
+            [
+                sys.executable, '-c', child_script, marker,
+                str(os.getppid()), signal_name, str(write_fd),
+            ],
+            pass_fds=(write_fd,),
+        )
+        writer.close()
+        ready.read(1)
+    return child
+"#;
+
 /// Build the helper argv with Python's isolated startup flags.
 pub(super) fn python_helper_argv(helper: &str) -> Vec<OsString> {
     ["/usr/bin/python3", "-I", "-S", "-c", helper]
         .into_iter()
         .map(OsString::from)
         .collect()
+}
+
+/// Build the argv for a helper that starts the shared child fixture.
+pub(super) fn python_helper_argv_with_child(helper: &str) -> Vec<OsString> {
+    python_helper_argv(&format!("{CHILD_FIXTURE}{helper}"))
 }
 
 fn run_supervisor(

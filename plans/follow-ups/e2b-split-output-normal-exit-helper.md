@@ -8,7 +8,7 @@
   wider fix of review finding 3.
 - **Location:** `crates/sandbox-e2b/src/process/types.rs:137`,
   `crates/sandbox-e2b/src/backend/screen_stack.rs:121`,
-  `crates/sandbox-e2b/src/backend/screen_resize.rs:140`,
+  `crates/sandbox-e2b/src/backend/screen_resize.rs:144`,
   `crates/sandbox-e2b/src/process/status.rs:6`.
 - **Reason:** The fix reaches the process module and screen setup, which the
   branch that found it did not change.

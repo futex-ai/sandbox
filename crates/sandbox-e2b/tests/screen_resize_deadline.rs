@@ -7,24 +7,18 @@ mod resize_supervisor;
 
 use sandbox_interface::{Error, ScreenViewportSize};
 
-use self::resize_supervisor::{python_helper_argv, resize_with_helper};
+use self::resize_supervisor::{
+    python_helper_argv, python_helper_argv_with_child, resize_with_helper,
+};
 
 const CLEANUP_HELPER: &str = r#"
-import os, subprocess, sys
-
 signal_name = os.environ['SCREEN_TEST_SIGNAL']
-child = subprocess.Popen([sys.executable, '-c', '''
-import os, pathlib, signal, sys
-
-supervisor, signal_name = sys.argv[1:]
 marker = 'signal-ready' if signal_name else 'started'
-pathlib.Path(marker).write_text('started')
-if signal_name:
-    os.kill(int(supervisor), getattr(signal, signal_name))
-sys.stdin.buffer.read(1)
-pathlib.Path('late-mutation').write_text('late resize')
-''', str(os.getppid()), signal_name])
-child.wait()
+start_child(marker, signal_name).wait()
+"#;
+
+const START_EARLY_EXIT_CHILD: &str = r#"
+start_child('early-exit-ready')
 "#;
 
 const ACKNOWLEDGMENT_HELPER: &str = r#"
@@ -70,7 +64,7 @@ async fn initialization_timeout_kills_the_helper_and_its_children_before_returni
     let result = resize_with_helper(
         viewport,
         directory.path(),
-        python_helper_argv(CLEANUP_HELPER),
+        python_helper_argv_with_child(CLEANUP_HELPER),
         Some(("SCREEN_TEST_SIGNAL", "")),
         "",
         |output| {
@@ -106,7 +100,7 @@ async fn initialization_signal_kills_the_helper_and_its_children_before_returnin
         let result = resize_with_helper(
             viewport,
             directory.path(),
-            python_helper_argv(CLEANUP_HELPER),
+            python_helper_argv_with_child(CLEANUP_HELPER),
             Some(("SCREEN_TEST_SIGNAL", signal)),
             "",
             move |output| {
@@ -133,6 +127,7 @@ async fn initialization_signal_kills_the_helper_and_its_children_before_returnin
 #[tokio::test]
 async fn initialization_resize_reports_the_supervised_helper_outcome() {
     let viewport = ScreenViewportSize::new(704, 768).expect("viewport");
+    let helper = format!("{START_EARLY_EXIT_CHILD}{ACKNOWLEDGMENT_HELPER}");
     for (helper_exit, succeeds, supervisor_exit) in
         [("0", true, 0), ("1", false, 3), ("SIGTERM", false, 3)]
     {
@@ -140,7 +135,7 @@ async fn initialization_resize_reports_the_supervised_helper_outcome() {
         let result = resize_with_helper(
             viewport,
             directory.path(),
-            python_helper_argv(ACKNOWLEDGMENT_HELPER),
+            python_helper_argv_with_child(&helper),
             Some(("SCREEN_TEST_HELPER_EXIT", helper_exit)),
             "",
             move |output| {
@@ -161,6 +156,14 @@ async fn initialization_resize_reports_the_supervised_helper_outcome() {
         assert!(
             matches_expected,
             "helper exit {helper_exit}: expected success {succeeds}, got {result:?}"
+        );
+        assert!(
+            directory.path().join("early-exit-ready").exists(),
+            "helper exit {helper_exit}: fixture child must have started"
+        );
+        assert!(
+            directory.path().join("late-mutation").exists(),
+            "helper exit {helper_exit}: fixture child must survive and write late-mutation after release"
         );
     }
 }
