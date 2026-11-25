@@ -295,11 +295,13 @@ operations.
 
 Screen ensure and resize commands use the configured template helper. Resize
 accepts only the exact version, width, and height response with no extra fields.
-Initialization uses the template's `/usr/bin/python3` to supervise resize.
-It reserves cleanup time within one absolute deadline. The adapter reports
-an unconfirmed termination separately so callers retain their session fence.
-Compatible custom template publication belongs to the external template
-release project, not this crate.
+A resize with a deadline, which bounded initialization uses, runs the helper
+under a trusted supervisor on the template's `/usr/bin/python3`. The adapter
+reserves cleanup time within that one absolute deadline. The resize rule in
+[E2B adapter guarantees](../../docs/e2b-adapter.md#files-processes-terminals-and-screens)
+says which results prove that the helper ended and when callers must retain
+their session fence. Compatible custom template publication belongs to the
+external template release project, not this crate.
 
 ## Quick Start
 

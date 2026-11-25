@@ -95,7 +95,7 @@ async fn a_timeout_without_observed_exit_is_not_reported_as_a_safe_failure() {
 }
 
 #[tokio::test]
-async fn a_supervisor_exit_confirms_deadline_cleanup() {
+async fn a_signalled_supervisor_leaves_deadline_cleanup_unconfirmed() {
     let processes = Unimock::new(
         ProcessTransportMock::run_split
             .next_call(matching!(_, _))
@@ -107,10 +107,65 @@ async fn a_supervisor_exit_confirms_deadline_cleanup() {
     );
     let backend =
         E2bSandboxBackend::with_transports(config(), Arc::new(control()), Arc::new(processes));
-    assert!(matches!(
-        backend.resize_screen_stack(request()).await,
-        Err(Error::BackendUnavailable { .. })
-    ));
+    let result = backend.resize_screen_stack(request()).await;
+    assert!(
+        matches!(result, Err(Error::ScreenViewportResizeUnconfirmed)),
+        "expected ScreenViewportResizeUnconfirmed after a signal, got {result:?}"
+    );
+}
+
+#[tokio::test]
+async fn known_supervisor_failure_codes_report_backend_unavailable() {
+    for (case, exit_code) in [("timeout cleanup", 124), ("helper failure", 3)] {
+        let processes = Unimock::new(
+            ProcessTransportMock::run_split
+                .some_call(matching!(_, _))
+                .returns(Ok(ProcessSplitOutput {
+                    exited: true,
+                    exit_code: Some(exit_code),
+                    ..ProcessSplitOutput::default()
+                })),
+        );
+        let backend =
+            E2bSandboxBackend::with_transports(config(), Arc::new(control()), Arc::new(processes));
+        let result = backend.resize_screen_stack(request()).await;
+        assert!(
+            matches!(result, Err(Error::BackendUnavailable { .. })),
+            "expected BackendUnavailable after {case} with exit code {exit_code}, got {result:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn unexpected_supervisor_exits_leave_deadline_cleanup_unconfirmed() {
+    let empty_stdout = b"".as_slice();
+    for (exited, exit_code, stdout) in [
+        (true, 1, empty_stdout),
+        (true, 2, empty_stdout),
+        (true, 120, empty_stdout),
+        (true, 137, empty_stdout),
+        (true, 255, empty_stdout),
+        (false, 124, empty_stdout),
+        (false, 0, br#"{"version":1,"width":704,"height":768}"#),
+    ] {
+        let processes = Unimock::new(
+            ProcessTransportMock::run_split
+                .some_call(matching!(_, _))
+                .returns(Ok(ProcessSplitOutput {
+                    exited,
+                    exit_code: Some(exit_code),
+                    stdout: stdout.to_vec(),
+                    ..ProcessSplitOutput::default()
+                })),
+        );
+        let backend =
+            E2bSandboxBackend::with_transports(config(), Arc::new(control()), Arc::new(processes));
+        let result = backend.resize_screen_stack(request()).await;
+        assert!(
+            matches!(result, Err(Error::ScreenViewportResizeUnconfirmed)),
+            "expected ScreenViewportResizeUnconfirmed for exited={exited} and exit code {exit_code}, got {result:?}"
+        );
+    }
 }
 
 fn request() -> BackendResizeScreenStackRequest {

@@ -15,9 +15,41 @@ use super::{configured::E2bSandboxBackend, mapping};
 const MAX_EXECUTION: Duration = Duration::from_secs(15);
 const TERMINATION_ALLOWANCE: Duration = Duration::from_secs(3);
 
-/// Keep the supervisor outside the helper's group so it can kill the group
-/// and reap the helper before it exits.
+/// Exit status for a failed helper reaped before the budget expires.
+///
+/// With `exited: true`, status 0 proceeds to acknowledgment validation.
+/// Status 3 confirms helper failure, and status 124 confirms timeout cleanup.
+/// Both failure codes return `Error::BackendUnavailable`. All other outcomes
+/// return `Error::ScreenViewportResizeUnconfirmed`.
+///
+/// The supervisor runs as `python3`. The interpreter can exit with 0 on
+/// success, 1 for an uncaught exception, 2 for a command-line usage error,
+/// or 120 for a stdout flush failure at exit. A signal death has no normal
+/// exit code, and envd reports `exited: false`. An outside kill can produce
+/// that report while the helper keeps running. Shells and wrappers report
+/// 126, 127, or `128 + signal number`. The supervisor reserves 124 for timeout
+/// cleanup. Status 3 is the lowest code outside these cases, so an unexpected
+/// supervisor exit cannot look like a helper failure.
+const SUPERVISOR_HELPER_FAILURE: i32 = 3;
+
+/// Exit status after the supervisor kills the helper's process group and
+/// reaps the helper on budget expiry or receipt of `SIGTERM`, `SIGINT`,
+/// `SIGHUP`, `SIGQUIT`, or `SIGALRM`.
+const SUPERVISOR_TIMEOUT_CLEANUP: i32 = 124;
+
+/// The helper runs in its own session and process group so the supervisor
+/// can kill the group and reap the helper.
+///
+/// When the supervisor observes the helper exit before the cutoff, it reaps
+/// the helper, leaves the group alone, and exits 0 or 3. This lets processes
+/// the template helper keeps running on purpose continue.
+///
+/// On budget expiry, including a helper exit seen at or after the cutoff, the
+/// supervisor kills the group, reaps the helper, and exits 124. It takes the
+/// same path if it receives a watched termination signal first.
 const RESIZE_SUPERVISOR: &str = r#"
+# Keep exit codes in sync with SUPERVISOR_HELPER_FAILURE and
+# SUPERVISOR_TIMEOUT_CLEANUP in Rust.
 import os
 import signal
 import subprocess
@@ -53,7 +85,7 @@ while True:
     if time.monotonic() >= cutoff:
         break
     status = helper.wait()
-    sys.exit(128 - status if status < 0 else status)
+    sys.exit(0 if status == 0 else 3)
 
 try:
     os.killpg(helper.pid, signal.SIGKILL)
@@ -106,10 +138,15 @@ pub(super) async fn resize(
         )
         .await
     {
-        Ok(output) if output.exit_code.is_some() => output,
-        Ok(_) | Err(_) => return Err(Error::ScreenViewportResizeUnconfirmed),
+        Ok(output) => output,
+        Err(_) => return Err(Error::ScreenViewportResizeUnconfirmed),
     };
-    acknowledge(backend, request.viewport, output)
+    match (budget, output.exited, output.exit_code) {
+        (_, true, Some(0)) => acknowledge(backend, request.viewport, output),
+        (Some(_), true, Some(SUPERVISOR_TIMEOUT_CLEANUP | SUPERVISOR_HELPER_FAILURE))
+        | (None, _, Some(_)) => Err(unavailable(backend)),
+        _ => Err(Error::ScreenViewportResizeUnconfirmed),
+    }
 }
 
 fn remaining(deadline: SystemTime) -> Option<Duration> {
@@ -163,11 +200,7 @@ fn acknowledge(
     viewport: ScreenViewportSize,
     output: ProcessSplitOutput,
 ) -> Result<ScreenViewportSize> {
-    if !output.exited
-        || output.exit_code != Some(0)
-        || output.stdout_overflowed
-        || output.stderr_overflowed
-    {
+    if output.stdout_overflowed || output.stderr_overflowed {
         return Err(unavailable(backend));
     }
     let Ok(acknowledgment) = serde_json::from_slice::<ResizeAcknowledgment>(&output.stdout) else {

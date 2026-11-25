@@ -234,13 +234,13 @@
   alternative again?
 - **Options:**
   - **A.** Add each entry above to its home with its text. Effort: Large.
-    - Split `docs/sandbox-contract.md`, with 428 lines, and
-      `docs/e2b-adapter.md`, with 471 lines, into linked pages of about 250
-      lines or less, as the `documentation` skill requires.
-    - Two sections pass that target alone, with 252 and 255 lines, so each
-      needs its own split:
-      - "Bounds And Failure Safety", `docs/sandbox-contract.md:136-387`.
-      - "Files, Processes, Terminals, And Screens", `docs/e2b-adapter.md:197-451`.
+    - Split `docs/e2b-adapter.md` into linked pages of about 250 lines or
+      less, as the `documentation` skill requires. The doc passes that
+      target. Its section "Files, Processes, Terminals, And Screens" passes
+      the target alone, so that section needs its own split.
+    - Measure the doc with `wc -l docs/e2b-adapter.md`. Measure the section
+      with
+      `awk '/^## /{s=($0=="## Files, Processes, Terminals, And Screens")} s' docs/e2b-adapter.md | wc -l`.
     - The same skill requires a second move in each protocol doc that the
       change touches. The change moves out function names, private type
       names, internal call order, and descriptions of mechanics. Entry points
@@ -266,19 +266,43 @@
     alternatives at the permalinks. The split and the code-name move then
     apply only to `docs/sandbox-contract.md`. Agents can still propose the
     rejected alternatives. Effort: Medium.
+  - **C.** Do A, but before the split, make the adapter doc state only E2B
+    behaviour, as `docs/boat-adapter.md:185-189` does. Effort: Large.
+    - Replace each passage of `docs/e2b-adapter.md` that restates a shared
+      capability page with one summary sentence and a link to that page.
+    - Example: the passage that starts "Inspection and output reads share
+      one record-aware resolver" restates the rules of
+      `docs/sandbox-terminal-screen-contract.md`, mainly lines 58-69. It adds
+      only the three-second termination window and the ten-second
+      identity-read limit.
+    - Example: the passage that starts "Regular-file reads use a
+      descriptor-relative helper" restates `docs/sandbox-file-safety.md:8-42`.
+    - Keep every E2B value, path, name, and decision, for example the
+      three-second termination window and the write-fence path.
+    - Then split each page that still passes the target, by capability.
+    - Risk: each removal needs a check that the shared page states the rule
+      at least as strictly. A wrong removal drops a guarantee.
+    - Limited to the long section, C is Medium, but the restated transport
+      rules then stay.
 - **Left out:**
-  - Only two approaches are real, because the `documentation` skill fixes the
-    home of a decision in force. The options differ in how many entries
-    move.
+  - Only three approaches are real, because the `documentation` skill fixes
+    the home of a decision in force. A and B differ in how many entries
+    move. C differs from A only in how the adapter doc reaches the length
+    target.
   - Change nothing. The two requirements and every reason then stay only at
     the permalinks, so the goal fails.
   - Write one separate file that lists all decisions. The `documentation`
     skill forbids a dated decision log in a protocol doc.
   - Write the decisions as code comments. The code is the home of mechanics,
     not of decisions in force.
-- **Wider fix:** None. The `plans` skill already requires that the protocol
-  docs hold each decision in force before a plan is deleted. This item is
-  the deferred part of that step.
+- **Wider fix:** C. It removes the adapter text that restates the shared
+  pages, so each shared rule has one home. The adapter pages then stay short
+  when a shared rule changes. The `documentation` skill rule alone did not
+  stop commit `5d856db` and a later resize change from adding lines to the
+  adapter doc while it passed the target. For the decisions themselves, the
+  `plans` skill already requires that the protocol docs hold each decision
+  in force before a plan is deleted. This item is the deferred part of that
+  step.
 - **Previous examples:** Commit `7d6e703` of 2026-09-22 added a stream
   outcome rule to `docs/sandbox-contract.md`. Commit `f010faf` replaced it the
   same day. The merge commit `fa11e0e` of 2026-09-23 dropped the `f010faf`
@@ -291,8 +315,11 @@
     `docs/sandbox-contract.md`. The first change that lands splits it.
   - `plans/follow-ups/control-client-extends-one-shot-deadline.md`: both
     change `docs/e2b-adapter.md`. The first change that lands splits it.
+  - `plans/follow-ups/follow-ups-cite-pre-split-contract.md`: the same
+    cause. Many citations of this item still point to the contract before
+    its split. Refresh them before or with this item.
 - **Recommendation:** A, because only the deleted plans hold these reasons
   now, and the `documentation` skill puts each decision in force next to its
-  requirement.
+  requirement. C best protects the docs.
 - **Action:** fix after merge, apply A, because a design call of 2026-11-04
   kept the doc splits out of the branch that deleted the plans.
