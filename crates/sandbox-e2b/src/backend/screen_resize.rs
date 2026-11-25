@@ -25,18 +25,24 @@ const TERMINATION_ALLOWANCE: Duration = Duration::from_secs(3);
 /// The supervisor runs as `python3`. The interpreter can exit with 0 on
 /// success, 1 for an uncaught exception, 2 for a command-line usage error,
 /// or 120 for a stdout flush failure at exit. A signal death has no normal
-/// exit code, and envd reports `exited: false`. Shells and wrappers report
-/// 126, 127, or `128 + signal number`. The supervisor reserves 124 for
-/// timeout cleanup. Status 3 is the lowest code outside these cases, so an
-/// unexpected supervisor exit cannot look like a helper failure.
+/// exit code, and envd reports `exited: false`. An outside kill can produce
+/// that report while the helper keeps running. Shells and wrappers report
+/// 126, 127, or `128 + signal number`. The supervisor reserves 124 for timeout
+/// cleanup. Status 3 is the lowest code outside these cases, so an unexpected
+/// supervisor exit cannot look like a helper failure.
 const SUPERVISOR_HELPER_FAILURE: i32 = 3;
 
 /// Exit status after the supervisor kills the helper's process group and
-/// reaps the helper on budget expiry or a watched termination signal.
+/// reaps the helper on budget expiry or receipt of `SIGTERM`, `SIGINT`,
+/// `SIGHUP`, `SIGQUIT`, or `SIGALRM`.
 const SUPERVISOR_TIMEOUT_CLEANUP: i32 = 124;
 
-/// Keep the supervisor outside the helper's group so it can kill the group
-/// and reap the helper before it exits.
+/// The helper runs in its own session and process group so the supervisor
+/// can kill the group and reap the helper.
+///
+/// The supervisor reaps the helper before it returns 0 or 3. On an early exit,
+/// it leaves the group alone so any processes the template helper keeps
+/// running on purpose can continue.
 const RESIZE_SUPERVISOR: &str = r#"
 # Keep exit codes in sync with SUPERVISOR_HELPER_FAILURE and
 # SUPERVISOR_TIMEOUT_CLEANUP in Rust.
@@ -132,12 +138,9 @@ pub(super) async fn resize(
         Err(_) => return Err(Error::ScreenViewportResizeUnconfirmed),
     };
     match (budget, output.exited, output.exit_code) {
-        (Some(_), true, Some(0)) | (None, _, Some(_)) => {
-            acknowledge(backend, request.viewport, output)
-        }
-        (Some(_), true, Some(SUPERVISOR_TIMEOUT_CLEANUP | SUPERVISOR_HELPER_FAILURE)) => {
-            Err(unavailable(backend))
-        }
+        (_, true, Some(0)) => acknowledge(backend, request.viewport, output),
+        (Some(_), true, Some(SUPERVISOR_TIMEOUT_CLEANUP | SUPERVISOR_HELPER_FAILURE))
+        | (None, _, Some(_)) => Err(unavailable(backend)),
         _ => Err(Error::ScreenViewportResizeUnconfirmed),
     }
 }
@@ -193,11 +196,7 @@ fn acknowledge(
     viewport: ScreenViewportSize,
     output: ProcessSplitOutput,
 ) -> Result<ScreenViewportSize> {
-    if !output.exited
-        || output.exit_code != Some(0)
-        || output.stdout_overflowed
-        || output.stderr_overflowed
-    {
+    if output.stdout_overflowed || output.stderr_overflowed {
         return Err(unavailable(backend));
     }
     let Ok(acknowledgment) = serde_json::from_slice::<ResizeAcknowledgment>(&output.stdout) else {
